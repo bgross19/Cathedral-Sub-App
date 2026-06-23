@@ -1,4 +1,30 @@
 /**
+ * Sets up the database headers in the Google Sheet.
+ * Run this function once from the Apps Script editor.
+ */
+function setupDatabase() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName("Absence Requests");
+  if (!sheet) {
+    sheet = ss.insertSheet("Absence Requests");
+  }
+
+  var headers = [
+    "ID", "Timestamp", "Email", "Date", "Periods", "Reason", "Duration",
+    "Urgency", "Instructions", "Period 1 Sub", "Period 2 Sub", "Period 3 Sub",
+    "Period 4 Sub", "Period 5 Sub", "Period 6 Sub", "Period 7 Sub", "Period 8 Sub"
+  ];
+
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+
+  // Optionally delete Split Responses sheet as it's no longer used
+  var splitSheet = ss.getSheetByName("Split Responses");
+  if (splitSheet) {
+    // ss.deleteSheet(splitSheet); // Uncomment to delete automatically, or delete manually.
+  }
+}
+
+/**
  * Serves the web app.
  */
 function doGet(e) {
@@ -59,8 +85,8 @@ function getMyAbsences() {
     var myAbsences = [];
     
     for (var i = 1; i < data.length; i++) {
-      if (String(data[i][1]).toLowerCase() === String(email).toLowerCase()) {
-        var dateVal = data[i][2]; 
+      if (String(data[i][2]).toLowerCase() === String(email).toLowerCase()) { // Email is index 2 now
+        var dateVal = data[i][3]; // Date is index 3 now
         if (!dateVal) continue; 
 
         var formattedDate = "Unknown Date";
@@ -70,13 +96,13 @@ function getMyAbsences() {
            formattedDate = new Date(dateVal).toLocaleDateString();
         }
 
-        var urgencyStr = String(data[i][6] || '');
+        var urgencyStr = String(data[i][7] || ''); // Urgency is index 7 now
 
         // Forced strings to ensure perfect serialization
         myAbsences.push({
           date: String(formattedDate),
-          periods: String(data[i][3]), 
-          reason: String(data[i][4]),  
+          periods: String(data[i][4]), // Periods is index 4 now
+          reason: String(data[i][5]),  // Reason is index 5 now
           urgency: urgencyStr.includes('Urgent') ? 'Urgent' : 'Standard' 
         });
       }
@@ -94,12 +120,12 @@ function getMyAbsences() {
 function getQuickCoverData() {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var splitSheet = ss.getSheetByName("Split Responses");
+    var mainSheet = ss.getSheetByName("Absence Requests");
     var rosterSheet = ss.getSheetByName("Staff Roster");
 
-    if (!splitSheet) return [];
+    if (!mainSheet) return [];
 
-    var data = splitSheet.getDataRange().getValues();
+    var data = mainSheet.getDataRange().getValues();
     var rosterData = rosterSheet ? rosterSheet.getDataRange().getValues() : [];
 
     var nameLookup = {};
@@ -116,6 +142,9 @@ function getQuickCoverData() {
     nextWeek.setDate(today.getDate() + 7); 
     nextWeek.setHours(23, 59, 59, 999); 
 
+    // Indices in new format:
+    // 0:ID, 1:Timestamp, 2:Email, 3:Date, 4:Periods, 5:Reason, 6:Duration, 7:Urgency, 8:Instructions
+    // 9:P1 Sub, 10:P2 Sub, ..., 16:P8 Sub
     for (var i = 1; i < data.length; i++) {
       var dateString = data[i][3];
       if (!dateString) continue; 
@@ -123,9 +152,7 @@ function getQuickCoverData() {
       var rowDate = new Date(dateString);
       if (isNaN(rowDate.getTime())) continue; 
 
-      var assignedSub = data[i][5]; 
-
-      if (rowDate >= today && rowDate <= nextWeek && (!assignedSub || String(assignedSub).trim() === "")) {
+      if (rowDate >= today && rowDate <= nextWeek) {
         var teacherEmail = String(data[i][2]).toLowerCase();
         var teacherName = nameLookup[teacherEmail] || teacherEmail; 
 
@@ -134,14 +161,27 @@ function getQuickCoverData() {
           teacherName = parts[1].trim() + " " + parts[0].trim();
         }
 
-        // We force everything to String or Number to prevent silent serialization crashes!
-        unfilled.push({
-          id: String(data[i][0] || ""),
-          teacherName: String(teacherName),
-          date: String(Utilities.formatDate(rowDate, Session.getScriptTimeZone(), "MMM d, yyyy")),
-          period: String(data[i][4] || ""),
-          rawDate: Number(rowDate.getTime()) 
-        });
+        var periodsRequested = String(data[i][4]).split(",").map(function(p) { return p.trim(); });
+        var rowId = String(data[i][0]);
+        var formattedDate = String(Utilities.formatDate(rowDate, Session.getScriptTimeZone(), "MMM d, yyyy"));
+        var rawDate = Number(rowDate.getTime());
+
+        for (var p = 1; p <= 8; p++) {
+          if (periodsRequested.indexOf(String(p)) !== -1) {
+            var subColumnIndex = 8 + p; // 9 for P1, 10 for P2, etc.
+            var assignedSub = data[i][subColumnIndex];
+
+            if (!assignedSub || String(assignedSub).trim() === "") {
+              unfilled.push({
+                id: rowId,
+                teacherName: String(teacherName),
+                date: formattedDate,
+                period: String(p),
+                rawDate: rawDate
+              });
+            }
+          }
+        }
       }
     }
 
@@ -157,6 +197,34 @@ function getQuickCoverData() {
   } catch (err) {
     // If we throw this, the frontend failure handler will catch it and show you the error!
     throw new Error("Backend Error: " + err.message);
+  }
+}
+
+/**
+ * Fetches the list of staff names from the Staff Roster.
+ */
+function getStaffList() {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName("Staff Roster");
+    if (!sheet) return [];
+
+    var data = sheet.getDataRange().getValues();
+    var staffNames = [];
+
+    for (var i = 1; i < data.length; i++) {
+      var name = String(data[i][0]).trim();
+      if (name) {
+        if (name.includes(",")) {
+          var parts = name.split(",");
+          name = parts[1].trim() + " " + parts[0].trim();
+        }
+        staffNames.push(name);
+      }
+    }
+    return staffNames.sort();
+  } catch (err) {
+    return [];
   }
 }
 
@@ -183,23 +251,17 @@ function submitAbsence(formData) {
 
     var timestamp = new Date();
     var email = Session.getActiveUser().getEmail();
+    var uniqueId = Utilities.getUuid();
 
+    // "ID", "Timestamp", "Email", "Date", "Periods", "Reason", "Duration",
+    // "Urgency", "Instructions", "Period 1 Sub", "Period 2 Sub", "Period 3 Sub",
+    // "Period 4 Sub", "Period 5 Sub", "Period 6 Sub", "Period 7 Sub", "Period 8 Sub"
     var newRow = [
-      timestamp, email, formData.date, "'" + formData.periods, 
-      formData.reason, formData.duration, urgencyFormatted, instructions
+      uniqueId, timestamp, email, formData.date, "'" + formData.periods,
+      formData.reason, formData.duration, urgencyFormatted, instructions,
+      "", "", "", "", "", "", "", ""
     ];
     mainSheet.appendRow(newRow);
-    
-    var splitSheet = ss.getSheetByName("Split Responses");
-    if (splitSheet && formData.periods) {
-      var parts = formData.periods.split(",").map(function(p) { return p.trim(); });
-      parts.forEach(function(part) {
-        var uniqueId = Utilities.getUuid(); 
-        splitSheet.appendRow([
-          uniqueId, timestamp, email, formData.date, part, "", instructions 
-        ]);
-      });
-    }
 
     var teacherName = getUserData().name; 
     if (urgencyFormatted === 'Urgent (Less than 24 hr notice)') {
@@ -218,6 +280,39 @@ function submitAbsence(formData) {
     }
     
     return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Assigns a substitute to a specific period for an absence request.
+ */
+function assignSubToPeriod(absenceId, period, subName) {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName("Absence Requests");
+    if (!sheet) throw new Error("Absence Requests sheet not found.");
+
+    var data = sheet.getDataRange().getValues();
+
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][0]) === String(absenceId)) {
+        var periodsRequested = String(data[i][4]).split(",").map(function(p) { return p.trim(); });
+
+        if (periodsRequested.indexOf(String(period)) === -1) {
+            throw new Error("Period " + period + " was not requested for this absence.");
+        }
+
+        var subColumnIndex = 10 + parseInt(period) - 1; // 1-based index for Apps Script Ranges: Col J is 10 (Period 1 Sub)
+
+        // Write the subname
+        sheet.getRange(i + 1, subColumnIndex).setValue(subName);
+        return { success: true };
+      }
+    }
+
+    throw new Error("Absence Request ID not found.");
   } catch (err) {
     return { success: false, error: err.message };
   }

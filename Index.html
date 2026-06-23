@@ -145,6 +145,7 @@
 
     <script>
       let currentUser = {};
+      let staffList = [];
 
       function initApp() {
         google.script.run
@@ -156,6 +157,7 @@
             // Checks for 'Admin' OR 'Sub coordinator' regardless of uppercase/lowercase in your sheet!
             if (data.role.toLowerCase() === 'admin' || data.role.toLowerCase() === 'sub coordinator') {
               document.getElementById('adminSection').classList.remove('hidden');
+              loadStaffList();
               loadQuickCover(); 
             }
           })
@@ -166,6 +168,16 @@
           .getUserData();
 
         loadMyAbsences();
+      }
+
+      function loadStaffList() {
+        google.script.run
+          .withSuccessHandler(list => {
+            staffList = list;
+            // Rerender Quick Cover in case it loaded before the staff list
+            loadQuickCover();
+          })
+          .getStaffList();
       }
 
       function toggleModal() {
@@ -210,16 +222,28 @@
             }
 
             let html = '<div class="divide-y divide-gray-200">';
+
+            let optionsHtml = '<option value="">Select a sub...</option>';
+            staffList.forEach(name => {
+              optionsHtml += `<option value="${name}">${name}</option>`;
+            });
+
             unfilled.forEach(req => {
+              let assignId = `assign-${req.id}-${req.period}`;
               html += `
-                <div class="p-4 hover:bg-orange-50 transition-colors flex justify-between items-center bg-white">
+                <div class="p-4 hover:bg-orange-50 transition-colors flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white gap-4">
                   <div>
                     <p class="font-bold text-[#002147]">${req.date}</p>
                     <p class="text-sm text-gray-600 font-semibold">${req.teacherName}</p>
+                    <span class="inline-block mt-1 bg-orange-100 text-orange-800 text-xs font-bold px-3 py-1 rounded-full border border-orange-200">Period ${req.period}</span>
                   </div>
-                  <div class="text-right">
-                    <span class="bg-orange-100 text-orange-800 text-xs font-bold px-3 py-1 rounded-full border border-orange-200">Period ${req.period}</span>
-                    <p class="text-xs text-gray-400 mt-2 hover:text-orange-600 cursor-pointer font-semibold underline" onclick="alert('For now, assign subs directly in the Google Sheet. We will build the Assign feature next!')">Assign Sub &rarr;</p>
+                  <div class="flex items-center gap-2 w-full sm:w-auto">
+                    <select id="${assignId}" class="flex-1 sm:w-48 p-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#00843D] bg-white">
+                      ${optionsHtml}
+                    </select>
+                    <button onclick="handleAssign('${req.id}', '${req.period}', '${assignId}')" class="bg-[#00843D] hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg text-sm transition-colors shadow-sm">
+                      Assign
+                    </button>
                   </div>
                 </div>
               `;
@@ -232,6 +256,38 @@
             document.getElementById('quickCoverContainer').innerHTML = `<div class="p-8 text-center text-red-600 font-bold">Failed to load data: ${err.message}</div>`;
           })
           .getQuickCoverData();
+      }
+
+      function handleAssign(absenceId, period, selectElementId) {
+        const selectEl = document.getElementById(selectElementId);
+        const subName = selectEl.value;
+
+        if (!subName) {
+          alert("Please select a substitute to assign.");
+          return;
+        }
+
+        const btn = selectEl.nextElementSibling;
+        const originalText = btn.innerText;
+        btn.disabled = true;
+        btn.innerText = "Saving...";
+
+        google.script.run
+          .withSuccessHandler(result => {
+            if (result && result.success) {
+              loadQuickCover(); // Refresh the list
+            } else {
+              alert("Failed to assign sub: " + (result ? result.error : "Unknown error"));
+              btn.disabled = false;
+              btn.innerText = originalText;
+            }
+          })
+          .withFailureHandler(err => {
+            alert("Connection error: " + err.message);
+            btn.disabled = false;
+            btn.innerText = originalText;
+          })
+          .assignSubToPeriod(absenceId, period, subName);
       }
 
       function loadMyAbsences() {
