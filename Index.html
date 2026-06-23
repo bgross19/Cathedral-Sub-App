@@ -53,9 +53,13 @@
       </div>
     </main>
 
-    <div id="detailsModal" class="modal opacity-0 pointer-events-none fixed w-full h-full top-0 left-0 flex items-center justify-center z-[100]">
-      <div class="modal-overlay absolute w-full h-full bg-gray-900 opacity-50" onclick="closeDetailsModal()"></div>
-      <div class="modal-container bg-white w-11/12 md:max-w-xl mx-auto rounded-2xl shadow-2xl z-50 overflow-y-auto max-h-[90vh]">
+    <!-- Generic Modal overlay -->
+    <div id="genericModalOverlay" class="modal opacity-0 pointer-events-none fixed w-full h-full top-0 left-0 flex items-center justify-center z-[100]">
+      <div class="modal-overlay absolute w-full h-full bg-gray-900 opacity-50" onclick="closeAllModals()"></div>
+    </div>
+
+    <div id="detailsModal" class="modal opacity-0 pointer-events-none fixed w-full h-full top-0 left-0 flex items-center justify-center z-[110]">
+      <div class="modal-container bg-white w-11/12 md:max-w-xl mx-auto rounded-2xl shadow-2xl z-[110] overflow-y-auto max-h-[90vh]">
         <div class="p-6">
           <div class="flex justify-between items-center pb-3 border-b">
             <p class="text-2xl font-bold text-[#002147]">Coverage Details</p>
@@ -70,18 +74,18 @@
       </div>
     </div>
 
-    <div id="modal" class="modal opacity-0 pointer-events-none fixed w-full h-full top-0 left-0 flex items-center justify-center z-[100]">
-      <div class="modal-overlay absolute w-full h-full bg-gray-900 opacity-50"></div>
-      <div class="modal-container bg-white w-11/12 md:max-w-xl mx-auto rounded-2xl shadow-2xl z-50 overflow-y-auto max-h-[90vh]">
+    <div id="modal" class="modal opacity-0 pointer-events-none fixed w-full h-full top-0 left-0 flex items-center justify-center z-[110]">
+      <div class="modal-container bg-white w-11/12 md:max-w-xl mx-auto rounded-2xl shadow-2xl z-[110] overflow-y-auto max-h-[90vh]">
         <div class="p-6">
           <div class="flex justify-between items-center pb-3 border-b">
-            <p class="text-2xl font-bold text-[#002147]">Request Sub</p>
+            <p id="requestModalTitle" class="text-2xl font-bold text-[#002147]">Request Sub</p>
             <div onclick="toggleModal()" class="cursor-pointer z-50 p-2 hover:bg-gray-100 rounded-full">
               <svg class="fill-current text-black" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 18 18"><path d="M14.53 4.53l-1.06-1.06L9 7.94 4.53 3.47 3.47 4.53 7.94 9l-4.47 4.47 1.06 1.06L9 10.06l4.47 4.47 1.06-1.06L10.06 9z"></path></svg>
             </div>
           </div>
 
           <form id="absenceForm" class="space-y-4 mt-4">
+            <input type="hidden" id="editAbsenceId" value="">
             
             <div class="grid grid-cols-2 gap-4">
               <div>
@@ -163,6 +167,7 @@
       let currentUser = {};
       let staffList = [];
       let currentUnfilledData = [];
+      let myAbsencesData = [];
 
       function initApp() {
         google.script.run
@@ -197,12 +202,47 @@
           .getStaffList();
       }
 
-      function toggleModal() {
+      function closeAllModals() {
+        const modals = document.querySelectorAll('.modal');
+        modals.forEach(m => {
+          m.classList.add('opacity-0');
+          m.classList.add('pointer-events-none');
+        });
+        document.querySelector('body').classList.remove('modal-active');
+      }
+
+      function toggleModal(isEdit = false, absId = null) {
         const body = document.querySelector('body');
         const modal = document.querySelector('#modal');
-        modal.classList.toggle('opacity-0');
-        modal.classList.toggle('pointer-events-none');
-        body.classList.toggle('modal-active');
+        const overlay = document.querySelector('#genericModalOverlay');
+
+        if (modal.classList.contains('opacity-0')) {
+          // Opening
+          modal.classList.remove('opacity-0');
+          modal.classList.remove('pointer-events-none');
+          overlay.classList.remove('opacity-0');
+          overlay.classList.remove('pointer-events-none');
+          body.classList.add('modal-active');
+
+          if (!isEdit) {
+             document.getElementById('requestModalTitle').innerText = "Request Sub";
+             document.getElementById('absenceForm').reset();
+             document.getElementById('editAbsenceId').value = "";
+             document.getElementById('submitBtn').innerText = "Submit Request";
+             setUrgency('Standard');
+             checkSpecialReason();
+
+             // Uncheck all periods
+             document.querySelectorAll('.period-cb').forEach(cb => cb.checked = false);
+          }
+        } else {
+          // Closing
+          modal.classList.add('opacity-0');
+          modal.classList.add('pointer-events-none');
+          overlay.classList.add('opacity-0');
+          overlay.classList.add('pointer-events-none');
+          body.classList.remove('modal-active');
+        }
       }
 
       function checkSpecialReason() {
@@ -334,16 +374,24 @@
 
         const body = document.querySelector('body');
         const modal = document.querySelector('#detailsModal');
+        const overlay = document.querySelector('#genericModalOverlay');
+
         modal.classList.remove('opacity-0');
         modal.classList.remove('pointer-events-none');
+        overlay.classList.remove('opacity-0');
+        overlay.classList.remove('pointer-events-none');
         body.classList.add('modal-active');
       }
 
       function closeDetailsModal() {
         const body = document.querySelector('body');
         const modal = document.querySelector('#detailsModal');
+        const overlay = document.querySelector('#genericModalOverlay');
+
         modal.classList.add('opacity-0');
         modal.classList.add('pointer-events-none');
+        overlay.classList.add('opacity-0');
+        overlay.classList.add('pointer-events-none');
         body.classList.remove('modal-active');
       }
 
@@ -390,6 +438,7 @@
       function loadMyAbsences() {
         google.script.run
           .withSuccessHandler(absences => {
+            myAbsencesData = absences;
             const container = document.getElementById('myAbsences');
             if (absences.length === 0) {
               container.innerHTML = 'No active requests found. You are doing great!';
@@ -397,18 +446,28 @@
             }
 
             let html = '<div class="space-y-3 text-left">';
-            absences.forEach(abs => {
+            absences.forEach((abs, index) => {
               let bgClass = abs.urgency === 'Urgent' ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200';
               let textClass = abs.urgency === 'Urgent' ? 'text-red-700' : 'text-[#002147]';
               
               html += `
-                <div class="flex justify-between items-start p-4 border rounded-xl shadow-sm ${bgClass}">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 border rounded-xl shadow-sm ${bgClass} gap-4">
                   <div>
-                    <p class="font-bold ${textClass} text-lg">${abs.date}</p>
+                    <div class="flex items-center gap-2">
+                       <p class="font-bold ${textClass} text-lg">${abs.date}</p>
+                       <span class="text-[10px] font-bold uppercase tracking-wider opacity-60 bg-white px-2 py-0.5 rounded border border-gray-300">${abs.urgency}</span>
+                    </div>
                     <p class="text-sm text-gray-600 font-semibold">${abs.reason}</p>
                     <p class="text-xs text-gray-500 mt-1">Periods: ${abs.periods}</p>
                   </div>
-                  <div class="text-xs font-bold uppercase tracking-wider opacity-60 mt-1">${abs.urgency}</div>
+                  <div class="flex gap-2 w-full sm:w-auto">
+                    <button onclick="editAbsence(${index})" class="flex-1 sm:flex-none bg-white hover:bg-gray-100 text-gray-700 text-sm font-bold py-2 px-4 rounded-lg border border-gray-300 transition-colors shadow-sm">
+                      Edit
+                    </button>
+                    <button onclick="cancelAbsence('${abs.id}')" class="flex-1 sm:flex-none bg-white hover:bg-red-50 text-red-600 text-sm font-bold py-2 px-4 rounded-lg border border-red-200 transition-colors shadow-sm">
+                      Cancel
+                    </button>
+                  </div>
                 </div>
               `;
             });
@@ -421,6 +480,83 @@
             document.getElementById('myAbsences').innerHTML = `<div class="text-red-600 font-bold">Failed to load absences: ${err.message}</div>`;
           })
           .getMyAbsences();
+      }
+
+      function editAbsence(index) {
+        const abs = myAbsencesData[index];
+        if (!abs) return;
+
+        document.getElementById('requestModalTitle').innerText = "Edit Request";
+        document.getElementById('editAbsenceId').value = abs.id;
+        document.getElementById('submitBtn').innerText = "Save Changes";
+
+        // Date format handling
+        if (abs.formDateString) {
+           document.getElementById('absDate').value = abs.formDateString;
+        } else {
+           let d = new Date(abs.rawDateString);
+           let year = d.getFullYear();
+           let month = String(d.getMonth() + 1).padStart(2, '0');
+           let day = String(d.getDate()).padStart(2, '0');
+           document.getElementById('absDate').value = `${year}-${month}-${day}`;
+        }
+
+        document.getElementById('absDuration').value = abs.duration || "Full Day";
+
+        let pArr = abs.periods.split(",").map(p => p.trim());
+        document.querySelectorAll('.period-cb').forEach(cb => {
+           cb.checked = pArr.includes(cb.value);
+        });
+
+        document.getElementById('absReason').value = abs.reason;
+        checkSpecialReason();
+
+        setUrgency(abs.urgency === 'Urgent' ? 'Urgent' : 'Standard');
+
+        // Remove HR prefix if present
+        let inst = abs.instructions || "";
+        let hrConfirmed = false;
+        if (inst.startsWith("[HR Docs Provided] ")) {
+           hrConfirmed = true;
+           inst = inst.replace("[HR Docs Provided] ", "");
+        }
+        document.getElementById('specialInst').value = inst;
+
+        if (hrConfirmed && !document.getElementById('hrSection').classList.contains('hidden')) {
+           document.getElementById('hrConfirm').checked = true;
+        } else {
+           document.getElementById('hrConfirm').checked = false;
+        }
+
+        document.getElementById('agreement').checked = true; // Pre-check for convenience on edit
+
+        toggleModal(true);
+      }
+
+      function cancelAbsence(id) {
+        if (!confirm("Are you sure you want to cancel this request? Any assigned substitutes will be automatically notified.")) return;
+
+        const container = document.getElementById('myAbsences');
+        container.innerHTML = '<div class="spinner mx-auto my-4"></div>';
+
+        google.script.run
+          .withSuccessHandler(result => {
+             if (result && result.success) {
+               alert("Request cancelled successfully.");
+               loadMyAbsences();
+               if (!document.getElementById('adminSection').classList.contains('hidden')) {
+                 loadQuickCover();
+               }
+             } else {
+               alert("Failed to cancel: " + (result ? result.error : "Unknown"));
+               loadMyAbsences();
+             }
+          })
+          .withFailureHandler(err => {
+             alert("Error: " + err.message);
+             loadMyAbsences();
+          })
+          .cancelAbsence(id);
       }
 
       document.getElementById('absenceForm').onsubmit = function(e) {
@@ -461,33 +597,61 @@
           hrConfirmed: hrChecked
         };
 
-        google.script.run
-          .withSuccessHandler((result) => {
-            if (result && result.success) {
-              alert("Request Submitted Successfully!");
-              document.getElementById('absenceForm').reset(); 
-              setUrgency('Standard'); 
-              document.getElementById('hrSection').classList.add('hidden');
-              btn.disabled = false;
-              btn.innerHTML = 'Submit Request';
-              toggleModal(); 
-              loadMyAbsences(); 
-              
-              if (!document.getElementById('adminSection').classList.contains('hidden')) {
-                loadQuickCover(); 
+        const editId = document.getElementById('editAbsenceId').value;
+
+        if (editId) {
+          google.script.run
+            .withSuccessHandler((result) => {
+              if (result && result.success) {
+                alert("Request Updated Successfully!");
+                btn.disabled = false;
+                btn.innerHTML = 'Save Changes';
+                toggleModal();
+                loadMyAbsences();
+                if (!document.getElementById('adminSection').classList.contains('hidden')) {
+                  loadQuickCover();
+                }
+              } else {
+                alert("Database Error: " + (result ? result.error : "Unknown issue"));
+                btn.disabled = false;
+                btn.innerHTML = 'Save Changes';
               }
-            } else {
-              alert("Database Error: " + (result ? result.error : "Unknown issue"));
+            })
+            .withFailureHandler(err => {
+              alert("Connection Error: " + err.message);
+              btn.disabled = false;
+              btn.innerHTML = 'Save Changes';
+            })
+            .updateAbsence(editId, formData);
+        } else {
+          google.script.run
+            .withSuccessHandler((result) => {
+              if (result && result.success) {
+                alert("Request Submitted Successfully!");
+                document.getElementById('absenceForm').reset();
+                setUrgency('Standard');
+                document.getElementById('hrSection').classList.add('hidden');
+                btn.disabled = false;
+                btn.innerHTML = 'Submit Request';
+                toggleModal();
+                loadMyAbsences();
+
+                if (!document.getElementById('adminSection').classList.contains('hidden')) {
+                  loadQuickCover();
+                }
+              } else {
+                alert("Database Error: " + (result ? result.error : "Unknown issue"));
+                btn.disabled = false;
+                btn.innerHTML = 'Submit Request';
+              }
+            })
+            .withFailureHandler(err => {
+              alert("Connection Error: " + err.message);
               btn.disabled = false;
               btn.innerHTML = 'Submit Request';
-            }
-          })
-          .withFailureHandler(err => {
-            alert("Connection Error: " + err.message);
-            btn.disabled = false;
-            btn.innerHTML = 'Submit Request';
-          })
-          .submitAbsence(formData);
+            })
+            .submitAbsence(formData);
+        }
       };
     </script>
   </body>
