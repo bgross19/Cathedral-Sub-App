@@ -222,10 +222,13 @@
 
             let html = '<div class="divide-y divide-gray-200">';
 
-            let optionsHtml = '<option value="">Select a sub...</option>';
+            let optionsHtml = '';
             staffList.forEach(name => {
-              optionsHtml += `<option value="${name}">${name}</option>`;
+              optionsHtml += `<option value="${name}"></option>`;
             });
+
+            // Ensure datalist only gets rendered once
+            html += `<datalist id="staffDataList">${optionsHtml}</datalist>`;
 
             unfilled.forEach(req => {
               let assignId = `assign-${req.id}-${req.period}`;
@@ -237,9 +240,7 @@
                     <span class="inline-block mt-1 bg-orange-100 text-orange-800 text-xs font-bold px-3 py-1 rounded-full border border-orange-200">Period ${req.period}</span>
                   </div>
                   <div class="flex items-center gap-2 w-full sm:w-auto">
-                    <select id="${assignId}" class="flex-1 sm:w-48 p-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#00843D] bg-white">
-                      ${optionsHtml}
-                    </select>
+                    <input type="text" id="${assignId}" list="staffDataList" placeholder="Enter sub name..." class="flex-1 sm:w-48 p-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#00843D] bg-white">
                     <button onclick="handleAssign('${req.id}', '${req.period}', '${assignId}')" class="bg-[#00843D] hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg text-sm transition-colors shadow-sm">
                       Assign
                     </button>
@@ -262,7 +263,12 @@
         const subName = selectEl.value;
 
         if (!subName) {
-          alert("Please select a substitute to assign.");
+          alert("Please enter a substitute to assign.");
+          return;
+        }
+
+        if (!staffList.includes(subName)) {
+          alert("Please enter a valid staff name from the list.");
           return;
         }
 

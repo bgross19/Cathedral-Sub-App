@@ -215,10 +215,6 @@ function getStaffList() {
     for (var i = 1; i < data.length; i++) {
       var name = String(data[i][0]).trim();
       if (name) {
-        if (name.includes(",")) {
-          var parts = name.split(",");
-          name = parts[1].trim() + " " + parts[0].trim();
-        }
         staffNames.push(name);
       }
     }
