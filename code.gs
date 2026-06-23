@@ -122,11 +122,31 @@ function getQuickCoverData() {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var mainSheet = ss.getSheetByName("Absence Requests");
     var rosterSheet = ss.getSheetByName("Staff Roster");
+    var masterScheduleSheet = ss.getSheetByName("Master Schedule");
 
     if (!mainSheet) return [];
 
     var data = mainSheet.getDataRange().getValues();
     var rosterData = rosterSheet ? rosterSheet.getDataRange().getValues() : [];
+
+    // Master Schedule data mapping
+    var scheduleData = masterScheduleSheet ? masterScheduleSheet.getDataRange().getValues() : [];
+    var scheduleLookup = {};
+    if (scheduleData.length > 0) {
+      var headers = scheduleData[0];
+      var joinIdx = headers.indexOf("EMAIL_PERIOD_JOIN");
+      var roomIdx = headers.indexOf("ROOM");
+      var courseIdx = headers.indexOf("COURSE_NAMES");
+
+      if (joinIdx > -1) {
+        for (var s = 1; s < scheduleData.length; s++) {
+          var joinKey = String(scheduleData[s][joinIdx]).toLowerCase();
+          var room = roomIdx > -1 ? scheduleData[s][roomIdx] : "";
+          var course = courseIdx > -1 ? scheduleData[s][courseIdx] : "";
+          scheduleLookup[joinKey] = { room: room, course: course };
+        }
+      }
+    }
 
     var nameLookup = {};
     for (var r = 1; r < rosterData.length; r++) {
@@ -166,18 +186,34 @@ function getQuickCoverData() {
         var formattedDate = String(Utilities.formatDate(rowDate, Session.getScriptTimeZone(), "MMM d, yyyy"));
         var rawDate = Number(rowDate.getTime());
 
+        var reason = String(data[i][5]);
+        var duration = String(data[i][6]);
+        var instructions = String(data[i][8]);
+
         for (var p = 1; p <= 8; p++) {
           if (periodsRequested.indexOf(String(p)) !== -1) {
             var subColumnIndex = 8 + p; // 9 for P1, 10 for P2, etc.
             var assignedSub = data[i][subColumnIndex];
 
             if (!assignedSub || String(assignedSub).trim() === "") {
+
+              var joinKey = teacherEmail + "-" + p;
+              var scheduleInfo = scheduleLookup[joinKey];
+              var roomStr = scheduleInfo && scheduleInfo.room ? String(scheduleInfo.room) : "No Class Assigned";
+              var courseStr = scheduleInfo && scheduleInfo.course ? String(scheduleInfo.course) : "No Class Assigned";
+
               unfilled.push({
                 id: rowId,
                 teacherName: String(teacherName),
+                teacherEmail: String(teacherEmail),
                 date: formattedDate,
                 period: String(p),
-                rawDate: rawDate
+                rawDate: rawDate,
+                room: roomStr,
+                course: courseStr,
+                reason: reason,
+                duration: duration,
+                instructions: instructions
               });
             }
           }
