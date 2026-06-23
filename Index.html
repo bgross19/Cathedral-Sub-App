@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      .modal { transition: opacity 0.25s ease; }
+      body.modal-active { overflow: hidden; }
+      .spinner { border: 3px solid #f3f3f3; border-top: 3px solid #00843D; border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; }
+      @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+  </head>
+
+  <body class="bg-gray-100 font-sans text-gray-800" onload="initApp()">
+
+    <nav class="bg-[#002147] text-white p-4 shadow-lg sticky top-0 z-50">
+       <div class="max-w-4xl mx-auto flex justify-between items-center">
+           <h1 class="text-xl font-bold flex items-center gap-2">
+              <span class="bg-white rounded-full h-8 w-8 flex items-center justify-center text-lg">☘️</span> 
+              <span class="hidden sm:inline">Cathedral Sub Coverage</span>
+           </h1>
+           <div id="userInfo" class="text-sm opacity-90 text-right">
+               <div id="userName" class="font-bold">Loading...</div>
+               <div id="userEmail" class="text-xs italic"><?= userEmail ?></div>
+           </div>
+       </div>
+    </nav>
+
+    <main class="max-w-4xl mx-auto p-4 mt-4">
+      
+      <div class="bg-white rounded-2xl shadow-sm p-6 mb-6 border-t-4 border-[#00843D]">
+        <h2 class="text-2xl font-bold text-[#002147]">Welcome, <span id="welcomeName">Teacher</span>!</h2>
+        <p class="text-gray-600 mt-1 mb-6">Need coverage for a class? Submit your request below.</p>
+        
+        <button onclick="toggleModal()" class="w-full sm:w-auto bg-[#00843D] hover:bg-green-700 text-white font-bold py-3 px-8 rounded-xl transition-all transform hover:scale-105 shadow-md flex items-center justify-center gap-2">
+          <span>➕</span> New Absence Request
+        </button>
+      </div>
+
+      <div id="adminSection" class="hidden mb-6">
+        <h3 class="text-lg font-bold text-[#002147] mb-3 flex items-center gap-2">
+          <span class="text-orange-500">🚩</span> Quick Cover (7-Day Triage)
+        </h3>
+        <div id="quickCoverContainer" class="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-200">
+           <div class="p-8 text-center text-gray-400 italic">Scanning database...</div>
+        </div>
+      </div>
+
+      <h3 class="text-lg font-bold text-[#002147] mb-3">My Upcoming Absences</h3>
+      <div id="myAbsences" class="bg-white rounded-xl shadow-sm p-8 text-center text-gray-400 border border-gray-200">
+          Loading requests...
+      </div>
+    </main>
+
+    <div id="modal" class="modal opacity-0 pointer-events-none fixed w-full h-full top-0 left-0 flex items-center justify-center z-[100]">
+      <div class="modal-overlay absolute w-full h-full bg-gray-900 opacity-50"></div>
+      <div class="modal-container bg-white w-11/12 md:max-w-xl mx-auto rounded-2xl shadow-2xl z-50 overflow-y-auto max-h-[90vh]">
+        <div class="p-6">
+          <div class="flex justify-between items-center pb-3 border-b">
+            <p class="text-2xl font-bold text-[#002147]">Request Sub</p>
+            <div onclick="toggleModal()" class="cursor-pointer z-50 p-2 hover:bg-gray-100 rounded-full">
+              <svg class="fill-current text-black" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 18 18"><path d="M14.53 4.53l-1.06-1.06L9 7.94 4.53 3.47 3.47 4.53 7.94 9l-4.47 4.47 1.06 1.06L9 10.06l4.47 4.47 1.06-1.06L10.06 9z"></path></svg>
+            </div>
+          </div>
+
+          <form id="absenceForm" class="space-y-4 mt-4">
+            
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-bold mb-1">Date of Absence</label>
+                <input type="date" id="absDate" required class="w-full p-3 border rounded-xl focus:ring-2 focus:ring-[#00843D] outline-none">
+              </div>
+              <div>
+                <label class="block text-sm font-bold mb-1">Duration</label>
+                <select id="absDuration" class="w-full p-3 border rounded-xl outline-none bg-white">
+                  <option value="Full Day">Full Day</option>
+                  <option value="Half Day">Half Day</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-sm font-bold mb-2">Period(s) Needed</label>
+              <div class="grid grid-cols-4 gap-2">
+                <label class="flex items-center gap-2 p-2 border rounded-lg cursor-pointer hover:bg-gray-50"><input type="checkbox" value="1" class="period-cb h-4 w-4"> 1</label>
+                <label class="flex items-center gap-2 p-2 border rounded-lg cursor-pointer hover:bg-gray-50"><input type="checkbox" value="2" class="period-cb h-4 w-4"> 2</label>
+                <label class="flex items-center gap-2 p-2 border rounded-lg cursor-pointer hover:bg-gray-50"><input type="checkbox" value="3" class="period-cb h-4 w-4"> 3</label>
+                <label class="flex items-center gap-2 p-2 border rounded-lg cursor-pointer hover:bg-gray-50"><input type="checkbox" value="4" class="period-cb h-4 w-4"> 4</label>
+                <label class="flex items-center gap-2 p-2 border rounded-lg cursor-pointer hover:bg-gray-50"><input type="checkbox" value="5" class="period-cb h-4 w-4"> 5</label>
+                <label class="flex items-center gap-2 p-2 border rounded-lg cursor-pointer hover:bg-gray-50"><input type="checkbox" value="6" class="period-cb h-4 w-4"> 6</label>
+                <label class="flex items-center gap-2 p-2 border rounded-lg cursor-pointer hover:bg-gray-50"><input type="checkbox" value="7" class="period-cb h-4 w-4"> 7</label>
+                <label class="flex items-center gap-2 p-2 border rounded-lg cursor-pointer hover:bg-gray-50"><input type="checkbox" value="8" class="period-cb h-4 w-4"> 8</label>
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-sm font-bold mb-1">Reason for Absence</label>
+              <select id="absReason" onchange="checkSpecialReason()" class="w-full p-3 border rounded-xl outline-none bg-white">
+                <option value="Sick">Sick</option>
+                <option value="Personal">Personal</option>
+                <option value="Professional Development">PD</option>
+                <option value="Retreat">Retreat</option>
+                <option value="Athletics">Athletics</option>
+                <option value="Jury Duty">Jury Duty</option>
+                <option value="Bereavement">Bereavement</option>
+              </select>
+            </div>
+
+            <div id="hrSection" class="hidden bg-orange-50 p-4 rounded-xl border border-orange-200">
+              <label class="flex items-start gap-3 cursor-pointer">
+                <input type="checkbox" id="hrConfirm" class="mt-1 h-5 w-5 rounded text-orange-600">
+                <span class="text-sm text-orange-800 leading-tight">I confirm I have contacted HR and provided documentation for this special absence.</span>
+              </label>
+            </div>
+
+            <div>
+              <label class="block text-sm font-bold mb-1">Urgency</label>
+              <div class="flex gap-2">
+                <button type="button" onclick="setUrgency('Standard')" id="btnStd" class="flex-1 py-2 rounded-lg border-2 border-[#00843D] bg-[#00843D] text-white font-bold transition-colors">Standard</button>
+                <button type="button" onclick="setUrgency('Urgent')" id="btnUrg" class="flex-1 py-2 rounded-lg border-2 border-gray-200 text-gray-500 font-bold transition-colors">Urgent</button>
+              </div>
+              <input type="hidden" id="urgencyValue" value="Standard">
+            </div>
+
+            <div>
+              <label class="block text-sm font-bold mb-1">Special Instructions (Optional)</label>
+              <textarea id="specialInst" rows="2" class="w-full p-3 border rounded-xl outline-none focus:ring-2 focus:ring-[#00843D]" placeholder="Any extra details..."></textarea>
+            </div>
+
+            <div class="bg-gray-50 p-4 rounded-xl border border-gray-200">
+              <label class="flex items-start gap-3 cursor-pointer">
+                <input type="checkbox" id="agreement" required class="mt-1 h-5 w-5 rounded">
+                <span class="text-xs text-gray-600 leading-tight italic">I confirm I have posted my lesson plans in Canvas and notified my department chair.</span>
+              </label>
+            </div>
+
+            <button type="submit" id="submitBtn" class="w-full bg-[#002147] hover:bg-blue-900 text-white font-bold py-4 rounded-xl transition-all shadow-lg mt-2">
+              Submit Request
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      let currentUser = {};
+
+      function initApp() {
+        google.script.run
+          .withSuccessHandler(data => {
+            currentUser = data;
+            document.getElementById('userName').innerText = data.name;
+            document.getElementById('welcomeName').innerText = (data.name.split(',')[1] || data.name).trim();
+            
+            // Checks for 'Admin' OR 'Sub coordinator' regardless of uppercase/lowercase in your sheet!
+            if (data.role.toLowerCase() === 'admin' || data.role.toLowerCase() === 'sub coordinator') {
+              document.getElementById('adminSection').classList.remove('hidden');
+              loadQuickCover(); 
+            }
+          })
+          .withFailureHandler(err => {
+            console.error(err);
+            document.getElementById('userName').innerText = "Authentication Error";
+          })
+          .getUserData();
+
+        loadMyAbsences();
+      }
+
+      function toggleModal() {
+        const body = document.querySelector('body');
+        const modal = document.querySelector('#modal');
+        modal.classList.toggle('opacity-0');
+        modal.classList.toggle('pointer-events-none');
+        body.classList.toggle('modal-active');
+      }
+
+      function checkSpecialReason() {
+        const reason = document.getElementById('absReason').value;
+        const hrSection = document.getElementById('hrSection');
+        if (reason === 'Jury Duty' || reason === 'Bereavement') {
+          hrSection.classList.remove('hidden');
+        } else {
+          hrSection.classList.add('hidden');
+        }
+      }
+
+      function setUrgency(val) {
+        document.getElementById('urgencyValue').value = val;
+        const s = document.getElementById('btnStd');
+        const u = document.getElementById('btnUrg');
+        if (val === 'Standard') {
+          s.className = "flex-1 py-2 rounded-lg border-2 border-[#00843D] bg-[#00843D] text-white font-bold transition-colors";
+          u.className = "flex-1 py-2 rounded-lg border-2 border-gray-200 text-gray-500 font-bold transition-colors";
+        } else {
+          u.className = "flex-1 py-2 rounded-lg border-2 border-red-600 bg-red-600 text-white font-bold transition-colors";
+          s.className = "flex-1 py-2 rounded-lg border-2 border-gray-200 text-gray-500 font-bold transition-colors";
+        }
+      }
+
+      function loadQuickCover() {
+        google.script.run
+          .withSuccessHandler(unfilled => {
+            const container = document.getElementById('quickCoverContainer');
+            
+            if (unfilled.length === 0) {
+              container.innerHTML = '<div class="p-8 text-center text-gray-500 font-medium flex flex-col items-center gap-2"><span class="text-3xl">🎉</span> All classes are covered for the next 7 days!</div>';
+              return;
+            }
+
+            let html = '<div class="divide-y divide-gray-200">';
+            unfilled.forEach(req => {
+              html += `
+                <div class="p-4 hover:bg-orange-50 transition-colors flex justify-between items-center bg-white">
+                  <div>
+                    <p class="font-bold text-[#002147]">${req.date}</p>
+                    <p class="text-sm text-gray-600 font-semibold">${req.teacherName}</p>
+                  </div>
+                  <div class="text-right">
+                    <span class="bg-orange-100 text-orange-800 text-xs font-bold px-3 py-1 rounded-full border border-orange-200">Period ${req.period}</span>
+                    <p class="text-xs text-gray-400 mt-2 hover:text-orange-600 cursor-pointer font-semibold underline" onclick="alert('For now, assign subs directly in the Google Sheet. We will build the Assign feature next!')">Assign Sub &rarr;</p>
+                  </div>
+                </div>
+              `;
+            });
+            html += '</div>';
+            
+            container.innerHTML = html;
+          })
+          .withFailureHandler(err => {
+            document.getElementById('quickCoverContainer').innerHTML = `<div class="p-8 text-center text-red-600 font-bold">Failed to load data: ${err.message}</div>`;
+          })
+          .getQuickCoverData();
+      }
+
+      function loadMyAbsences() {
+        google.script.run
+          .withSuccessHandler(absences => {
+            const container = document.getElementById('myAbsences');
+            if (absences.length === 0) {
+              container.innerHTML = 'No active requests found. You are doing great!';
+              return;
+            }
+
+            let html = '<div class="space-y-3 text-left">';
+            absences.forEach(abs => {
+              let bgClass = abs.urgency === 'Urgent' ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200';
+              let textClass = abs.urgency === 'Urgent' ? 'text-red-700' : 'text-[#002147]';
+              
+              html += `
+                <div class="flex justify-between items-start p-4 border rounded-xl shadow-sm ${bgClass}">
+                  <div>
+                    <p class="font-bold ${textClass} text-lg">${abs.date}</p>
+                    <p class="text-sm text-gray-600 font-semibold">${abs.reason}</p>
+                    <p class="text-xs text-gray-500 mt-1">Periods: ${abs.periods}</p>
+                  </div>
+                  <div class="text-xs font-bold uppercase tracking-wider opacity-60 mt-1">${abs.urgency}</div>
+                </div>
+              `;
+            });
+            html += '</div>';
+            
+            container.innerHTML = html;
+            container.classList.remove('text-gray-400');
+          })
+          .withFailureHandler(err => {
+            document.getElementById('myAbsences').innerHTML = `<div class="text-red-600 font-bold">Failed to load absences: ${err.message}</div>`;
+          })
+          .getMyAbsences();
+      }
+
+      document.getElementById('absenceForm').onsubmit = function(e) {
+        e.preventDefault();
+        
+        const selectedPeriods = Array.from(document.querySelectorAll('.period-cb:checked'))
+                                     .map(cb => cb.value).join(', ');
+
+        if (!selectedPeriods) {
+          alert("Please select at least one period for coverage.");
+          return;
+        }
+
+        const reason = document.getElementById('absReason').value;
+        const hrChecked = document.getElementById('hrConfirm').checked;
+        const agreed = document.getElementById('agreement').checked;
+
+        if ((reason === 'Jury Duty' || reason === 'Bereavement') && !hrChecked) {
+          alert("Please confirm HR documentation has been provided.");
+          return;
+        }
+        if (!agreed) {
+          alert("You must agree to the terms to submit.");
+          return;
+        }
+
+        const btn = document.getElementById('submitBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<div class="flex items-center justify-center gap-2"><div class="spinner"></div> Sending...</div>';
+
+        const formData = {
+          date: document.getElementById('absDate').value,
+          duration: document.getElementById('absDuration').value,
+          periods: selectedPeriods,
+          reason: reason,
+          urgency: document.getElementById('urgencyValue').value,
+          specialInstructions: document.getElementById('specialInst').value,
+          hrConfirmed: hrChecked
+        };
+
+        google.script.run
+          .withSuccessHandler((result) => {
+            if (result && result.success) {
+              alert("Request Submitted Successfully!");
+              document.getElementById('absenceForm').reset(); 
+              setUrgency('Standard'); 
+              document.getElementById('hrSection').classList.add('hidden');
+              btn.disabled = false;
+              btn.innerHTML = 'Submit Request';
+              toggleModal(); 
+              loadMyAbsences(); 
+              
+              if (!document.getElementById('adminSection').classList.contains('hidden')) {
+                loadQuickCover(); 
+              }
+            } else {
+              alert("Database Error: " + (result ? result.error : "Unknown issue"));
+              btn.disabled = false;
+              btn.innerHTML = 'Submit Request';
+            }
+          })
+          .withFailureHandler(err => {
+            alert("Connection Error: " + err.message);
+            btn.disabled = false;
+            btn.innerHTML = 'Submit Request';
+          })
+          .submitAbsence(formData);
+      };
+    </script>
+  </body>
+</html>
