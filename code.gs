@@ -134,6 +134,131 @@ function getMyAbsences() {
 }
 
 /**
+ * Fetches the sub duties assigned to the logged-in user over the next calendar week.
+ */
+function getMySubDuties() {
+  try {
+    var userEmail = Session.getActiveUser().getEmail().toLowerCase();
+    var userData = getUserData();
+    var userName = String(userData.name).trim().toLowerCase();
+
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var mainSheet = ss.getSheetByName("Absence Requests");
+    var rosterSheet = ss.getSheetByName("Staff Roster");
+    var masterScheduleSheet = ss.getSheetByName("Master Schedule");
+
+    if (!mainSheet) return [];
+
+    var data = mainSheet.getDataRange().getValues();
+    var rosterData = rosterSheet ? rosterSheet.getDataRange().getValues() : [];
+
+    // Master Schedule data mapping
+    var scheduleData = masterScheduleSheet ? masterScheduleSheet.getDataRange().getValues() : [];
+    var scheduleLookup = {};
+    if (scheduleData.length > 0) {
+      var headers = scheduleData[0];
+      var joinIdx = headers.indexOf("EMAIL_PERIOD_JOIN");
+      var roomIdx = headers.indexOf("ROOM");
+      var courseIdx = headers.indexOf("COURSE_NAMES");
+
+      if (joinIdx > -1) {
+        for (var s = 1; s < scheduleData.length; s++) {
+          var joinKey = String(scheduleData[s][joinIdx]).toLowerCase();
+          var room = roomIdx > -1 ? scheduleData[s][roomIdx] : "";
+          var course = courseIdx > -1 ? scheduleData[s][courseIdx] : "";
+          scheduleLookup[joinKey] = { room: room, course: course };
+        }
+      }
+    }
+
+    var nameLookup = {};
+    for (var r = 1; r < rosterData.length; r++) {
+      var rosterEmail = String(rosterData[r][1]).toLowerCase();
+      nameLookup[rosterEmail] = String(rosterData[r][0]);
+    }
+
+    var myDuties = [];
+    var today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    var targetEnd = new Date(today);
+    targetEnd.setDate(today.getDate() + 6); // Up to next week (7 days total including today)
+    targetEnd.setHours(23, 59, 59, 999);
+
+    for (var i = 1; i < data.length; i++) {
+      var status = String(data[i][17] || 'Active');
+      if (status === 'Canceled') continue;
+
+      var dateString = data[i][3];
+      if (!dateString) continue;
+
+      var rowDate = new Date(dateString);
+      if (isNaN(rowDate.getTime())) continue;
+
+      if (rowDate >= today && rowDate <= targetEnd) {
+        var teacherEmail = String(data[i][2]).toLowerCase();
+        var teacherName = nameLookup[teacherEmail] || teacherEmail;
+
+        if (teacherName.includes(",")) {
+          var parts = teacherName.split(",");
+          teacherName = parts[1].trim() + " " + parts[0].trim();
+        }
+
+        var periodsRequested = String(data[i][4]).split(",").map(function(p) { return p.trim(); });
+        var rowId = String(data[i][0]);
+        var formattedDate = String(Utilities.formatDate(rowDate, Session.getScriptTimeZone(), "MMM d, yyyy"));
+        var rawDate = Number(rowDate.getTime());
+
+        var reason = String(data[i][5]);
+        var duration = String(data[i][6]);
+        var instructions = String(data[i][8]);
+
+        for (var p = 1; p <= 8; p++) {
+          if (periodsRequested.indexOf(String(p)) !== -1) {
+            var subColumnIndex = 8 + p; // 9 for P1, 10 for P2, etc.
+            var assignedSub = String(data[i][subColumnIndex] || "").trim().toLowerCase();
+
+            // If the assigned sub matches the user's name
+            if (assignedSub === userName) {
+              var joinKey = teacherEmail + "-" + p;
+              var scheduleInfo = scheduleLookup[joinKey];
+              var roomStr = scheduleInfo && scheduleInfo.room ? String(scheduleInfo.room) : "No Class Assigned";
+              var courseStr = scheduleInfo && scheduleInfo.course ? String(scheduleInfo.course) : "No Class Assigned";
+
+              myDuties.push({
+                id: rowId,
+                teacherName: String(teacherName),
+                teacherEmail: String(teacherEmail),
+                date: formattedDate,
+                period: String(p),
+                rawDate: rawDate,
+                room: roomStr,
+                course: courseStr,
+                reason: reason,
+                duration: duration,
+                instructions: instructions
+              });
+            }
+          }
+        }
+      }
+    }
+
+    myDuties.sort(function(a, b) {
+      if (a.rawDate === b.rawDate) {
+        return parseInt(a.period) - parseInt(b.period);
+      }
+      return a.rawDate - b.rawDate;
+    });
+
+    return myDuties;
+
+  } catch (err) {
+    throw new Error("MySubDuties Error: " + err.message);
+  }
+}
+
+/**
  * Fetches unfilled sub requests for the next 2 days (or through Monday if weekend) for the Admin Dashboard.
  */
 function getQuickCoverData() {
@@ -343,6 +468,59 @@ function submitAbsence(formData) {
     }
     
     return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Cancels a single assigned sub duty by the sub themselves.
+ */
+function cancelMySubDuty(absenceId, period) {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName("Absence Requests");
+    if (!sheet) throw new Error("Absence Requests sheet not found.");
+
+    var userEmail = Session.getActiveUser().getEmail().toLowerCase();
+    var userData = getUserData();
+    var userName = String(userData.name).trim();
+
+    var data = sheet.getDataRange().getValues();
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][0]) === String(absenceId)) {
+        var subColumnIndex = 10 + parseInt(period) - 1; // 1-based col: J=10 (P1), etc.
+        var assignedSub = String(sheet.getRange(i + 1, subColumnIndex).getValue() || "").trim();
+
+        if (assignedSub.toLowerCase() === userName.toLowerCase()) {
+          // Get details BEFORE clearing the sub, just in case
+          var coordinatorEmail = getCoordinatorEmail();
+          var details = getAbsenceDetails(absenceId, period);
+
+          // Clear the sub from the sheet
+          sheet.getRange(i + 1, subColumnIndex).setValue("");
+
+          // Send email to sub coordinator, CCing the sub
+          if (coordinatorEmail && details) {
+            var subject = "SUB CANCELLATION: " + userName + " cancelled coverage";
+            var body = userName + " has cancelled their assigned coverage.\n\n" +
+                       "Date: " + details.date + "\n" +
+                       "Period: " + details.period + "\n" +
+                       "Teacher to Cover: " + details.teacherName + "\n" +
+                       "Room: " + details.room + "\n" +
+                       "Course: " + details.course + "\n\n" +
+                       "This period is now UNFILLED. Please log into the Coverage Portal to reassign a sub.";
+
+            GmailApp.sendEmail(coordinatorEmail, subject, body, { cc: userEmail });
+          }
+
+          return { success: true };
+        } else {
+          throw new Error("You are not currently assigned to this period.");
+        }
+      }
+    }
+    throw new Error("Absence ID not found.");
   } catch (err) {
     return { success: false, error: err.message };
   }
