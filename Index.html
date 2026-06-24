@@ -490,7 +490,7 @@
           // Find index in raw data for correct modal launching
           const rawIdx = adminDataRaw.findIndex(r => r.id === req.id && r.period === req.period);
 
-          let courseHtml = req.course;
+          let courseHtml = req.course ? `<span class="inline-block max-w-[200px] sm:max-w-[250px] md:max-w-xs truncate align-middle" title="${req.course}">${req.course}</span>` : '';
           if (req.course === "No Class Assigned" || !req.course) {
              courseHtml = `<span class="tooltip text-red-500 font-bold px-2 py-1 bg-red-50 rounded cursor-help">--<span class="tooltiptext">No course found</span></span>`;
           }
