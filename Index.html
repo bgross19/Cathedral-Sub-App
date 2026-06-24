@@ -9,6 +9,10 @@
       body.modal-active { overflow: hidden; }
       .spinner { border: 3px solid #f3f3f3; border-top: 3px solid #00843D; border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; }
       @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+      .tooltip { position: relative; display: inline-block; cursor: help; }
+      .tooltip .tooltiptext { visibility: hidden; width: 140px; background-color: #555; color: #fff; text-align: center; border-radius: 6px; padding: 5px; position: absolute; z-index: 1; bottom: 125%; left: 50%; margin-left: -70px; opacity: 0; transition: opacity 0.3s; font-size: 0.75rem; font-weight: normal; }
+      .tooltip .tooltiptext::after { content: ""; position: absolute; top: 100%; left: 50%; margin-left: -5px; border-width: 5px; border-style: solid; border-color: #555 transparent transparent transparent; }
+      .tooltip:hover .tooltiptext { visibility: visible; opacity: 1; }
     </style>
   </head>
 
@@ -16,10 +20,15 @@
 
     <nav class="bg-[#002147] text-white p-4 shadow-lg sticky top-0 z-50">
        <div class="max-w-4xl mx-auto flex justify-between items-center">
-           <h1 class="text-xl font-bold flex items-center gap-2">
-              <span class="bg-white rounded-full h-8 w-8 flex items-center justify-center text-lg">☘️</span> 
-              <span class="hidden sm:inline">Cathedral Sub Coverage</span>
-           </h1>
+           <div class="flex items-center gap-4">
+               <h1 class="text-xl font-bold flex items-center gap-2">
+                  <span class="bg-white rounded-full h-8 w-8 flex items-center justify-center text-lg">☘️</span>
+                  <span class="hidden sm:inline">Cathedral Sub Coverage</span>
+               </h1>
+               <button id="navAdminBtn" onclick="toggleAdminDashboard()" class="hidden ml-4 bg-white/20 hover:bg-white/30 text-white text-sm font-semibold py-1.5 px-4 rounded-full transition-colors flex items-center gap-2">
+                   <span>📊</span> Admin Dashboard
+               </button>
+           </div>
            <div id="userInfo" class="text-sm opacity-90 text-right">
                <div id="userName" class="font-bold">Loading...</div>
                <div id="userEmail" class="text-xs italic"><?= userEmail ?></div>
@@ -27,7 +36,7 @@
        </div>
     </nav>
 
-    <main class="max-w-4xl mx-auto p-4 mt-4">
+    <main id="mainContent" class="max-w-4xl mx-auto p-4 mt-4">
       
       <div class="bg-white rounded-2xl shadow-sm p-6 mb-6 border-t-4 border-[#00843D]">
         <h2 class="text-2xl font-bold text-[#002147]">Welcome, <span id="welcomeName">Teacher</span>!</h2>
@@ -50,6 +59,54 @@
       <h3 class="text-lg font-bold text-[#002147] mb-3">My Upcoming Absences</h3>
       <div id="myAbsences" class="bg-white rounded-xl shadow-sm p-8 text-center text-gray-400 border border-gray-200">
           Loading requests...
+      </div>
+    </main>
+
+    <!-- Admin Dashboard View -->
+    <main id="adminDashboardView" class="max-w-6xl mx-auto p-4 mt-4 hidden">
+      <div class="flex justify-between items-center mb-6">
+        <h2 class="text-2xl font-bold text-[#002147] flex items-center gap-2">
+          <span>📊</span> Sub Coverage Dashboard
+        </h2>
+        <button onclick="toggleAdminDashboard()" class="text-[#002147] hover:bg-gray-200 font-semibold py-2 px-4 rounded-lg transition-colors border border-[#002147]">
+           &larr; Return to Homepage
+        </button>
+      </div>
+
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
+        <div class="flex flex-col sm:flex-row gap-4 items-center justify-between">
+            <div class="flex items-center gap-2 w-full sm:w-auto">
+               <label class="text-sm font-bold text-gray-700">From:</label>
+               <input type="date" id="filterStartDate" class="border rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-[#00843D]" onchange="applyAdminFilters()">
+            </div>
+            <div class="flex items-center gap-2 w-full sm:w-auto">
+               <label class="text-sm font-bold text-gray-700">To:</label>
+               <input type="date" id="filterEndDate" class="border rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-[#00843D]" onchange="applyAdminFilters()">
+            </div>
+            <div class="flex items-center gap-2 w-full sm:w-auto ml-auto">
+               <button onclick="resetAdminFilters()" class="text-sm text-gray-500 hover:text-gray-800 underline">Reset Filters</button>
+            </div>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-x-auto">
+        <table class="w-full text-left border-collapse min-w-max">
+          <thead>
+            <tr class="bg-gray-50 border-b border-gray-200 text-sm text-gray-700 uppercase">
+              <th class="p-3 cursor-pointer hover:bg-gray-100" onclick="sortAdminTable('teacherName')">Name ↕️</th>
+              <th class="p-3 cursor-pointer hover:bg-gray-100" onclick="sortAdminTable('teacherEmail')">Email ↕️</th>
+              <th class="p-3 cursor-pointer hover:bg-gray-100" onclick="sortAdminTable('date')">Date ↕️</th>
+              <th class="p-3 cursor-pointer hover:bg-gray-100" onclick="sortAdminTable('period')">Period ↕️</th>
+              <th class="p-3 cursor-pointer hover:bg-gray-100" onclick="sortAdminTable('course')">Course ↕️</th>
+              <th class="p-3 cursor-pointer hover:bg-gray-100" onclick="sortAdminTable('room')">Room ↕️</th>
+              <th class="p-3 cursor-pointer hover:bg-gray-100" onclick="sortAdminTable('assignedSub')">Assigned Sub ↕️</th>
+              <th class="p-3 cursor-pointer hover:bg-gray-100" onclick="sortAdminTable('instructions')">Instructions ↕️</th>
+            </tr>
+          </thead>
+          <tbody id="adminDashboardTableBody" class="divide-y divide-gray-100">
+             <tr><td colspan="8" class="p-8 text-center text-gray-400 italic">Loading dashboard...</td></tr>
+          </tbody>
+        </table>
       </div>
     </main>
 
@@ -168,6 +225,10 @@
       let staffList = [];
       let currentUnfilledData = [];
       let myAbsencesData = [];
+      let adminDataRaw = [];
+      let adminDataFiltered = [];
+      let adminSortCol = 'date';
+      let adminSortAsc = true;
 
       function initApp() {
         google.script.run
@@ -179,6 +240,7 @@
             // Checks for 'Admin' OR 'Sub coordinator' regardless of uppercase/lowercase in your sheet!
             if (data.role.toLowerCase() === 'admin' || data.role.toLowerCase() === 'sub coordinator') {
               document.getElementById('adminSection').classList.remove('hidden');
+              document.getElementById('navAdminBtn').classList.remove('hidden');
               loadStaffList();
               loadQuickCover(); 
             }
@@ -324,6 +386,216 @@
             document.getElementById('quickCoverContainer').innerHTML = `<div class="p-8 text-center text-red-600 font-bold">Failed to load data: ${err.message}</div>`;
           })
           .getQuickCoverData();
+      }
+
+      function toggleAdminDashboard() {
+        const mainContent = document.getElementById('mainContent');
+        const adminView = document.getElementById('adminDashboardView');
+
+        if (adminView.classList.contains('hidden')) {
+          mainContent.classList.add('hidden');
+          adminView.classList.remove('hidden');
+          if (adminDataRaw.length === 0) {
+            loadAdminDashboardData();
+          }
+        } else {
+          adminView.classList.add('hidden');
+          mainContent.classList.remove('hidden');
+        }
+      }
+
+      function loadAdminDashboardData() {
+        document.getElementById('adminDashboardTableBody').innerHTML = '<tr><td colspan="7" class="p-8 text-center text-gray-400 italic">Loading dashboard data...</td></tr>';
+        google.script.run
+          .withSuccessHandler(data => {
+            adminDataRaw = data;
+            // Default to today
+            const today = new Date();
+            const offset = today.getTimezoneOffset() * 60000;
+            const localISOTime = (new Date(today - offset)).toISOString().split('T')[0];
+
+            document.getElementById('filterStartDate').value = localISOTime;
+            applyAdminFilters();
+          })
+          .withFailureHandler(err => {
+            document.getElementById('adminDashboardTableBody').innerHTML = `<tr><td colspan="7" class="p-8 text-center text-red-600 font-bold">Failed to load: ${err.message}</td></tr>`;
+          })
+          .getAdminDashboardData();
+      }
+
+      function applyAdminFilters() {
+        const startDateStr = document.getElementById('filterStartDate').value;
+        const endDateStr = document.getElementById('filterEndDate').value;
+
+        adminDataFiltered = adminDataRaw.filter(req => {
+          let match = true;
+          if (startDateStr && req.date < startDateStr) match = false;
+          if (endDateStr && req.date > endDateStr) match = false;
+          return match;
+        });
+
+        renderAdminTable();
+      }
+
+      function resetAdminFilters() {
+        document.getElementById('filterStartDate').value = '';
+        document.getElementById('filterEndDate').value = '';
+        applyAdminFilters();
+      }
+
+      function sortAdminTable(col) {
+        if (adminSortCol === col) {
+          adminSortAsc = !adminSortAsc;
+        } else {
+          adminSortCol = col;
+          adminSortAsc = true;
+        }
+        renderAdminTable();
+      }
+
+      function renderAdminTable() {
+        const tbody = document.getElementById('adminDashboardTableBody');
+        if (adminDataFiltered.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="8" class="p-8 text-center text-gray-400 italic">No absence requests found for these filters.</td></tr>';
+          return;
+        }
+
+        // Sort data
+        adminDataFiltered.sort((a, b) => {
+          let valA = a[adminSortCol] || '';
+          let valB = b[adminSortCol] || '';
+
+          if (adminSortCol === 'period') {
+             valA = parseInt(valA) || 0;
+             valB = parseInt(valB) || 0;
+          } else {
+             valA = String(valA).toLowerCase();
+             valB = String(valB).toLowerCase();
+          }
+
+          if (valA < valB) return adminSortAsc ? -1 : 1;
+          if (valA > valB) return adminSortAsc ? 1 : -1;
+          return 0;
+        });
+
+        let html = '';
+        adminDataFiltered.forEach((req, idx) => {
+          // Find index in raw data for correct modal launching
+          const rawIdx = adminDataRaw.findIndex(r => r.id === req.id && r.period === req.period);
+
+          let courseHtml = req.course;
+          if (req.course === "No Class Assigned" || !req.course) {
+             courseHtml = `<span class="tooltip text-red-500 font-bold px-2 py-1 bg-red-50 rounded cursor-help">--<span class="tooltiptext">No course found</span></span>`;
+          }
+
+          let roomHtml = req.room;
+          if (req.room === "No Class Assigned" || !req.room) {
+             roomHtml = `<span class="tooltip text-red-500 font-bold px-2 py-1 bg-red-50 rounded cursor-help">--<span class="tooltiptext">No room found</span></span>`;
+          }
+
+          let subHtml = req.assignedSub ? `<span class="bg-green-100 text-green-800 border border-green-200 px-2 py-1 rounded font-bold">${req.assignedSub}</span>` : `<span class="text-gray-400 italic font-medium">Unassigned</span>`;
+
+          html += `
+            <tr class="hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0">
+              <td class="p-3 text-sm text-gray-800 font-medium">${req.teacherName}</td>
+              <td class="p-3 text-sm text-gray-600"><a href="mailto:${req.teacherEmail}" class="hover:underline text-blue-600">${req.teacherEmail}</a></td>
+              <td class="p-3 text-sm text-gray-600">${req.date}</td>
+              <td class="p-3 text-sm font-bold text-gray-700">Period ${req.period}</td>
+              <td class="p-3 text-sm text-gray-600">${courseHtml}</td>
+              <td class="p-3 text-sm text-gray-600">${roomHtml}</td>
+              <td class="p-3 text-sm cursor-pointer hover:bg-gray-100" onclick="openDetailsModalForAdmin(${rawIdx})">${subHtml}</td>
+              <td class="p-3 text-sm text-gray-500 max-w-xs truncate" title="${req.instructions || ''}">${req.instructions || '-'}</td>
+            </tr>
+          `;
+        });
+
+        tbody.innerHTML = html;
+      }
+
+      function openDetailsModalForAdmin(index) {
+        const req = adminDataRaw[index];
+        if (!req) return;
+
+        const assignId = `admin-modal-assign-${req.id}-${req.period}`;
+
+        let html = `
+          <div class="bg-gray-50 p-4 rounded-xl border mb-4">
+             <div class="grid grid-cols-2 gap-4 text-sm">
+                <div><span class="font-bold text-gray-700">Teacher:</span> ${req.teacherName}</div>
+                <div><span class="font-bold text-gray-700">Email:</span> <a href="mailto:${req.teacherEmail}" class="text-blue-600 hover:underline">${req.teacherEmail}</a></div>
+                <div><span class="font-bold text-gray-700">Date:</span> ${req.date}</div>
+                <div><span class="font-bold text-gray-700">Period:</span> ${req.period}</div>
+                <div><span class="font-bold text-gray-700">Room:</span> ${req.room}</div>
+                <div><span class="font-bold text-gray-700">Course:</span> ${req.course}</div>
+             </div>
+          </div>
+
+          <div class="space-y-3">
+             <div>
+               <p class="font-bold text-sm text-gray-700">Special Instructions</p>
+               <p class="text-gray-600 bg-white p-3 border rounded-lg">${req.instructions || 'None provided'}</p>
+             </div>
+          </div>
+
+          <div class="mt-6 border-t pt-4">
+             <p class="font-bold text-sm text-gray-700 mb-2">Assign/Edit Substitute</p>
+             <div class="flex items-center gap-2">
+                <input type="text" id="${assignId}" list="staffDataList" value="${req.assignedSub || ''}" placeholder="Enter sub name..." class="flex-1 p-3 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#00843D] bg-white">
+                <button onclick="handleAdminAssign('${req.id}', '${req.period}', '${assignId}')" class="bg-[#00843D] hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg transition-colors shadow-sm">
+                  Save
+                </button>
+             </div>
+             <p class="text-xs text-gray-500 mt-2 italic">To remove a sub, clear the box and click Save.</p>
+          </div>
+        `;
+
+        document.getElementById('detailsContent').innerHTML = html;
+
+        const modal = document.querySelector('#detailsModal');
+        const overlay = document.querySelector('#genericModalOverlay');
+        const body = document.querySelector('body');
+
+        modal.classList.remove('opacity-0');
+        modal.classList.remove('pointer-events-none');
+        overlay.classList.remove('opacity-0');
+        overlay.classList.remove('pointer-events-none');
+        body.classList.add('modal-active');
+      }
+
+      function handleAdminAssign(absenceId, period, selectElementId) {
+        const selectEl = document.getElementById(selectElementId);
+        const subName = selectEl.value; // It can be empty to unassign!
+
+        if (subName && !staffList.includes(subName)) {
+          alert("Please enter a valid staff name from the list, or leave it blank to clear.");
+          return;
+        }
+
+        const btn = selectEl.nextElementSibling;
+        const originalText = btn.innerText;
+        btn.disabled = true;
+        btn.innerText = "Saving...";
+
+        google.script.run
+          .withSuccessHandler(result => {
+            if (result && result.success) {
+              closeAllModals();
+              // Refresh admin data behind the scenes
+              loadAdminDashboardData();
+              // Also refresh quick cover if it's the same 7-day window
+              loadQuickCover();
+            } else {
+              alert("Failed to assign sub: " + (result ? result.error : "Unknown error"));
+              btn.disabled = false;
+              btn.innerText = originalText;
+            }
+          })
+          .withFailureHandler(err => {
+            alert("Error: " + err.message);
+            btn.disabled = false;
+            btn.innerText = originalText;
+          })
+          .assignSubToPeriod(absenceId, period, subName);
       }
 
       function openDetailsModal(index) {
