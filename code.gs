@@ -1117,6 +1117,8 @@ function getAdminDashboardData() {
       var email = String(data[i][2]).toLowerCase().trim();
       var dateStr = data[i][3];
       var periodsStr = String(data[i][4]);
+      var reason = String(data[i][5] || "").trim();
+      var duration = String(data[i][6] || "").trim();
       var instructions = String(data[i][8] || "").trim();
 
       // Get teacher name
@@ -1161,6 +1163,8 @@ function getAdminDashboardData() {
               course: String(course || ""),
               room: String(room || ""),
               assignedSub: String(assignedSub || "").trim(),
+              reason: String(reason || ""),
+              duration: String(duration || ""),
               instructions: String(instructions || "")
             });
         }
