@@ -48,9 +48,10 @@ function getUserData() {
   var rosterSheet = ss.getSheetByName("Staff Roster");
   var rosterData = rosterSheet ? rosterSheet.getDataRange().getValues() : [];
   var name = "Teacher"; 
+  var targetEmail = String(email).toLowerCase();
   
   for (var i = 1; i < rosterData.length; i++) {
-    if (String(rosterData[i][1]).toLowerCase() === String(email).toLowerCase()) { 
+    if (String(rosterData[i][1]).toLowerCase() === targetEmail) {
       name = rosterData[i][0]; 
       break;
     }
@@ -61,7 +62,7 @@ function getUserData() {
   var role = "User"; 
   
   for (var j = 1; j < roleData.length; j++) {
-    if (String(roleData[j][0]).toLowerCase() === String(email).toLowerCase()) { 
+    if (String(roleData[j][0]).toLowerCase() === targetEmail) {
       role = roleData[j][1]; 
       break;
     }
@@ -83,12 +84,13 @@ function getMyAbsences() {
     
     var data = sheet.getDataRange().getValues();
     var myAbsences = [];
+    var targetEmail = String(email).toLowerCase();
     
     for (var i = 1; i < data.length; i++) {
       var status = String(data[i][17] || 'Active');
       if (status === 'Canceled') continue;
 
-      if (String(data[i][2]).toLowerCase() === String(email).toLowerCase()) { // Email is index 2 now
+      if (String(data[i][2]).toLowerCase() === targetEmail) { // Email is index 2 now
         var dateVal = data[i][3]; // Date is index 3 now
         if (!dateVal) continue; 
 
@@ -487,12 +489,13 @@ function cancelMySubDuty(absenceId, period) {
     var userName = String(userData.name).trim();
 
     var data = sheet.getDataRange().getValues();
+    var targetUserName = userName.toLowerCase();
     for (var i = 1; i < data.length; i++) {
       if (String(data[i][0]) === String(absenceId)) {
         var subColumnIndex = 10 + parseInt(period) - 1; // 1-based col: J=10 (P1), etc.
         var assignedSub = String(sheet.getRange(i + 1, subColumnIndex).getValue() || "").trim();
 
-        if (assignedSub.toLowerCase() === userName.toLowerCase()) {
+        if (assignedSub.toLowerCase() === targetUserName) {
           // Get details BEFORE clearing the sub, just in case
           var coordinatorEmail = getCoordinatorEmail();
           var details = getAbsenceDetails(absenceId, period);
@@ -681,8 +684,9 @@ function getTeacherNameFromEmail(email) {
   var sheet = ss.getSheetByName("Staff Roster");
   if (!sheet) return email;
   var data = sheet.getDataRange().getValues();
+  var targetEmail = email.trim().toLowerCase();
   for (var i = 1; i < data.length; i++) {
-    if (String(data[i][1]).trim().toLowerCase() === email.trim().toLowerCase()) {
+    if (String(data[i][1]).trim().toLowerCase() === targetEmail) {
       return String(data[i][0]).trim();
     }
   }
