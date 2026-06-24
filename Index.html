@@ -107,7 +107,6 @@
           <thead>
             <tr class="bg-gray-50 border-b border-gray-200 text-sm text-gray-700 uppercase">
               <th class="p-3 cursor-pointer hover:bg-gray-100" onclick="sortAdminTable('teacherName')">Name ↕️</th>
-              <th class="p-3 cursor-pointer hover:bg-gray-100" onclick="sortAdminTable('teacherEmail')">Email ↕️</th>
               <th class="p-3 cursor-pointer hover:bg-gray-100" onclick="sortAdminTable('date')">Date ↕️</th>
               <th class="p-3 cursor-pointer hover:bg-gray-100" onclick="sortAdminTable('period')">Period ↕️</th>
               <th class="p-3 cursor-pointer hover:bg-gray-100" onclick="sortAdminTable('course')">Course ↕️</th>
@@ -117,7 +116,7 @@
             </tr>
           </thead>
           <tbody id="adminDashboardTableBody" class="divide-y divide-gray-100">
-             <tr><td colspan="8" class="p-8 text-center text-gray-400 italic">Loading dashboard...</td></tr>
+             <tr><td colspan="7" class="p-8 text-center text-gray-400 italic">Loading dashboard...</td></tr>
           </tbody>
         </table>
       </div>
@@ -546,7 +545,7 @@
       function renderAdminTable() {
         const tbody = document.getElementById('adminDashboardTableBody');
         if (adminDataFiltered.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="8" class="p-8 text-center text-gray-400 italic">No absence requests found for these filters.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="7" class="p-8 text-center text-gray-400 italic">No absence requests found for these filters.</td></tr>';
           return;
         }
 
@@ -573,7 +572,7 @@
           // Find index in raw data for correct modal launching
           const rawIdx = adminDataRaw.findIndex(r => r.id === req.id && r.period === req.period);
 
-          let courseHtml = req.course ? `<span class="inline-block max-w-[200px] sm:max-w-[250px] md:max-w-xs truncate align-middle" title="${req.course}">${req.course}</span>` : '';
+          let courseHtml = req.course ? `<span class="inline-block max-w-[150px] sm:max-w-[180px] md:max-w-[240px] truncate align-middle" title="${req.course}">${req.course}</span>` : '';
           if (req.course === "No Class Assigned" || !req.course) {
              courseHtml = `<span class="tooltip text-red-500 font-bold px-2 py-1 bg-red-50 rounded cursor-help">--<span class="tooltiptext">No course found</span></span>`;
           }
@@ -587,8 +586,7 @@
 
           html += `
             <tr class="hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0">
-              <td class="p-3 text-sm text-gray-800 font-medium">${req.teacherName}</td>
-              <td class="p-3 text-sm text-gray-600"><a href="mailto:${req.teacherEmail}" class="hover:underline text-blue-600">${req.teacherEmail}</a></td>
+              <td class="p-3 text-sm text-gray-800 font-medium"><a href="mailto:${req.teacherEmail}" class="hover:underline text-blue-600">${req.teacherName}</a></td>
               <td class="p-3 text-sm text-gray-600">${req.date}</td>
               <td class="p-3 text-sm font-bold text-gray-700">Period ${req.period}</td>
               <td class="p-3 text-sm text-gray-600">${courseHtml}</td>
