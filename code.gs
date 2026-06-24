@@ -41,9 +41,9 @@ function doGet(e) {
 /**
  * Grabs the user's name and role on startup.
  */
-function getUserData() {
+function getUserData(ss) {
   var email = Session.getActiveUser().getEmail();
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = ss || SpreadsheetApp.getActiveSpreadsheet();
   
   var rosterSheet = ss.getSheetByName("Staff Roster");
   var rosterData = rosterSheet ? rosterSheet.getDataRange().getValues() : [];
@@ -139,10 +139,10 @@ function getMyAbsences() {
 function getMySubDuties() {
   try {
     var userEmail = Session.getActiveUser().getEmail().toLowerCase();
-    var userData = getUserData();
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var userData = getUserData(ss);
     var userName = String(userData.name).trim().toLowerCase();
 
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
     var mainSheet = ss.getSheetByName("Absence Requests");
     var rosterSheet = ss.getSheetByName("Staff Roster");
     var masterScheduleSheet = ss.getSheetByName("Master Schedule");
@@ -416,8 +416,8 @@ function getStaffList() {
   }
 }
 
-function getCoordinatorEmail() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+function getCoordinatorEmail(ss) {
+  var ss = ss || SpreadsheetApp.getActiveSpreadsheet();
   var roleSheet = ss.getSheetByName("User Roles");
   if (!roleSheet) return null;
   
@@ -451,9 +451,9 @@ function submitAbsence(formData) {
     ];
     mainSheet.appendRow(newRow);
 
-    var teacherName = getUserData().name; 
+    var teacherName = getUserData(ss).name;
     if (urgencyFormatted === 'Urgent (Less than 24 hr notice)') {
-      var coordinatorEmail = getCoordinatorEmail();
+      var coordinatorEmail = getCoordinatorEmail(ss);
       if (coordinatorEmail) {
         var subject = "URGENT COVERAGE NEEDED: " + teacherName;
         var body = "An urgent absence request has been submitted requiring immediate attention.\n\n" +
@@ -483,7 +483,7 @@ function cancelMySubDuty(absenceId, period) {
     if (!sheet) throw new Error("Absence Requests sheet not found.");
 
     var userEmail = Session.getActiveUser().getEmail().toLowerCase();
-    var userData = getUserData();
+    var userData = getUserData(ss);
     var userName = String(userData.name).trim();
 
     var data = sheet.getDataRange().getValues();
@@ -494,7 +494,7 @@ function cancelMySubDuty(absenceId, period) {
 
         if (assignedSub.toLowerCase() === userName.toLowerCase()) {
           // Get details BEFORE clearing the sub, just in case
-          var coordinatorEmail = getCoordinatorEmail();
+          var coordinatorEmail = getCoordinatorEmail(ss);
           var details = getAbsenceDetails(absenceId, period);
 
           // Clear the sub from the sheet
