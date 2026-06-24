@@ -33,6 +33,9 @@
                <button id="navHRBtn" onclick="toggleHRDashboard()" class="hidden ml-4 bg-white/20 hover:bg-white/30 text-white text-sm font-semibold py-1.5 px-4 rounded-full transition-colors flex items-center gap-2">
                    <span>👥</span> HR Dashboard
                </button>
+               <button id="navAtAGlanceBtn" onclick="toggleAtAGlanceDashboard()" class="hidden ml-4 bg-white/20 hover:bg-white/30 text-white text-sm font-semibold py-1.5 px-4 rounded-full transition-colors flex items-center gap-2">
+                   <span>📅</span> Today at a Glance
+               </button>
            </div>
            <div id="userInfo" class="text-sm opacity-90 text-right">
                <div id="userName" class="font-bold">Loading...</div>
@@ -178,6 +181,50 @@
         </table>
       </div>
     </main>
+    <!-- At a Glance Dashboard View -->
+    <main id="atAGlanceDashboardView" class="max-w-6xl mx-auto p-4 mt-4 hidden">
+      <div class="flex justify-between items-center mb-6">
+        <h2 class="text-2xl font-bold text-[#002147] flex items-center gap-2">
+          <span>📅</span> Today at a Glance
+        </h2>
+        <button onclick="toggleAtAGlanceDashboard()" class="text-[#002147] hover:bg-gray-200 font-semibold py-2 px-4 rounded-lg transition-colors border border-[#002147]">
+           &larr; Return to Homepage
+        </button>
+      </div>
+
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
+        <div class="flex flex-col sm:flex-row gap-4 items-center justify-between">
+            <div class="flex items-center gap-2 w-full sm:w-auto">
+               <label class="text-sm font-bold text-gray-700">Date:</label>
+               <input type="date" id="atAGlanceDate" class="border rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-[#00843D]" onchange="applyAtAGlanceFilter()">
+            </div>
+            <div class="flex items-center gap-2 w-full sm:w-auto ml-auto">
+               <button onclick="copyAtAGlance()" class="bg-white hover:bg-gray-100 text-[#002147] text-sm font-bold py-1.5 px-4 rounded border border-[#002147] transition-colors shadow-sm flex items-center gap-2">
+                   <span>📋</span> Copy This Info
+               </button>
+            </div>
+        </div>
+      </div>
+
+      <div id="atAGlanceCopyContainer" class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-x-auto p-4">
+        <!-- The table and footer will be rendered inside this container so it can be easily copied -->
+        <table class="w-full text-left border-collapse min-w-max border border-gray-300">
+          <thead id="atAGlanceTableHeader">
+             <tr class="bg-gray-50 border-b border-gray-300 text-sm text-gray-700 uppercase">
+                <!-- Columns dynamically injected -->
+             </tr>
+          </thead>
+          <tbody id="atAGlanceTableBody" class="divide-y divide-gray-200">
+             <tr><td class="p-8 text-center text-gray-400 italic">Loading Today at a Glance...</td></tr>
+          </tbody>
+        </table>
+        <div id="atAGlanceFooter" class="mt-4 text-sm hidden">
+           <br>
+           Please refer to the <a href="https://script.google.com/a/macros/gocathedral.com/s/AKfycbwKZrBo4R-9O97aVNCjOHk9PddWCb6XNKviDS1lj4nNc49khl3T9OL8pGUDa7E1XE0/exec" style="color: #00843D; text-decoration: underline;">Cathedral Sub App</a> for more information.
+        </div>
+      </div>
+    </main>
+
     <!-- Generic Modal overlay -->
     <div id="genericModalOverlay" class="modal opacity-0 pointer-events-none fixed w-full h-full top-0 left-0 flex items-center justify-center z-[100]">
       <div class="modal-overlay absolute w-full h-full bg-gray-900 opacity-50" onclick="closeAllModals()"></div>
@@ -315,6 +362,9 @@
               document.getElementById('navAdminBtn').classList.remove('hidden');
               loadStaffList();
               loadQuickCover(); 
+            }
+            if (lowerRole === 'sub coordinator') {
+              document.getElementById('navAtAGlanceBtn').classList.remove('hidden');
             }
             if (lowerRole === 'hr' || lowerRole === 'principal') {
               document.getElementById('navHRBtn').classList.remove('hidden');
@@ -563,9 +613,13 @@
       function toggleAdminDashboard() {
         const mainContent = document.getElementById('mainContent');
         const adminView = document.getElementById('adminDashboardView');
+        const hrView = document.getElementById('hrDashboardView');
+        const atAGlanceView = document.getElementById('atAGlanceDashboardView');
 
         if (adminView.classList.contains('hidden')) {
           mainContent.classList.add('hidden');
+          if (hrView) hrView.classList.add('hidden');
+          if (atAGlanceView) atAGlanceView.classList.add('hidden');
           adminView.classList.remove('hidden');
           if (adminDataRaw.length === 0) {
             loadAdminDashboardData();
@@ -576,21 +630,148 @@
         }
       }
 
-      function loadAdminDashboardData() {
+      function toggleAtAGlanceDashboard() {
+        const mainContent = document.getElementById('mainContent');
+        const adminView = document.getElementById('adminDashboardView');
+        const hrView = document.getElementById('hrDashboardView');
+        const atAGlanceView = document.getElementById('atAGlanceDashboardView');
+
+        if (atAGlanceView.classList.contains('hidden')) {
+          mainContent.classList.add('hidden');
+          if (adminView) adminView.classList.add('hidden');
+          if (hrView) hrView.classList.add('hidden');
+          atAGlanceView.classList.remove('hidden');
+
+          if (adminDataRaw.length === 0) {
+            loadAdminDashboardData(true); // pass flag to indicate it should render atAGlance when done
+          } else {
+            // Default to today if empty
+            if (!document.getElementById('atAGlanceDate').value) {
+                const today = new Date();
+                const offset = today.getTimezoneOffset() * 60000;
+                const localISOTime = (new Date(today - offset)).toISOString().split('T')[0];
+                document.getElementById('atAGlanceDate').value = localISOTime;
+            }
+            applyAtAGlanceFilter();
+          }
+        } else {
+          atAGlanceView.classList.add('hidden');
+          mainContent.classList.remove('hidden');
+        }
+      }
+
+      function applyAtAGlanceFilter() {
+        const selectedDate = document.getElementById('atAGlanceDate').value;
+        if (!selectedDate) return;
+
+        // Filter for records on the exact selected date
+        const todaysRecords = adminDataRaw.filter(req => req.date === selectedDate);
+        renderAtAGlanceTable(todaysRecords);
+      }
+
+      function renderAtAGlanceTable(records) {
+        const thead = document.getElementById('atAGlanceTableHeader');
+        const tbody = document.getElementById('atAGlanceTableBody');
+
+        if (records.length === 0) {
+            thead.innerHTML = '<tr class="bg-gray-50 border-b border-gray-300 text-sm text-gray-700 uppercase"><th class="p-3 border border-gray-300">Teacher Name</th></tr>';
+            tbody.innerHTML = '<tr><td class="p-8 text-center text-gray-400 italic border border-gray-300">No absence requests found for this date.</td></tr>';
+            return;
+        }
+
+        // 1. Group records by teacher
+        const teacherMap = {};
+        const activePeriods = new Set();
+
+        records.forEach(req => {
+            if (!teacherMap[req.teacherName]) {
+                teacherMap[req.teacherName] = {
+                    name: req.teacherName,
+                    periods: {}
+                };
+            }
+
+            teacherMap[req.teacherName].periods[req.period] = {
+                assignedSub: req.assignedSub || null,
+                room: req.room || "N/A"
+            };
+            activePeriods.add(parseInt(req.period));
+        });
+
+        const sortedActivePeriods = Array.from(activePeriods).sort((a, b) => a - b);
+
+        // 2. Build Header
+        let headerHtml = `<th class="p-3 border border-gray-300 min-w-[150px]">Teacher Name</th>`;
+        sortedActivePeriods.forEach(p => {
+            headerHtml += `<th class="p-3 border border-gray-300 text-center w-32">Period ${p}</th>`;
+        });
+        thead.innerHTML = headerHtml;
+
+        // 3. Build Body
+        let html = '';
+        const teachers = Object.values(teacherMap).sort((a, b) => a.name.localeCompare(b.name));
+
+        teachers.forEach(t => {
+            html += `<tr class="hover:bg-gray-50 transition-colors">`;
+            html += `<td class="p-3 text-sm text-gray-800 font-bold border border-gray-300">${t.name}</td>`;
+
+            sortedActivePeriods.forEach(p => {
+                const pData = t.periods[p];
+                if (pData) {
+                    // They requested a sub for this period
+                    if (pData.assignedSub) {
+                        html += `<td class="p-3 text-xs text-center border border-gray-300 bg-green-50 align-top">
+                                    <div class="font-bold text-green-800">${pData.assignedSub}</div>
+                                    <div class="text-gray-500 mt-1">${pData.room}</div>
+                                 </td>`;
+                    } else {
+                        html += `<td class="p-3 text-xs text-center border border-gray-300 bg-yellow-100 align-top">
+                                    <div class="font-bold text-yellow-800">Unassigned</div>
+                                    <div class="text-gray-600 mt-1">${pData.room}</div>
+                                 </td>`;
+                    }
+                } else {
+                    // Did not request a sub for this period
+                    html += `<td class="p-3 text-xs text-center border border-gray-300 bg-gray-200">
+                                <div style="width: 100%; height: 2px; background-color: #9ca3af; margin: 10px 0;"></div>
+                             </td>`;
+                }
+            });
+            html += `</tr>`;
+        });
+
+        tbody.innerHTML = html;
+      }
+
+      function loadAdminDashboardData(renderAtAGlance = false) {
         document.getElementById('adminDashboardTableBody').innerHTML = '<tr><td colspan="7" class="p-8 text-center text-gray-400 italic">Loading dashboard data...</td></tr>';
+        if (renderAtAGlance) {
+            document.getElementById('atAGlanceTableBody').innerHTML = '<tr><td class="p-8 text-center text-gray-400 italic">Loading Today at a Glance...</td></tr>';
+        }
+
         google.script.run
           .withSuccessHandler(data => {
             adminDataRaw = data;
-            // Default to today
             const today = new Date();
             const offset = today.getTimezoneOffset() * 60000;
             const localISOTime = (new Date(today - offset)).toISOString().split('T')[0];
 
-            document.getElementById('filterStartDate').value = localISOTime;
-            applyAdminFilters();
+            if (renderAtAGlance) {
+                if (!document.getElementById('atAGlanceDate').value) {
+                    document.getElementById('atAGlanceDate').value = localISOTime;
+                }
+                applyAtAGlanceFilter();
+            } else {
+                // Default to today
+                document.getElementById('filterStartDate').value = localISOTime;
+                applyAdminFilters();
+            }
           })
           .withFailureHandler(err => {
             document.getElementById('adminDashboardTableBody').innerHTML = `<tr><td colspan="7" class="p-8 text-center text-red-600 font-bold">Failed to load: ${err.message}</td></tr>`;
+            if (renderAtAGlance) {
+                document.getElementById('atAGlanceTableBody').innerHTML = `<tr><td class="p-8 text-center text-red-600 font-bold">Failed to load: ${err.message}</td></tr>`;
+            }
           })
           .getAdminDashboardData();
       }
@@ -1230,10 +1411,12 @@
         const mainContent = document.getElementById('mainContent');
         const adminView = document.getElementById('adminDashboardView');
         const hrView = document.getElementById('hrDashboardView');
+        const atAGlanceView = document.getElementById('atAGlanceDashboardView');
 
         if (hrView.classList.contains('hidden')) {
           mainContent.classList.add('hidden');
-          adminView.classList.add('hidden');
+          if (adminView) adminView.classList.add('hidden');
+          if (atAGlanceView) atAGlanceView.classList.add('hidden');
           hrView.classList.remove('hidden');
 
           if (hrDataRaw.length === 0) {
@@ -1485,6 +1668,39 @@
             console.error('Failed to copy text: ', err);
             alert('Failed to copy data to clipboard.');
         });
+      }
+
+      function copyAtAGlance() {
+        const container = document.getElementById('atAGlanceCopyContainer');
+        const footer = document.getElementById('atAGlanceFooter');
+
+        // Show the footer temporarily for the copy
+        footer.classList.remove('hidden');
+
+        // Create a range and selection to copy HTML content
+        const range = document.createRange();
+        range.selectNode(container);
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+
+        try {
+            document.execCommand('copy');
+
+            const btn = document.querySelector('button[onclick="copyAtAGlance()"]');
+            const originalHTML = btn.innerHTML;
+            btn.innerHTML = '<span>✅</span> Copied!';
+            setTimeout(() => {
+                btn.innerHTML = originalHTML;
+            }, 2000);
+        } catch (err) {
+            console.error('Failed to copy text: ', err);
+            alert('Failed to copy data to clipboard.');
+        }
+
+        // Clean up
+        selection.removeAllRanges();
+        footer.classList.add('hidden');
       }
     </script>
   </body>
