@@ -1,7 +1,0 @@
-Ah wait, the sub coverages iterates over periods. "req.assignedSubs.forEach(sub => { ... aggregated[sub] += 1; })".
-But actually, Sub Coverages was 1 period. It means it already equals 1 hour (since 8 periods = 8 hours full day). So changing the text to "Hours" is logically consistent.
-Wait, let's review what the user request was. "At the same time, can we change the counts for Full Day and Half day, to be 8 and 4 respectively? Since HR works off of hours and not days."
-There is only one place where it was calculating Full day and Half day (which is the Absences view).
-However, for Sub Coverages, if the reviewer is complaining that the Sub Coverages view should ALSO have been updated, let's just make sure both views say "Hours" instead of "Count" / "Periods Subbed".
-
-Is there anywhere else that calculates Full Day and Half Day?
