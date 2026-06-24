@@ -279,6 +279,104 @@ function getMySubDuties() {
 }
 
 /**
+ * Fetches unfilled sub requests for today.
+ */
+function getTodaysOpenJobsData() {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var mainSheet = ss.getSheetByName("Absence Requests");
+    var rosterSheet = ss.getSheetByName("Staff Roster");
+    var masterScheduleSheet = ss.getSheetByName("Master Schedule");
+
+    if (!mainSheet) return [];
+
+    var data = mainSheet.getDataRange().getValues();
+    var rosterData = rosterSheet ? rosterSheet.getDataRange().getValues() : [];
+
+    var scheduleData = masterScheduleSheet ? masterScheduleSheet.getDataRange().getValues() : [];
+    var scheduleLookup = buildScheduleLookup(scheduleData);
+    var nameLookup = buildNameLookup(rosterData);
+
+    var unfilled = [];
+    var today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    var targetEnd = new Date(today);
+    targetEnd.setHours(23, 59, 59, 999);
+
+    for (var i = 1; i < data.length; i++) {
+      var status = String(data[i][17] || 'Active');
+      if (status === 'Canceled') continue;
+
+      var dateString = data[i][3];
+      if (!dateString) continue;
+
+      var rowDate = new Date(dateString);
+      if (isNaN(rowDate.getTime())) continue;
+
+      if (rowDate >= today && rowDate <= targetEnd) {
+        var teacherEmail = String(data[i][2]).toLowerCase();
+        var teacherName = nameLookup[teacherEmail] || teacherEmail;
+
+        if (teacherName.includes(",")) {
+          var parts = teacherName.split(",");
+          teacherName = parts[1].trim() + " " + parts[0].trim();
+        }
+
+        var periodsRequested = String(data[i][4]).split(",").map(function(p) { return p.trim(); });
+        var rowId = String(data[i][0]);
+        var formattedDate = String(Utilities.formatDate(rowDate, Session.getScriptTimeZone(), "MMM d, yyyy"));
+        var rawDate = Number(rowDate.getTime());
+
+        var reason = String(data[i][5]);
+        var duration = String(data[i][6]);
+        var instructions = String(data[i][8]);
+
+        for (var p = 1; p <= 8; p++) {
+          if (periodsRequested.indexOf(String(p)) !== -1) {
+            var subColumnIndex = 8 + p;
+            var assignedSub = data[i][subColumnIndex];
+
+            if (!assignedSub || String(assignedSub).trim() === "") {
+              var joinKey = teacherEmail + "-" + p;
+              var scheduleInfo = scheduleLookup[joinKey];
+              var roomStr = scheduleInfo && scheduleInfo.room ? String(scheduleInfo.room) : "No Class Assigned";
+              var courseStr = scheduleInfo && scheduleInfo.course ? String(scheduleInfo.course) : "No Class Assigned";
+
+              unfilled.push({
+                id: rowId,
+                teacherName: String(teacherName),
+                teacherEmail: String(teacherEmail),
+                date: formattedDate,
+                period: String(p),
+                rawDate: rawDate,
+                room: roomStr,
+                course: courseStr,
+                reason: reason,
+                duration: duration,
+                instructions: instructions
+              });
+            }
+          }
+        }
+      }
+    }
+
+    unfilled.sort(function(a, b) {
+      if (a.rawDate === b.rawDate) {
+        return parseInt(a.period) - parseInt(b.period);
+      }
+      return a.rawDate - b.rawDate;
+    });
+
+    return unfilled;
+
+  } catch (err) {
+    throw new Error("Backend Error: " + err.message);
+  }
+}
+
+/**
  * Fetches unfilled sub requests for the next 2 days (or through Monday if weekend) for the Admin Dashboard.
  */
 function getQuickCoverData() {
