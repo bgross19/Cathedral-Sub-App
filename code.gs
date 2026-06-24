@@ -863,12 +863,12 @@ function assignSubToPeriod(absenceId, period, subName) {
  */
 function getAdminDashboardData() {
   try {
-    var user = getUserData();
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var user = getUserData(ss);
     if (user.role !== "Admin" && user.role !== "Sub Coordinator") {
       throw new Error("Unauthorized access. Admin or Sub Coordinator role required.");
     }
 
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
     var mainSheet = ss.getSheetByName("Absence Requests");
     var rosterSheet = ss.getSheetByName("Staff Roster");
     var masterScheduleSheet = ss.getSheetByName("Master Schedule");
@@ -898,6 +898,12 @@ function getAdminDashboardData() {
       }
     }
 
+    var nameLookup = {};
+    for (var r = 1; r < rosterData.length; r++) {
+      var rosterEmail = String(rosterData[r][1]).toLowerCase().trim();
+      nameLookup[rosterEmail] = String(rosterData[r][0]).trim();
+    }
+
     var adminData = [];
 
     // Skip header row
@@ -912,7 +918,8 @@ function getAdminDashboardData() {
       var instructions = String(data[i][8] || "").trim();
 
       // Get teacher name
-      var teacherName = getTeacherNameFromEmail(email);
+      var lookupEmail = email; // email is already lowercased and trimmed above
+      var teacherName = nameLookup[lookupEmail] || email;
 
       // Parse date to a comparable format, YYYY-MM-DD
       var dateObj = new Date(dateStr);
