@@ -665,3 +665,114 @@ function assignSubToPeriod(absenceId, period, subName) {
     return { success: false, error: err.message };
   }
 }
+
+/**
+ * Fetches data for the Admin Dashboard.
+ * Returns an array of objects, one per period.
+ */
+function getAdminDashboardData() {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var mainSheet = ss.getSheetByName("Absence Requests");
+    var rosterSheet = ss.getSheetByName("Staff Roster");
+    var masterScheduleSheet = ss.getSheetByName("Master Schedule");
+
+    if (!mainSheet) return [];
+
+    var data = mainSheet.getDataRange().getValues();
+    var rosterData = rosterSheet ? rosterSheet.getDataRange().getValues() : [];
+
+    // Master Schedule data mapping
+    var scheduleData = masterScheduleSheet ? masterScheduleSheet.getDataRange().getValues() : [];
+    var scheduleLookup = {};
+    if (scheduleData.length > 0) {
+      var headers = scheduleData[0];
+      var joinIdx = headers.indexOf("EMAIL_PERIOD_JOIN");
+      var roomIdx = headers.indexOf("ROOM");
+      var courseIdx = headers.indexOf("COURSE_NAMES");
+
+      if (joinIdx > -1 && roomIdx > -1 && courseIdx > -1) {
+        for (var s = 1; s < scheduleData.length; s++) {
+          var key = String(scheduleData[s][joinIdx]).toLowerCase().trim();
+          scheduleLookup[key] = {
+            room: scheduleData[s][roomIdx] || "No Class Assigned",
+            course: scheduleData[s][courseIdx] || "No Class Assigned"
+          };
+        }
+      }
+    }
+
+    var adminData = [];
+
+    // Skip header row
+    for (var i = 1; i < data.length; i++) {
+      var status = String(data[i][17] || "").trim(); // 17 is Status
+      if (status === "Canceled") continue;
+
+      var id = data[i][0];
+      var email = String(data[i][2]).toLowerCase().trim();
+      var dateStr = data[i][3];
+      var periodsStr = String(data[i][4]);
+      var instructions = String(data[i][8] || "").trim();
+
+      // Get teacher name
+      var teacherName = getTeacherNameFromEmail(email);
+
+      // Parse date to a comparable format, YYYY-MM-DD
+      var dateObj = new Date(dateStr);
+      var dateFormatted = "";
+      if (!isNaN(dateObj.getTime())) {
+          // Keep local timezone in mind, maybe just formatting using Utilities
+          dateFormatted = Utilities.formatDate(dateObj, Session.getScriptTimeZone(), "yyyy-MM-dd");
+      } else {
+          // Fallback if not a standard date
+          dateFormatted = dateStr;
+      }
+
+      var periods = periodsStr.split(',').map(function(p) { return p.trim(); });
+
+      for (var j = 0; j < periods.length; j++) {
+        var p = parseInt(periods[j]);
+        if (!isNaN(p)) {
+            var subColumnIndex = 8 + p; // 9 for P1, 10 for P2, etc.
+            var assignedSub = data[i][subColumnIndex] || "";
+
+            var scheduleKey = email + "-" + p;
+            var room = "";
+            var course = "";
+
+            if (scheduleLookup[scheduleKey]) {
+              room = scheduleLookup[scheduleKey].room;
+              course = scheduleLookup[scheduleKey].course;
+            }
+
+            adminData.push({
+              id: id,
+              originalDate: dateStr,
+              date: dateFormatted,
+              period: p,
+              teacherName: teacherName,
+              teacherEmail: email,
+              course: course,
+              room: room,
+              assignedSub: String(assignedSub).trim(),
+              instructions: instructions
+            });
+        }
+      }
+    }
+
+    // Sort by Date, then by Period
+    adminData.sort(function(a, b) {
+      if (a.date < b.date) return -1;
+      if (a.date > b.date) return 1;
+      return a.period - b.period;
+    });
+
+    return adminData;
+
+  } catch (e) {
+    console.error("Error fetching Admin Dashboard Data: " + e.message);
+    throw new Error("Failed to load admin dashboard data.");
+  }
+}
