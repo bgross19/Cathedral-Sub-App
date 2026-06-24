@@ -599,14 +599,27 @@ function submitAbsence(formData) {
       var coordinatorEmail = getCoordinatorEmail(ss);
       if (coordinatorEmail) {
         var subject = "URGENT COVERAGE NEEDED: " + teacherName;
+        var appUrl = "https://script.google.com/a/macros/gocathedral.com/s/AKfycbwKZrBo4R-9O97aVNCjOHk9PddWCb6XNKviDS1lj4nNc49khl3T9OL8pGUDa7E1XE0/exec";
+
         var body = "An urgent absence request has been submitted requiring immediate attention.\n\n" +
                    "Teacher: " + teacherName + "\n" +
                    "Date Needed: " + formData.date + "\n" +
                    "Periods: " + formData.periods + "\n" +
                    "Reason: " + formData.reason + "\n\n" +
                    "Instructions: " + (instructions ? instructions : "None") + "\n\n" +
-                   "Please log into the Coverage Portal to assign a sub.";
-        GmailApp.sendEmail(coordinatorEmail, subject, body);
+                   "Please log into the Cathedral Sub App to assign a sub: " + appUrl;
+
+        var htmlBody = "<p>An urgent absence request has been submitted requiring immediate attention.</p>" +
+                       "<ul>" +
+                       "<li><strong>Teacher:</strong> " + teacherName + "</li>" +
+                       "<li><strong>Date Needed:</strong> " + formData.date + "</li>" +
+                       "<li><strong>Periods:</strong> " + formData.periods + "</li>" +
+                       "<li><strong>Reason:</strong> " + formData.reason + "</li>" +
+                       "</ul>" +
+                       "<p><strong>Instructions:</strong> " + (instructions ? instructions : "None") + "</p>" +
+                       "<p>Please log into the <a href='" + appUrl + "'>Cathedral Sub App</a> to assign a sub.</p>";
+
+        GmailApp.sendEmail(coordinatorEmail, subject, body, { htmlBody: htmlBody });
       }
     }
     
@@ -647,15 +660,27 @@ function cancelMySubDuty(absenceId, period) {
           // Send email to sub coordinator, CCing the sub
           if (coordinatorEmail && details) {
             var subject = "SUB CANCELLATION: " + userName + " cancelled coverage";
+            var appUrl = "https://script.google.com/a/macros/gocathedral.com/s/AKfycbwKZrBo4R-9O97aVNCjOHk9PddWCb6XNKviDS1lj4nNc49khl3T9OL8pGUDa7E1XE0/exec";
+
             var body = userName + " has cancelled their assigned coverage.\n\n" +
                        "Date: " + details.date + "\n" +
                        "Period: " + details.period + "\n" +
                        "Teacher to Cover: " + details.teacherName + "\n" +
                        "Room: " + details.room + "\n" +
                        "Course: " + details.course + "\n\n" +
-                       "This period is now UNFILLED. Please log into the Coverage Portal to reassign a sub.";
+                       "This period is now UNFILLED. Please log into the Cathedral Sub App to reassign a sub: " + appUrl;
 
-            GmailApp.sendEmail(coordinatorEmail, subject, body, { cc: userEmail });
+            var htmlBody = "<p>" + userName + " has cancelled their assigned coverage.</p>" +
+                           "<ul>" +
+                           "<li><strong>Date:</strong> " + details.date + "</li>" +
+                           "<li><strong>Period:</strong> " + details.period + "</li>" +
+                           "<li><strong>Teacher to Cover:</strong> " + details.teacherName + "</li>" +
+                           "<li><strong>Room:</strong> " + details.room + "</li>" +
+                           "<li><strong>Course:</strong> " + details.course + "</li>" +
+                           "</ul>" +
+                           "<p>This period is now UNFILLED. Please log into the <a href='" + appUrl + "'>Cathedral Sub App</a> to reassign a sub.</p>";
+
+            GmailApp.sendEmail(coordinatorEmail, subject, body, { cc: userEmail, htmlBody: htmlBody });
           }
 
           return { success: true };
@@ -979,6 +1004,9 @@ function sendSubNotification(subEmail, type, details) {
 
   var subject = "";
   var body = "";
+  var htmlBody = "";
+
+  var appUrl = "https://script.google.com/a/macros/gocathedral.com/s/AKfycbwKZrBo4R-9O97aVNCjOHk9PddWCb6XNKviDS1lj4nNc49khl3T9OL8pGUDa7E1XE0/exec";
 
   var detailsText = "Date: " + details.date + "\n";
   if (details.period) detailsText += "Period: " + details.period + "\n";
@@ -989,19 +1017,31 @@ function sendSubNotification(subEmail, type, details) {
   }
   detailsText += "\nSpecial Instructions:\n" + (details.instructions ? details.instructions : "None provided");
 
+  var detailsHtml = "<ul>" +
+                    "<li><strong>Date:</strong> " + details.date + "</li>" +
+                    (details.period ? "<li><strong>Period:</strong> " + details.period + "</li>" : "") +
+                    "<li><strong>Teacher:</strong> " + details.teacherName + "</li>" +
+                    (details.period ? "<li><strong>Room:</strong> " + details.room + "</li>" : "") +
+                    (details.period ? "<li><strong>Course:</strong> " + details.course + "</li>" : "") +
+                    "</ul>" +
+                    "<p><strong>Special Instructions:</strong><br>" + (details.instructions ? details.instructions : "None provided") + "</p>";
+
   if (type === 'Assigned') {
     subject = "Coverage Assignment: " + details.date + (details.period ? " Period " + details.period : "");
-    body = "You have been assigned to cover a class.\n\n" + detailsText + "\n\nPlease check the Coverage Portal for more information.";
+    body = "You have been assigned to cover a class.\n\n" + detailsText + "\n\nPlease check the Cathedral Sub App for more information: " + appUrl;
+    htmlBody = "<p>You have been assigned to cover a class.</p>" + detailsHtml + "<p>Please check the <a href='" + appUrl + "'>Cathedral Sub App</a> for more information.</p>";
   } else if (type === 'Canceled') {
     subject = "CANCELED - Coverage Assignment: " + details.date + (details.period ? " Period " + details.period : "");
-    body = "Your assigned coverage has been CANCELED. You are no longer needed for this assignment.\n\n" + detailsText;
+    body = "Your assigned coverage has been CANCELED. You are no longer needed for this assignment.\n\n" + detailsText + "\n\nGo to the Cathedral Sub App for more information: " + appUrl;
+    htmlBody = "<p>Your assigned coverage has been CANCELED. You are no longer needed for this assignment.</p>" + detailsHtml + "<p>Go to the <a href='" + appUrl + "'>Cathedral Sub App</a> for more information.</p>";
   } else if (type === 'Modified') {
     subject = "UPDATED - Coverage Assignment: " + details.date + (details.period ? " Period " + details.period : "");
-    body = "There has been an update to your assigned coverage.\n\nUpdated Details:\n" + detailsText + "\n\nPlease check the Coverage Portal for more information.";
+    body = "There has been an update to your assigned coverage.\n\nUpdated Details:\n" + detailsText + "\n\nPlease check the Cathedral Sub App for more information: " + appUrl;
+    htmlBody = "<p>There has been an update to your assigned coverage.</p><h3>Updated Details:</h3>" + detailsHtml + "<p>Please check the <a href='" + appUrl + "'>Cathedral Sub App</a> for more information.</p>";
   }
 
   try {
-    GmailApp.sendEmail(subEmail, subject, body);
+    GmailApp.sendEmail(subEmail, subject, body, { htmlBody: htmlBody });
   } catch (e) {
     console.error("Failed to send email to " + subEmail + ": " + e.message);
   }
