@@ -1036,8 +1036,8 @@ function getHRDashboardData() {
     var user = getUserData(ss);
     var lowerRole = user.role.toLowerCase();
 
-    if (lowerRole !== "hr" && lowerRole !== "principal" && lowerRole !== "admin" && lowerRole !== "sub coordinator") {
-      throw new Error("Unauthorized access. HR, Principal, Admin, or Sub Coordinator role required.");
+    if (lowerRole !== "hr" && lowerRole !== "principal") {
+      throw new Error("Unauthorized access. HR or Principal role required.");
     }
 
     var mainSheet = ss.getSheetByName("Absence Requests");
