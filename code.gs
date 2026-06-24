@@ -1065,6 +1065,7 @@ function getHRDashboardData() {
       var email = String(data[i][2]).toLowerCase().trim();
       var dateStr = data[i][3];
       var periodsStr = String(data[i][4]);
+      var reason = String(data[i][5]).trim();
       var duration = String(data[i][6]).trim(); // "Full Day" or "Half Day"
 
       // Get teacher name
@@ -1097,6 +1098,7 @@ function getHRDashboardData() {
         id: String(id || ""),
         date: String(dateFormatted || ""),
         teacherName: String(teacherName || ""),
+        reason: reason,
         duration: duration,
         assignedSubs: assignedSubs
       });
