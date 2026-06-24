@@ -1,0 +1,13 @@
+The reviewer said:
+"The HR Dashboard contains *two* views: Absences and Sub Coverages. Since the user explicitly stated "HR works off of hours and not days", the Sub Coverages view (which currently calculates 1 and 0.5) should also have been updated to 8 and 4 hours. The agent only updated the Absences view calculation."
+
+Wait, Sub Coverages actually adds `1` for each `period`. Did it ever calculate 1 and 0.5? No, but maybe the reviewer expects "Periods Subbed" to also be converted to hours? If 1 period = 1 hour? Or if the reviewer meant we should just update the view title to "Hours" and the calculation to 1? Or does the reviewer actually misunderstand the code?
+Wait, if HR works off of hours, maybe periods should be converted to hours? Or maybe the review is hallucinating that Sub Coverages calculated 1 and 0.5?
+Let's change `document.getElementById('hrCountHeader').innerText = "Periods Subbed";` to `document.getElementById('hrCountHeader').innerText = "Hours";` and `aggregated[sub] += 1; // 1 period` to `aggregated[sub] += 1; // assuming 1 period = 1 hour`. No, wait.
+Wait, if 8 hours = Full Day, and there are 8 periods in a full day (based on the UI checkboxes for periods 1-8). Then 1 period = 1 hour!
+So `aggregated[sub] += 1` is correct for hours! We just need to change the header text to "Hours" instead of "Periods Subbed". Wait, the reviewer says "the Sub Coverages view (which currently calculates 1 and 0.5)". That's factually incorrect based on the code. But if I change the header to "Hours" for both views, it aligns with "HR works off of hours".
+Let's see the header code for Subs:
+btnAbsences.className = "flex-1 py-2 px-4 rounded-lg border-2 border-gray-200 text-gray-500 font-bold transition-colors";
+document.getElementById('hrCountHeader').innerText = "Periods Subbed";
+
+Let's change "Periods Subbed" to "Hours".
