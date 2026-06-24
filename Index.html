@@ -1203,31 +1203,52 @@
 
         let aggregated = {};
 
+        // Extract expected reasons from the DOM dropdown
+        let reasonOptions = Array.from(document.getElementById('absReason').options);
+        let expectedReasons = reasonOptions.map(opt => opt.value);
+        let expectedLabels = reasonOptions.map(opt => opt.text);
+
+        let dynamicReasons = [...expectedReasons];
+
         if (hrCurrentView === 'absences') {
             filteredData.forEach(req => {
                 let teacher = req.teacherName;
                 if (!aggregated[teacher]) {
-                    aggregated[teacher] = {
-                        Personal: 0,
-                        'Professional Development': 0,
-                        Retreat: 0,
-                        Athletics: 0,
-                        'Jury Duty': 0,
-                        Bereavement: 0,
-                        total: 0
-                    };
+                    aggregated[teacher] = { total: 0 };
+                    // Initialize all expected reasons
+                    expectedReasons.forEach(r => aggregated[teacher][r] = 0);
                 }
                 let hours = (req.duration === 'Half Day' ? 4 : 8);
-                // Ensure reason exists in our structure, fallback to 'Personal' if unknown?
-                // The prompt says "so personal, PD, Athletics would all have individual columns"
-                // The reasons from the form are: Personal, Professional Development, Retreat, Athletics, Jury Duty, Bereavement
-                if (aggregated[teacher][req.reason] !== undefined) {
-                    aggregated[teacher][req.reason] += hours;
-                } else {
-                    // if it's some other reason from historical data, just lump it into personal or handle safely
-                    if (!aggregated[teacher]['Other']) aggregated[teacher]['Other'] = 0;
-                    aggregated[teacher]['Other'] += hours;
+
+                let reason = req.reason ? req.reason.trim() : "Other";
+                let matchedReason = null;
+
+                // Case-insensitive matching against values and labels
+                for (let i = 0; i < expectedReasons.length; i++) {
+                    if (reason.toLowerCase() === expectedReasons[i].toLowerCase() ||
+                        reason.toLowerCase() === expectedLabels[i].toLowerCase()) {
+                        matchedReason = expectedReasons[i];
+                        break;
+                    }
                 }
+
+                if (matchedReason) {
+                    aggregated[teacher][matchedReason] += hours;
+                } else {
+                    // It's a legacy or unknown reason
+                    let existingDynamic = dynamicReasons.find(r => r.toLowerCase() === reason.toLowerCase());
+                    if (existingDynamic) {
+                        matchedReason = existingDynamic;
+                    } else {
+                        matchedReason = reason;
+                        dynamicReasons.push(matchedReason);
+                    }
+                    if (aggregated[teacher][matchedReason] === undefined) {
+                        aggregated[teacher][matchedReason] = 0;
+                    }
+                    aggregated[teacher][matchedReason] += hours;
+                }
+
                 aggregated[teacher].total += hours;
             });
         } else {
@@ -1256,27 +1277,31 @@
         // Sort alphabetically
         resultList.sort((a, b) => a.name.localeCompare(b.name));
 
-        renderHRTable(resultList);
+        renderHRTable(resultList, dynamicReasons, expectedReasons, expectedLabels);
       }
 
-      function renderHRTable(dataList) {
+      function renderHRTable(dataList, dynamicReasons, expectedReasons, expectedLabels) {
         const thead = document.getElementById('hrDashboardTableHeader');
         const tbody = document.getElementById('hrDashboardTableBody');
 
         // Dynamically set headers based on view
         if (hrCurrentView === 'absences') {
-          thead.innerHTML = `
+          let headerHtml = `
             <tr class="bg-gray-50 border-b border-gray-200 text-sm text-gray-700 uppercase">
               <th class="p-3">Teacher Name</th>
-              <th class="p-3">Personal</th>
-              <th class="p-3">PD</th>
-              <th class="p-3">Retreat</th>
-              <th class="p-3">Athletics</th>
-              <th class="p-3">Jury Duty</th>
-              <th class="p-3">Bereavement</th>
-              <th class="p-3 text-right">Total Hours</th>
-            </tr>
           `;
+
+          dynamicReasons.forEach(reason => {
+             let label = reason;
+             let idx = expectedReasons.findIndex(r => r === reason);
+             if (idx !== -1) {
+                 label = expectedLabels[idx];
+             }
+             headerHtml += `<th class="p-3">${label}</th>`;
+          });
+
+          headerHtml += `<th class="p-3 text-right">Total Hours</th></tr>`;
+          thead.innerHTML = headerHtml;
         } else {
           thead.innerHTML = `
             <tr class="bg-gray-50 border-b border-gray-200 text-sm text-gray-700 uppercase">
@@ -1286,7 +1311,7 @@
           `;
         }
 
-        const colCount = hrCurrentView === 'absences' ? 8 : 2;
+        const colCount = hrCurrentView === 'absences' ? (2 + (dynamicReasons ? dynamicReasons.length : 0)) : 2;
 
         if (dataList.length === 0) {
           tbody.innerHTML = `<tr><td colspan="${colCount}" class="p-8 text-center text-gray-400 italic">No data found for the selected dates.</td></tr>`;
@@ -1299,12 +1324,13 @@
             html += `
               <tr class="hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0">
                 <td class="p-3 text-sm text-gray-800 font-medium">${item.name}</td>
-                <td class="p-3 text-sm text-gray-600 font-bold">${item.Personal || 0}</td>
-                <td class="p-3 text-sm text-gray-600 font-bold">${item['Professional Development'] || 0}</td>
-                <td class="p-3 text-sm text-gray-600 font-bold">${item.Retreat || 0}</td>
-                <td class="p-3 text-sm text-gray-600 font-bold">${item.Athletics || 0}</td>
-                <td class="p-3 text-sm text-gray-600 font-bold">${item['Jury Duty'] || 0}</td>
-                <td class="p-3 text-sm text-gray-600 font-bold">${item.Bereavement || 0}</td>
+            `;
+
+            dynamicReasons.forEach(reason => {
+                html += `<td class="p-3 text-sm text-gray-600 font-bold">${item[reason] || 0}</td>`;
+            });
+
+            html += `
                 <td class="p-3 text-sm text-gray-600 font-bold text-right">${item.total || 0}</td>
               </tr>
             `;
