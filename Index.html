@@ -161,7 +161,7 @@
 
       <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-x-auto">
         <table class="w-full text-left border-collapse min-w-max">
-          <thead>
+          <thead id="hrDashboardTableHeader">
             <tr class="bg-gray-50 border-b border-gray-200 text-sm text-gray-700 uppercase">
               <th class="p-3">Teacher Name</th>
               <th id="hrCountHeader" class="p-3">Count</th>
@@ -1152,11 +1152,9 @@
         if (viewType === 'absences') {
           btnAbsences.className = "flex-1 py-2 px-4 rounded-lg border-2 border-[#00843D] bg-[#00843D] text-white font-bold transition-colors";
           btnSubs.className = "flex-1 py-2 px-4 rounded-lg border-2 border-gray-200 text-gray-500 font-bold transition-colors";
-          document.getElementById('hrCountHeader').innerText = "Hours";
         } else {
           btnSubs.className = "flex-1 py-2 px-4 rounded-lg border-2 border-[#00843D] bg-[#00843D] text-white font-bold transition-colors";
           btnAbsences.className = "flex-1 py-2 px-4 rounded-lg border-2 border-gray-200 text-gray-500 font-bold transition-colors";
-          document.getElementById('hrCountHeader').innerText = "Periods";
         }
 
         applyHRFilters();
@@ -1208,14 +1206,35 @@
         if (hrCurrentView === 'absences') {
             filteredData.forEach(req => {
                 let teacher = req.teacherName;
-                if (!aggregated[teacher]) aggregated[teacher] = 0;
-                aggregated[teacher] += (req.duration === 'Half Day' ? 4 : 8);
+                if (!aggregated[teacher]) {
+                    aggregated[teacher] = {
+                        Personal: 0,
+                        'Professional Development': 0,
+                        Retreat: 0,
+                        Athletics: 0,
+                        'Jury Duty': 0,
+                        Bereavement: 0,
+                        total: 0
+                    };
+                }
+                let hours = (req.duration === 'Half Day' ? 4 : 8);
+                // Ensure reason exists in our structure, fallback to 'Personal' if unknown?
+                // The prompt says "so personal, PD, Athletics would all have individual columns"
+                // The reasons from the form are: Personal, Professional Development, Retreat, Athletics, Jury Duty, Bereavement
+                if (aggregated[teacher][req.reason] !== undefined) {
+                    aggregated[teacher][req.reason] += hours;
+                } else {
+                    // if it's some other reason from historical data, just lump it into personal or handle safely
+                    if (!aggregated[teacher]['Other']) aggregated[teacher]['Other'] = 0;
+                    aggregated[teacher]['Other'] += hours;
+                }
+                aggregated[teacher].total += hours;
             });
         } else {
             filteredData.forEach(req => {
                 req.assignedSubs.forEach(sub => {
-                    if (!aggregated[sub]) aggregated[sub] = 0;
-                    aggregated[sub] += 1; // 1 period
+                    if (!aggregated[sub]) aggregated[sub] = { count: 0 };
+                    aggregated[sub].count += 1; // 1 period
                 });
             });
         }
@@ -1223,8 +1242,14 @@
         // Convert to array and filter out 0s
         let resultList = [];
         for (let name in aggregated) {
-            if (aggregated[name] > 0) {
-                resultList.push({ name: name, count: aggregated[name] });
+            if (hrCurrentView === 'absences') {
+                if (aggregated[name].total > 0) {
+                    resultList.push({ name: name, ...aggregated[name] });
+                }
+            } else {
+                if (aggregated[name].count > 0) {
+                    resultList.push({ name: name, count: aggregated[name].count });
+                }
             }
         }
 
@@ -1235,21 +1260,62 @@
       }
 
       function renderHRTable(dataList) {
+        const thead = document.getElementById('hrDashboardTableHeader');
         const tbody = document.getElementById('hrDashboardTableBody');
 
+        // Dynamically set headers based on view
+        if (hrCurrentView === 'absences') {
+          thead.innerHTML = `
+            <tr class="bg-gray-50 border-b border-gray-200 text-sm text-gray-700 uppercase">
+              <th class="p-3">Teacher Name</th>
+              <th class="p-3">Personal</th>
+              <th class="p-3">PD</th>
+              <th class="p-3">Retreat</th>
+              <th class="p-3">Athletics</th>
+              <th class="p-3">Jury Duty</th>
+              <th class="p-3">Bereavement</th>
+              <th class="p-3 text-right">Total Hours</th>
+            </tr>
+          `;
+        } else {
+          thead.innerHTML = `
+            <tr class="bg-gray-50 border-b border-gray-200 text-sm text-gray-700 uppercase">
+              <th class="p-3">Teacher Name</th>
+              <th class="p-3 text-right">Periods</th>
+            </tr>
+          `;
+        }
+
+        const colCount = hrCurrentView === 'absences' ? 8 : 2;
+
         if (dataList.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="2" class="p-8 text-center text-gray-400 italic">No data found for the selected dates.</td></tr>';
+          tbody.innerHTML = `<tr><td colspan="${colCount}" class="p-8 text-center text-gray-400 italic">No data found for the selected dates.</td></tr>`;
           return;
         }
 
         let html = '';
         dataList.forEach(item => {
-          html += `
-            <tr class="hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0">
-              <td class="p-3 text-sm text-gray-800 font-medium">${item.name}</td>
-              <td class="p-3 text-sm text-gray-600 font-bold">${item.count}</td>
-            </tr>
-          `;
+          if (hrCurrentView === 'absences') {
+            html += `
+              <tr class="hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0">
+                <td class="p-3 text-sm text-gray-800 font-medium">${item.name}</td>
+                <td class="p-3 text-sm text-gray-600 font-bold">${item.Personal || 0}</td>
+                <td class="p-3 text-sm text-gray-600 font-bold">${item['Professional Development'] || 0}</td>
+                <td class="p-3 text-sm text-gray-600 font-bold">${item.Retreat || 0}</td>
+                <td class="p-3 text-sm text-gray-600 font-bold">${item.Athletics || 0}</td>
+                <td class="p-3 text-sm text-gray-600 font-bold">${item['Jury Duty'] || 0}</td>
+                <td class="p-3 text-sm text-gray-600 font-bold">${item.Bereavement || 0}</td>
+                <td class="p-3 text-sm text-gray-600 font-bold text-right">${item.total || 0}</td>
+              </tr>
+            `;
+          } else {
+            html += `
+              <tr class="hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0">
+                <td class="p-3 text-sm text-gray-800 font-medium">${item.name}</td>
+                <td class="p-3 text-sm text-gray-600 font-bold text-right">${item.count}</td>
+              </tr>
+            `;
+          }
         });
 
         tbody.innerHTML = html;
