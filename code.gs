@@ -1088,7 +1088,8 @@ function getAdminDashboardData() {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var user = getUserData(ss);
-    if (user.role !== "Admin" && user.role !== "Sub Coordinator") {
+    var lowerRole = user.role.toLowerCase();
+    if (lowerRole !== "admin" && lowerRole !== "sub coordinator") {
       throw new Error("Unauthorized access. Admin or Sub Coordinator role required.");
     }
 
