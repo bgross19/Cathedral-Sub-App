@@ -454,7 +454,53 @@ function submitAbsence(formData) {
     mainSheet.appendRow(newRow);
 
     var teacherName = getUserData(ss).name;
-    if (urgencyFormatted === 'Urgent (Less than 24 hr notice)') {
+
+    // Check if manually marked urgent
+    var isMarkedUrgent = urgencyFormatted === 'Urgent (Less than 24 hr notice)';
+    var isUrgentByTime = false;
+
+    try {
+      // Determine if urgent based on time of submission
+      var tz = Session.getScriptTimeZone();
+
+      // Parse formData.date (format YYYY-MM-DD)
+      var absParts = formData.date.split("-");
+      var absenceDate = new Date(parseInt(absParts[0], 10), parseInt(absParts[1], 10) - 1, parseInt(absParts[2], 10), 12, 0, 0);
+
+      // Get current date components in the script timezone
+      var nowTzDateStr = Utilities.formatDate(timestamp, tz, "yyyy-MM-dd");
+      var nowTzHourStr = Utilities.formatDate(timestamp, tz, "HH");
+      var nowTzDayStr = Utilities.formatDate(timestamp, tz, "E"); // Mon, Tue, Wed, Thu, Fri, Sat, Sun
+
+      var nowParts = nowTzDateStr.split("-");
+      var currentLocalDate = new Date(parseInt(nowParts[0], 10), parseInt(nowParts[1], 10) - 1, parseInt(nowParts[2], 10), 12, 0, 0);
+      var currentHour = parseInt(nowTzHourStr, 10);
+
+      var diffTime = absenceDate.getTime() - currentLocalDate.getTime();
+      var diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+
+      if (diffDays <= 0) {
+        isUrgentByTime = true; // Same day or past
+      } else if (diffDays === 1) {
+        if (currentHour >= 15 || nowTzDayStr === "Sun") {
+          isUrgentByTime = true; // Next day after 3pm, or Sun for Mon
+        }
+      } else if (diffDays === 2) {
+        if (nowTzDayStr === "Sat") {
+          isUrgentByTime = true; // Sat for Mon
+        }
+      } else if (diffDays === 3) {
+        if (nowTzDayStr === "Fri" && currentHour >= 15) {
+          isUrgentByTime = true; // Fri after 3pm for Mon
+        }
+      }
+    } catch (e) {
+      console.error("Error calculating urgency: " + e.message);
+    }
+
+    var shouldSendUrgentEmail = isMarkedUrgent || isUrgentByTime;
+
+    if (shouldSendUrgentEmail) {
       var coordinatorEmail = getCoordinatorEmail(ss);
       if (coordinatorEmail) {
         var subject = "URGENT COVERAGE NEEDED: " + teacherName;
