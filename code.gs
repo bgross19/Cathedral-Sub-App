@@ -1025,3 +1025,87 @@ function getAdminDashboardData() {
     throw new Error("Failed to load admin dashboard data.");
   }
 }
+
+/**
+ * Fetches data for the HR Dashboard.
+ * Returns a list of absence request summaries (ignoring canceled requests).
+ */
+function getHRDashboardData() {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var user = getUserData(ss);
+    var lowerRole = user.role.toLowerCase();
+
+    if (lowerRole !== "hr" && lowerRole !== "principal" && lowerRole !== "admin" && lowerRole !== "sub coordinator") {
+      throw new Error("Unauthorized access. HR, Principal, Admin, or Sub Coordinator role required.");
+    }
+
+    var mainSheet = ss.getSheetByName("Absence Requests");
+    var rosterSheet = ss.getSheetByName("Staff Roster");
+
+    if (!mainSheet) return [];
+
+    var data = mainSheet.getDataRange().getValues();
+    var rosterData = rosterSheet ? rosterSheet.getDataRange().getValues() : [];
+
+    var nameLookup = {};
+    for (var r = 1; r < rosterData.length; r++) {
+      var rosterEmail = String(rosterData[r][1]).toLowerCase().trim();
+      nameLookup[rosterEmail] = String(rosterData[r][0]).trim();
+    }
+
+    var hrData = [];
+
+    // Skip header row
+    for (var i = 1; i < data.length; i++) {
+      var status = String(data[i][17] || "").trim(); // 17 is Status
+      if (status === "Canceled") continue;
+
+      var id = data[i][0];
+      var email = String(data[i][2]).toLowerCase().trim();
+      var dateStr = data[i][3];
+      var periodsStr = String(data[i][4]);
+      var duration = String(data[i][6]).trim(); // "Full Day" or "Half Day"
+
+      // Get teacher name
+      var teacherName = nameLookup[email] || email;
+
+      // Parse date to a comparable format, YYYY-MM-DD
+      var dateObj = new Date(dateStr);
+      var dateFormatted = "";
+      if (!isNaN(dateObj.getTime())) {
+          dateFormatted = Utilities.formatDate(dateObj, Session.getScriptTimeZone(), "yyyy-MM-dd");
+      } else {
+          dateFormatted = dateStr;
+      }
+
+      var periods = periodsStr.split(',').map(function(p) { return p.trim(); });
+      var assignedSubs = [];
+
+      for (var j = 0; j < periods.length; j++) {
+        var p = parseInt(periods[j]);
+        if (!isNaN(p)) {
+            var subColumnIndex = 8 + p; // 9 for P1, 10 for P2, etc.
+            var assignedSub = data[i][subColumnIndex] || "";
+            if (assignedSub && String(assignedSub).trim() !== "") {
+              assignedSubs.push(String(assignedSub).trim());
+            }
+        }
+      }
+
+      hrData.push({
+        id: String(id || ""),
+        date: String(dateFormatted || ""),
+        teacherName: String(teacherName || ""),
+        duration: duration,
+        assignedSubs: assignedSubs
+      });
+    }
+
+    return hrData;
+
+  } catch (e) {
+    console.error("Error fetching HR Dashboard Data: " + e.message);
+    throw new Error("Failed to load HR dashboard data.");
+  }
+}

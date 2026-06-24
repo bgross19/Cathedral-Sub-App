@@ -28,6 +28,9 @@
                <button id="navAdminBtn" onclick="toggleAdminDashboard()" class="hidden ml-4 bg-white/20 hover:bg-white/30 text-white text-sm font-semibold py-1.5 px-4 rounded-full transition-colors flex items-center gap-2">
                    <span>📊</span> Admin Dashboard
                </button>
+               <button id="navHRBtn" onclick="toggleHRDashboard()" class="hidden ml-4 bg-white/20 hover:bg-white/30 text-white text-sm font-semibold py-1.5 px-4 rounded-full transition-colors flex items-center gap-2">
+                   <span>👥</span> HR Dashboard
+               </button>
            </div>
            <div id="userInfo" class="text-sm opacity-90 text-right">
                <div id="userName" class="font-bold">Loading...</div>
@@ -115,6 +118,52 @@
       </div>
     </main>
 
+
+    <!-- HR Dashboard View -->
+    <main id="hrDashboardView" class="max-w-6xl mx-auto p-4 mt-4 hidden">
+      <div class="flex justify-between items-center mb-6">
+        <h2 class="text-2xl font-bold text-[#002147] flex items-center gap-2">
+          <span>👥</span> HR Dashboard
+        </h2>
+        <button onclick="toggleHRDashboard()" class="text-[#002147] hover:bg-gray-200 font-semibold py-2 px-4 rounded-lg transition-colors border border-[#002147]">
+           &larr; Return to Homepage
+        </button>
+      </div>
+
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
+        <div class="flex flex-col sm:flex-row gap-4 items-center justify-between">
+            <div class="flex gap-2">
+               <button id="hrToggleAbsences" onclick="setHRView('absences')" class="flex-1 py-2 px-4 rounded-lg border-2 border-[#00843D] bg-[#00843D] text-white font-bold transition-colors">Absences</button>
+               <button id="hrToggleSubs" onclick="setHRView('subs')" class="flex-1 py-2 px-4 rounded-lg border-2 border-gray-200 text-gray-500 font-bold transition-colors">Sub Coverages</button>
+            </div>
+
+            <div class="flex flex-col sm:flex-row gap-4 items-center w-full sm:w-auto ml-auto">
+               <div class="flex items-center gap-2">
+                  <label class="text-sm font-bold text-gray-700">From:</label>
+                  <input type="date" id="hrFilterStartDate" class="border rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-[#00843D]" onchange="applyHRFilters()">
+               </div>
+               <div class="flex items-center gap-2">
+                  <label class="text-sm font-bold text-gray-700">To:</label>
+                  <input type="date" id="hrFilterEndDate" class="border rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-[#00843D]" onchange="applyHRFilters()">
+               </div>
+            </div>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-x-auto">
+        <table class="w-full text-left border-collapse min-w-max">
+          <thead>
+            <tr class="bg-gray-50 border-b border-gray-200 text-sm text-gray-700 uppercase">
+              <th class="p-3">Teacher Name</th>
+              <th id="hrCountHeader" class="p-3">Count</th>
+            </tr>
+          </thead>
+          <tbody id="hrDashboardTableBody" class="divide-y divide-gray-100">
+             <tr><td colspan="2" class="p-8 text-center text-gray-400 italic">Loading HR dashboard...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </main>
     <!-- Generic Modal overlay -->
     <div id="genericModalOverlay" class="modal opacity-0 pointer-events-none fixed w-full h-full top-0 left-0 flex items-center justify-center z-[100]">
       <div class="modal-overlay absolute w-full h-full bg-gray-900 opacity-50" onclick="closeAllModals()"></div>
@@ -235,6 +284,8 @@
       let adminDataFiltered = [];
       let adminSortCol = 'date';
       let adminSortAsc = true;
+      let hrDataRaw = [];
+      let hrCurrentView = 'absences'; // 'absences' or 'subs'
 
       function initApp() {
         google.script.run
@@ -244,11 +295,15 @@
             document.getElementById('welcomeName').innerText = (data.name.split(',')[1] || data.name).trim();
             
             // Checks for 'Admin' OR 'Sub coordinator' regardless of uppercase/lowercase in your sheet!
-            if (data.role.toLowerCase() === 'admin' || data.role.toLowerCase() === 'sub coordinator') {
+            let lowerRole = data.role.toLowerCase();
+            if (lowerRole === 'admin' || lowerRole === 'sub coordinator') {
               document.getElementById('adminSection').classList.remove('hidden');
               document.getElementById('navAdminBtn').classList.remove('hidden');
               loadStaffList();
               loadQuickCover(); 
+            }
+            if (lowerRole === 'hr' || lowerRole === 'principal' || lowerRole === 'admin' || lowerRole === 'sub coordinator') {
+              document.getElementById('navHRBtn').classList.remove('hidden');
             }
           })
           .withFailureHandler(err => {
@@ -1043,6 +1098,136 @@
             .submitAbsence(formData);
         }
       };
+
+      function toggleHRDashboard() {
+        const mainContent = document.getElementById('mainContent');
+        const adminView = document.getElementById('adminDashboardView');
+        const hrView = document.getElementById('hrDashboardView');
+
+        if (hrView.classList.contains('hidden')) {
+          mainContent.classList.add('hidden');
+          adminView.classList.add('hidden');
+          hrView.classList.remove('hidden');
+
+          if (hrDataRaw.length === 0) {
+            loadHRDashboardData();
+          }
+        } else {
+          hrView.classList.add('hidden');
+          mainContent.classList.remove('hidden');
+        }
+      }
+
+      function setHRView(viewType) {
+        hrCurrentView = viewType;
+        const btnAbsences = document.getElementById('hrToggleAbsences');
+        const btnSubs = document.getElementById('hrToggleSubs');
+
+        if (viewType === 'absences') {
+          btnAbsences.className = "flex-1 py-2 px-4 rounded-lg border-2 border-[#00843D] bg-[#00843D] text-white font-bold transition-colors";
+          btnSubs.className = "flex-1 py-2 px-4 rounded-lg border-2 border-gray-200 text-gray-500 font-bold transition-colors";
+          document.getElementById('hrCountHeader').innerText = "Absence Count";
+        } else {
+          btnSubs.className = "flex-1 py-2 px-4 rounded-lg border-2 border-[#00843D] bg-[#00843D] text-white font-bold transition-colors";
+          btnAbsences.className = "flex-1 py-2 px-4 rounded-lg border-2 border-gray-200 text-gray-500 font-bold transition-colors";
+          document.getElementById('hrCountHeader').innerText = "Periods Subbed";
+        }
+
+        applyHRFilters();
+      }
+
+      function loadHRDashboardData() {
+        document.getElementById('hrDashboardTableBody').innerHTML = '<tr><td colspan="2" class="p-8 text-center text-gray-400 italic">Loading HR dashboard data...</td></tr>';
+
+        google.script.run
+          .withSuccessHandler(data => {
+            hrDataRaw = data;
+
+            // Default End Date = Today
+            const today = new Date();
+            const offset = today.getTimezoneOffset() * 60000;
+            const endLocalDate = new Date(today - offset);
+            const endDateStr = endLocalDate.toISOString().split('T')[0];
+
+            // Default Start Date = 14 days ago
+            const startLocalDate = new Date(endLocalDate);
+            startLocalDate.setDate(startLocalDate.getDate() - 14);
+            const startDateStr = startLocalDate.toISOString().split('T')[0];
+
+            document.getElementById('hrFilterStartDate').value = startDateStr;
+            document.getElementById('hrFilterEndDate').value = endDateStr;
+
+            applyHRFilters();
+          })
+          .withFailureHandler(err => {
+            document.getElementById('hrDashboardTableBody').innerHTML = `<tr><td colspan="2" class="p-8 text-center text-red-600 font-bold">Failed to load: ${err.message}</td></tr>`;
+          })
+          .getHRDashboardData();
+      }
+
+      function applyHRFilters() {
+        const startDateStr = document.getElementById('hrFilterStartDate').value;
+        const endDateStr = document.getElementById('hrFilterEndDate').value;
+
+        // Filter data by date range
+        let filteredData = hrDataRaw.filter(req => {
+          let match = true;
+          if (startDateStr && req.date < startDateStr) match = false;
+          if (endDateStr && req.date > endDateStr) match = false;
+          return match;
+        });
+
+        let aggregated = {};
+
+        if (hrCurrentView === 'absences') {
+            filteredData.forEach(req => {
+                let teacher = req.teacherName;
+                if (!aggregated[teacher]) aggregated[teacher] = 0;
+                aggregated[teacher] += (req.duration === 'Half Day' ? 0.5 : 1);
+            });
+        } else {
+            filteredData.forEach(req => {
+                req.assignedSubs.forEach(sub => {
+                    if (!aggregated[sub]) aggregated[sub] = 0;
+                    aggregated[sub] += 1; // 1 period
+                });
+            });
+        }
+
+        // Convert to array and filter out 0s
+        let resultList = [];
+        for (let name in aggregated) {
+            if (aggregated[name] > 0) {
+                resultList.push({ name: name, count: aggregated[name] });
+            }
+        }
+
+        // Sort alphabetically
+        resultList.sort((a, b) => a.name.localeCompare(b.name));
+
+        renderHRTable(resultList);
+      }
+
+      function renderHRTable(dataList) {
+        const tbody = document.getElementById('hrDashboardTableBody');
+
+        if (dataList.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="2" class="p-8 text-center text-gray-400 italic">No data found for the selected dates.</td></tr>';
+          return;
+        }
+
+        let html = '';
+        dataList.forEach(item => {
+          html += `
+            <tr class="hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0">
+              <td class="p-3 text-sm text-gray-800 font-medium">${item.name}</td>
+              <td class="p-3 text-sm text-gray-600 font-bold">${item.count}</td>
+            </tr>
+          `;
+        });
+
+        tbody.innerHTML = html;
+      }
     </script>
   </body>
 </html>
