@@ -13,6 +13,8 @@
       .tooltip .tooltiptext { visibility: hidden; width: 140px; background-color: #555; color: #fff; text-align: center; border-radius: 6px; padding: 5px; position: absolute; z-index: 1; bottom: 125%; left: 50%; margin-left: -70px; opacity: 0; transition: opacity 0.3s; font-size: 0.75rem; font-weight: normal; }
       .tooltip .tooltiptext::after { content: ""; position: absolute; top: 100%; left: 50%; margin-left: -5px; border-width: 5px; border-style: solid; border-color: #555 transparent transparent transparent; }
       .tooltip:hover .tooltiptext { visibility: visible; opacity: 1; }
+      .grid-rows-0 { grid-template-rows: 0fr; }
+      .grid-rows-1 { grid-template-rows: 1fr; }
     </style>
   </head>
 
@@ -61,19 +63,40 @@
         </div>
       </div>
 
-      <h3 class="text-lg font-bold text-[#002147] mb-3">My Upcoming Absences</h3>
-      <div id="myAbsences" class="bg-white rounded-xl shadow-sm p-8 text-center text-gray-400 border border-gray-200 mb-6">
-          Loading requests...
+      <div class="mb-3 flex items-center cursor-pointer select-none" id="headerMyAbsences" onclick="toggleSection('myAbsencesWrapper', 'iconMyAbsences')">
+        <svg id="iconMyAbsences" class="fill-current text-[#002147] mr-2 transition-transform duration-300" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+        <h3 class="text-lg font-bold text-[#002147]">My Upcoming Absences</h3>
+      </div>
+      <div id="myAbsencesWrapper" class="grid grid-rows-1 transition-all duration-300 ease-in-out mb-6">
+        <div class="overflow-hidden">
+          <div id="myAbsences" class="bg-white rounded-xl shadow-sm p-8 text-center text-gray-400 border border-gray-200">
+              Loading requests...
+          </div>
+        </div>
       </div>
 
-      <h3 class="text-lg font-bold text-[#002147] mb-3">My Upcoming Sub-Duties</h3>
-      <div id="mySubDuties" class="bg-white rounded-xl shadow-sm p-8 text-center text-gray-400 border border-gray-200 mb-6">
-          Loading sub-duties...
+      <div class="mb-3 flex items-center cursor-pointer select-none" id="headerMySubDuties" onclick="toggleSection('mySubDutiesWrapper', 'iconMySubDuties')">
+        <svg id="iconMySubDuties" class="fill-current text-[#002147] mr-2 transition-transform duration-300" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+        <h3 class="text-lg font-bold text-[#002147]">My Upcoming Sub-Duties</h3>
+      </div>
+      <div id="mySubDutiesWrapper" class="grid grid-rows-1 transition-all duration-300 ease-in-out mb-6">
+        <div class="overflow-hidden">
+          <div id="mySubDuties" class="bg-white rounded-xl shadow-sm p-8 text-center text-gray-400 border border-gray-200">
+              Loading sub-duties...
+          </div>
+        </div>
       </div>
 
-      <h3 class="text-lg font-bold text-[#002147] mb-3">Today's Open Jobs</h3>
-      <div id="todaysOpenJobs" class="bg-white rounded-xl shadow-sm p-8 text-center text-gray-400 border border-gray-200">
-          Loading open jobs...
+      <div class="mb-3 flex items-center cursor-pointer select-none" id="headerTodaysOpenJobs" onclick="toggleSection('todaysOpenJobsWrapper', 'iconTodaysOpenJobs')">
+        <svg id="iconTodaysOpenJobs" class="fill-current text-[#002147] mr-2 transition-transform duration-300" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+        <h3 class="text-lg font-bold text-[#002147]">Today's Open Jobs</h3>
+      </div>
+      <div id="todaysOpenJobsWrapper" class="grid grid-rows-1 transition-all duration-300 ease-in-out mb-6">
+        <div class="overflow-hidden">
+          <div id="todaysOpenJobs" class="bg-white rounded-xl shadow-sm p-8 text-center text-gray-400 border border-gray-200">
+              Loading open jobs...
+          </div>
+        </div>
       </div>
     </main>
 
@@ -289,6 +312,49 @@
     </div>
 
     <script>
+      function toggleSection(wrapperId, iconId) {
+        const wrapper = document.getElementById(wrapperId);
+        const icon = document.getElementById(iconId);
+
+        // Check current state
+        const isOpen = wrapper.classList.contains('grid-rows-1');
+
+        if (isOpen) {
+          // Close it
+          wrapper.classList.remove('grid-rows-1');
+          wrapper.classList.add('grid-rows-0');
+          icon.classList.add('-rotate-90');
+          localStorage.setItem(`toggle_${wrapperId}`, 'closed');
+        } else {
+          // Open it
+          wrapper.classList.remove('grid-rows-0');
+          wrapper.classList.add('grid-rows-1');
+          icon.classList.remove('-rotate-90');
+          localStorage.setItem(`toggle_${wrapperId}`, 'open');
+        }
+      }
+
+      function initToggles() {
+        const sections = [
+          { wrapperId: 'myAbsencesWrapper', iconId: 'iconMyAbsences' },
+          { wrapperId: 'mySubDutiesWrapper', iconId: 'iconMySubDuties' },
+          { wrapperId: 'todaysOpenJobsWrapper', iconId: 'iconTodaysOpenJobs' }
+        ];
+
+        sections.forEach(sec => {
+          const state = localStorage.getItem(`toggle_${sec.wrapperId}`);
+          if (state === 'closed') {
+            const wrapper = document.getElementById(sec.wrapperId);
+            const icon = document.getElementById(sec.iconId);
+            if (wrapper && icon) {
+              wrapper.classList.remove('grid-rows-1');
+              wrapper.classList.add('grid-rows-0');
+              icon.classList.add('-rotate-90');
+            }
+          }
+        });
+      }
+
       let currentUser = {};
       let staffList = [];
       let currentUnfilledData = [];
@@ -302,6 +368,7 @@
       let hrCurrentView = 'absences'; // 'absences' or 'subs'
 
       function initApp() {
+        initToggles();
         google.script.run
           .withSuccessHandler(data => {
             currentUser = data;

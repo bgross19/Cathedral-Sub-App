@@ -1,0 +1,9 @@
+node_modules/
+test_index.html
+test_toggles.js
+mock_backend.js
+package.json
+package-lock.json
+initial.png
+closed.png
+reloaded_closed.png
