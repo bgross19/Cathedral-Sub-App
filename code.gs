@@ -859,6 +859,11 @@ function assignSubToPeriod(absenceId, period, subName) {
  */
 function getAdminDashboardData() {
   try {
+    var user = getUserData();
+    if (user.role !== "Admin" && user.role !== "Sub Coordinator") {
+      throw new Error("Unauthorized access. Admin or Sub Coordinator role required.");
+    }
+
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var mainSheet = ss.getSheetByName("Absence Requests");
     var rosterSheet = ss.getSheetByName("Staff Roster");
