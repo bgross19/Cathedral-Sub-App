@@ -134,7 +134,7 @@ function getMyAbsences() {
 }
 
 /**
- * Fetches unfilled sub requests for the next 7 days for the Admin Dashboard.
+ * Fetches unfilled sub requests for the next 2 days (or through Monday if weekend) for the Admin Dashboard.
  */
 function getQuickCoverData() {
   try {
@@ -177,9 +177,18 @@ function getQuickCoverData() {
     var today = new Date();
     today.setHours(0, 0, 0, 0); 
 
-    var nextWeek = new Date(today);
-    nextWeek.setDate(today.getDate() + 7); 
-    nextWeek.setHours(23, 59, 59, 999); 
+    var targetEnd = new Date(today);
+    var dayOfWeek = today.getDay(); // 0 is Sunday, 5 is Friday, 6 is Saturday
+
+    var daysToAdd = 1;
+    if (dayOfWeek === 5) { // Friday
+      daysToAdd = 3; // +3 to reach Monday
+    } else if (dayOfWeek === 6) { // Saturday
+      daysToAdd = 2; // +2 to reach Monday
+    }
+
+    targetEnd.setDate(today.getDate() + daysToAdd);
+    targetEnd.setHours(23, 59, 59, 999);
 
     // Indices in new format:
     // 0:ID, 1:Timestamp, 2:Email, 3:Date, 4:Periods, 5:Reason, 6:Duration, 7:Urgency, 8:Instructions
@@ -194,7 +203,7 @@ function getQuickCoverData() {
       var rowDate = new Date(dateString);
       if (isNaN(rowDate.getTime())) continue; 
 
-      if (rowDate >= today && rowDate <= nextWeek) {
+      if (rowDate >= today && rowDate <= targetEnd) {
         var teacherEmail = String(data[i][2]).toLowerCase();
         var teacherName = nameLookup[teacherEmail] || teacherEmail; 
 
