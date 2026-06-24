@@ -72,6 +72,45 @@ function getUserData(ss) {
 }
 
 /**
+ * Helper to build a name lookup dictionary from Staff Roster data.
+ */
+function buildNameLookup(rosterData) {
+  var nameLookup = {};
+  for (var r = 1; r < rosterData.length; r++) {
+    var rosterEmail = String(rosterData[r][1]).toLowerCase().trim();
+    nameLookup[rosterEmail] = String(rosterData[r][0]).trim();
+  }
+  return nameLookup;
+}
+
+/**
+ * Helper to build a schedule lookup dictionary from Master Schedule data.
+ */
+function buildScheduleLookup(scheduleData) {
+  var scheduleLookup = {};
+  if (scheduleData.length > 0) {
+    var headers = scheduleData[0];
+    var joinIdx = headers.indexOf("EMAIL_PERIOD_JOIN");
+    var roomIdx = headers.indexOf("ROOM");
+    var courseIdx = headers.indexOf("COURSE_NAMES");
+
+    if (joinIdx > -1) {
+      for (var s = 1; s < scheduleData.length; s++) {
+        var joinKey = String(scheduleData[s][joinIdx]).toLowerCase().trim();
+        var room = roomIdx > -1 ? scheduleData[s][roomIdx] : "No Class Assigned";
+        var course = courseIdx > -1 ? scheduleData[s][courseIdx] : "No Class Assigned";
+        // Do not overwrite with empty values if we don't have to, but be safe
+        scheduleLookup[joinKey] = {
+          room: room ? room : "No Class Assigned",
+          course: course ? course : "No Class Assigned"
+        };
+      }
+    }
+  }
+  return scheduleLookup;
+}
+
+/**
  * Fetches the logged-in user's upcoming absences.
  */
 function getMyAbsences() {
@@ -154,30 +193,9 @@ function getMySubDuties() {
     var data = mainSheet.getDataRange().getValues();
     var rosterData = rosterSheet ? rosterSheet.getDataRange().getValues() : [];
 
-    // Master Schedule data mapping
     var scheduleData = masterScheduleSheet ? masterScheduleSheet.getDataRange().getValues() : [];
-    var scheduleLookup = {};
-    if (scheduleData.length > 0) {
-      var headers = scheduleData[0];
-      var joinIdx = headers.indexOf("EMAIL_PERIOD_JOIN");
-      var roomIdx = headers.indexOf("ROOM");
-      var courseIdx = headers.indexOf("COURSE_NAMES");
-
-      if (joinIdx > -1) {
-        for (var s = 1; s < scheduleData.length; s++) {
-          var joinKey = String(scheduleData[s][joinIdx]).toLowerCase();
-          var room = roomIdx > -1 ? scheduleData[s][roomIdx] : "";
-          var course = courseIdx > -1 ? scheduleData[s][courseIdx] : "";
-          scheduleLookup[joinKey] = { room: room, course: course };
-        }
-      }
-    }
-
-    var nameLookup = {};
-    for (var r = 1; r < rosterData.length; r++) {
-      var rosterEmail = String(rosterData[r][1]).toLowerCase();
-      nameLookup[rosterEmail] = String(rosterData[r][0]);
-    }
+    var scheduleLookup = buildScheduleLookup(scheduleData);
+    var nameLookup = buildNameLookup(rosterData);
 
     var myDuties = [];
     var today = new Date();
@@ -275,30 +293,9 @@ function getQuickCoverData() {
     var data = mainSheet.getDataRange().getValues();
     var rosterData = rosterSheet ? rosterSheet.getDataRange().getValues() : [];
 
-    // Master Schedule data mapping
     var scheduleData = masterScheduleSheet ? masterScheduleSheet.getDataRange().getValues() : [];
-    var scheduleLookup = {};
-    if (scheduleData.length > 0) {
-      var headers = scheduleData[0];
-      var joinIdx = headers.indexOf("EMAIL_PERIOD_JOIN");
-      var roomIdx = headers.indexOf("ROOM");
-      var courseIdx = headers.indexOf("COURSE_NAMES");
-
-      if (joinIdx > -1) {
-        for (var s = 1; s < scheduleData.length; s++) {
-          var joinKey = String(scheduleData[s][joinIdx]).toLowerCase();
-          var room = roomIdx > -1 ? scheduleData[s][roomIdx] : "";
-          var course = courseIdx > -1 ? scheduleData[s][courseIdx] : "";
-          scheduleLookup[joinKey] = { room: room, course: course };
-        }
-      }
-    }
-
-    var nameLookup = {};
-    for (var r = 1; r < rosterData.length; r++) {
-      var rosterEmail = String(rosterData[r][1]).toLowerCase();
-      nameLookup[rosterEmail] = String(rosterData[r][0]); 
-    }
+    var scheduleLookup = buildScheduleLookup(scheduleData);
+    var nameLookup = buildNameLookup(rosterData);
 
     var unfilled = [];
     var today = new Date();
@@ -578,11 +575,66 @@ function cancelMySubDuty(absenceId, period) {
 /**
  * Cancels an entire absence request.
  */
+/**
+ * Local variant of getAbsenceDetails avoiding spreadsheet lookups.
+ */
+function getAbsenceDetailsLocal(row, period, scheduleLookup, nameLookup) {
+  var teacherEmail = String(row[2]);
+  var teacherName = nameLookup[teacherEmail.toLowerCase()] || teacherEmail;
+  var dateVal = row[3];
+  var formattedDate = dateVal;
+  if (dateVal instanceof Date) {
+    formattedDate = Utilities.formatDate(dateVal, Session.getScriptTimeZone(), "MMM d, yyyy");
+  } else {
+    try {
+      formattedDate = Utilities.formatDate(new Date(dateVal), Session.getScriptTimeZone(), "MMM d, yyyy");
+    } catch(e) {
+      // ignore
+    }
+  }
+  var instructions = String(row[8]);
+
+  var roomStr = "No Class Assigned";
+  var courseStr = "No Class Assigned";
+
+  if (period) {
+    var joinKey = teacherEmail.toLowerCase() + "-" + period;
+    var scheduleInfo = scheduleLookup[joinKey];
+    if (scheduleInfo) {
+      roomStr = scheduleInfo.room || roomStr;
+      courseStr = scheduleInfo.course || courseStr;
+    }
+  }
+
+  return {
+    teacherName: teacherName,
+    date: formattedDate,
+    period: period,
+    room: roomStr,
+    course: courseStr,
+    instructions: instructions
+  };
+}
+
 function cancelAbsence(absenceId) {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var sheet = ss.getSheetByName("Absence Requests");
     if (!sheet) throw new Error("Absence Requests sheet not found.");
+
+    var rosterSheet = ss.getSheetByName("Staff Roster");
+    var masterScheduleSheet = ss.getSheetByName("Master Schedule");
+    var rosterData = rosterSheet ? rosterSheet.getDataRange().getValues() : [];
+    var scheduleData = masterScheduleSheet ? masterScheduleSheet.getDataRange().getValues() : [];
+
+    // We want a lookup of Sub Name -> Email
+    var subEmailLookup = {};
+    for (var r = 1; r < rosterData.length; r++) {
+      subEmailLookup[String(rosterData[r][0]).trim()] = String(rosterData[r][1]).trim();
+    }
+
+    var scheduleLookup = buildScheduleLookup(scheduleData);
+    var nameLookup = buildNameLookup(rosterData);
 
     var data = sheet.getDataRange().getValues();
     for (var i = 1; i < data.length; i++) {
@@ -595,9 +647,9 @@ function cancelAbsence(absenceId) {
           var subIndex = 8 + p; // 9 for P1, etc.
           var subName = String(data[i][subIndex] || "").trim();
           if (subName) {
-            var email = getSubEmail(subName);
+            var email = subEmailLookup[subName];
             if (email) {
-              var details = getAbsenceDetails(absenceId, p);
+              var details = getAbsenceDetailsLocal(data[i], p, scheduleLookup, nameLookup);
               if (details) sendSubNotification(email, "Canceled", details);
             }
           }
@@ -619,6 +671,19 @@ function updateAbsence(absenceId, formData) {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var sheet = ss.getSheetByName("Absence Requests");
     if (!sheet) throw new Error("Absence Requests sheet not found.");
+
+    var rosterSheet = ss.getSheetByName("Staff Roster");
+    var masterScheduleSheet = ss.getSheetByName("Master Schedule");
+    var rosterData = rosterSheet ? rosterSheet.getDataRange().getValues() : [];
+    var scheduleData = masterScheduleSheet ? masterScheduleSheet.getDataRange().getValues() : [];
+
+    var subEmailLookup = {};
+    for (var r = 1; r < rosterData.length; r++) {
+      subEmailLookup[String(rosterData[r][0]).trim()] = String(rosterData[r][1]).trim();
+    }
+
+    var scheduleLookup = buildScheduleLookup(scheduleData);
+    var nameLookup = buildNameLookup(rosterData);
 
     var data = sheet.getDataRange().getValues();
     for (var i = 1; i < data.length; i++) {
@@ -646,12 +711,10 @@ function updateAbsence(absenceId, formData) {
         if (formData.hrConfirmed) instructions = "[HR Docs Provided] " + instructions;
 
         // Update basic info
-        sheet.getRange(i + 1, 4).setValue(formData.date);
-        sheet.getRange(i + 1, 5).setValue("'" + formData.periods);
-        sheet.getRange(i + 1, 6).setValue(formData.reason);
-        sheet.getRange(i + 1, 7).setValue(formData.duration);
-        sheet.getRange(i + 1, 8).setValue(urgencyFormatted);
-        sheet.getRange(i + 1, 9).setValue(instructions);
+        sheet.getRange(i + 1, 4, 1, 6).setValues([[
+          formData.date, "'" + formData.periods, formData.reason,
+          formData.duration, urgencyFormatted, instructions
+        ]]);
 
         // Notify subs
         for (var p = 1; p <= 8; p++) {
@@ -659,13 +722,13 @@ function updateAbsence(absenceId, formData) {
           var subName = String(data[i][subIndex] || "").trim();
 
           if (subName) {
-            var email = getSubEmail(subName);
+            var email = subEmailLookup[subName];
             var isPeriodStillNeeded = newPeriods.indexOf(String(p)) !== -1;
 
             if (email) {
                if (dateChanged || !isPeriodStillNeeded) {
                  // Cancel this sub for this period
-                 var cancelDetails = getAbsenceDetails(absenceId, p);
+                 var cancelDetails = getAbsenceDetailsLocal(data[i], p, scheduleLookup, nameLookup);
                  // We pass old date since they are canceled for the old date
                  if (cancelDetails) {
                     cancelDetails.date = Utilities.formatDate(new Date(oldDateRaw), Session.getScriptTimeZone(), "MMM d, yyyy");
@@ -686,8 +749,11 @@ function updateAbsence(absenceId, formData) {
                                       (oldInstructions !== instructions);
 
                  if (detailsChanged) {
-                    var modDetails = getAbsenceDetails(absenceId, p);
-                    if (modDetails) sendSubNotification(email, "Modified", modDetails);
+                    var modDetails = getAbsenceDetailsLocal(data[i], p, scheduleLookup, nameLookup);
+                    if(modDetails) {
+                      modDetails.instructions = instructions;
+                      sendSubNotification(email, "Modified", modDetails);
+                    }
                  }
                }
             } else if (dateChanged || !isPeriodStillNeeded) {
@@ -852,6 +918,19 @@ function assignSubToPeriod(absenceId, period, subName) {
     var sheet = ss.getSheetByName("Absence Requests");
     if (!sheet) throw new Error("Absence Requests sheet not found.");
 
+    var rosterSheet = ss.getSheetByName("Staff Roster");
+    var masterScheduleSheet = ss.getSheetByName("Master Schedule");
+    var rosterData = rosterSheet ? rosterSheet.getDataRange().getValues() : [];
+    var scheduleData = masterScheduleSheet ? masterScheduleSheet.getDataRange().getValues() : [];
+
+    var subEmailLookup = {};
+    for (var r = 1; r < rosterData.length; r++) {
+      subEmailLookup[String(rosterData[r][0]).trim()] = String(rosterData[r][1]).trim();
+    }
+
+    var scheduleLookup = buildScheduleLookup(scheduleData);
+    var nameLookup = buildNameLookup(rosterData);
+
     var data = sheet.getDataRange().getValues();
 
     for (var i = 1; i < data.length; i++) {
@@ -872,11 +951,11 @@ function assignSubToPeriod(absenceId, period, subName) {
         }
 
         // Get details for email
-        var details = getAbsenceDetails(absenceId, period);
+        var details = getAbsenceDetailsLocal(data[i], period, scheduleLookup, nameLookup);
 
         // Cancel existing sub if there is one
         if (existingSub && details) {
-           var existingEmail = getSubEmail(existingSub);
+           var existingEmail = subEmailLookup[existingSub];
            if (existingEmail) {
               sendSubNotification(existingEmail, 'Canceled', details);
            }
@@ -887,7 +966,7 @@ function assignSubToPeriod(absenceId, period, subName) {
 
         // Notify new sub if there is one
         if (newSub && details) {
-           var newEmail = getSubEmail(newSub);
+           var newEmail = subEmailLookup[newSub];
            if (newEmail) {
               sendSubNotification(newEmail, 'Assigned', details);
            }
@@ -924,31 +1003,9 @@ function getAdminDashboardData() {
     var data = mainSheet.getDataRange().getValues();
     var rosterData = rosterSheet ? rosterSheet.getDataRange().getValues() : [];
 
-    // Master Schedule data mapping
     var scheduleData = masterScheduleSheet ? masterScheduleSheet.getDataRange().getValues() : [];
-    var scheduleLookup = {};
-    if (scheduleData.length > 0) {
-      var headers = scheduleData[0];
-      var joinIdx = headers.indexOf("EMAIL_PERIOD_JOIN");
-      var roomIdx = headers.indexOf("ROOM");
-      var courseIdx = headers.indexOf("COURSE_NAMES");
-
-      if (joinIdx > -1 && roomIdx > -1 && courseIdx > -1) {
-        for (var s = 1; s < scheduleData.length; s++) {
-          var key = String(scheduleData[s][joinIdx]).toLowerCase().trim();
-          scheduleLookup[key] = {
-            room: scheduleData[s][roomIdx] || "No Class Assigned",
-            course: scheduleData[s][courseIdx] || "No Class Assigned"
-          };
-        }
-      }
-    }
-
-    var nameLookup = {};
-    for (var r = 1; r < rosterData.length; r++) {
-      var rosterEmail = String(rosterData[r][1]).toLowerCase().trim();
-      nameLookup[rosterEmail] = String(rosterData[r][0]).trim();
-    }
+    var scheduleLookup = buildScheduleLookup(scheduleData);
+    var nameLookup = buildNameLookup(rosterData);
 
     var adminData = [];
 
@@ -1048,11 +1105,7 @@ function getHRDashboardData() {
     var data = mainSheet.getDataRange().getValues();
     var rosterData = rosterSheet ? rosterSheet.getDataRange().getValues() : [];
 
-    var nameLookup = {};
-    for (var r = 1; r < rosterData.length; r++) {
-      var rosterEmail = String(rosterData[r][1]).toLowerCase().trim();
-      nameLookup[rosterEmail] = String(rosterData[r][0]).trim();
-    }
+    var nameLookup = buildNameLookup(rosterData);
 
     var hrData = [];
 
