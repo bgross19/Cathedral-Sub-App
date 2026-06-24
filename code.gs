@@ -950,16 +950,16 @@ function getAdminDashboardData() {
             }
 
             adminData.push({
-              id: id,
-              originalDate: dateStr,
-              date: dateFormatted,
+              id: String(id || ""),
+              originalDate: String(dateStr || ""),
+              date: String(dateFormatted || ""),
               period: p,
-              teacherName: teacherName,
-              teacherEmail: email,
-              course: course,
-              room: room,
-              assignedSub: String(assignedSub).trim(),
-              instructions: instructions
+              teacherName: String(teacherName || ""),
+              teacherEmail: String(email || ""),
+              course: String(course || ""),
+              room: String(room || ""),
+              assignedSub: String(assignedSub || "").trim(),
+              instructions: String(instructions || "")
             });
         }
       }
