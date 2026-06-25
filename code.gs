@@ -1611,7 +1611,16 @@ function getHRDashboardData() {
 
     var mainSheet = ss.getSheetByName("Absence Requests");
     var rosterSheet = ss.getSheetByName("Staff Roster");
-    var payPeriodsSheet = ss.getSheetByName("Payperiods");
+
+    // Look for Payperiods sheet case-insensitively
+    var allSheets = ss.getSheets();
+    var payPeriodsSheet = null;
+    for (var s = 0; s < allSheets.length; s++) {
+      if (allSheets[s].getName().toLowerCase() === "payperiods") {
+        payPeriodsSheet = allSheets[s];
+        break;
+      }
+    }
 
     if (!mainSheet) return { requests: [], payPeriods: [] };
 
@@ -1624,11 +1633,17 @@ function getHRDashboardData() {
     var hrData = [];
     var payPeriods = [];
 
-    // Process Payperiods
-    for (var p = 1; p < payPeriodsData.length; p++) {
+    // Process Payperiods - start from 0 in case there is no header
+    for (var p = 0; p < payPeriodsData.length; p++) {
       var periodNum = String(payPeriodsData[p][0]).trim();
       var startDateRaw = payPeriodsData[p][1];
       var endDateRaw = payPeriodsData[p][2];
+
+      // Attempt to validate dates to skip headers
+      var isHeader = false;
+      if (typeof startDateRaw === 'string' && startDateRaw.toLowerCase().includes('start')) isHeader = true;
+      if (typeof endDateRaw === 'string' && endDateRaw.toLowerCase().includes('end')) isHeader = true;
+      if (isHeader) continue;
 
       if (periodNum && startDateRaw && endDateRaw) {
         var startFormatted = "";
