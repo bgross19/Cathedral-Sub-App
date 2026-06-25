@@ -2402,6 +2402,9 @@
              if (idx !== -1) {
                  label = expectedLabels[idx];
              }
+             if (label === 'Professional Development') {
+                 label = 'PD';
+             }
              headerHtml += `<th class="p-3">${label}</th>`;
           });
 
