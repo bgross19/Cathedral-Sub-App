@@ -1,317 +1,4 @@
-<!DOCTYPE html>
-<html>
-  <head>
-    <base target="_top">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-      .modal { transition: opacity 0.25s ease; }
-      body.modal-active { overflow: hidden; }
-      .spinner { border: 3px solid #f3f3f3; border-top: 3px solid #00843D; border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; }
-      @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-      .tooltip { position: relative; display: inline-block; cursor: help; }
-      .tooltip .tooltiptext { visibility: hidden; width: 140px; background-color: #555; color: #fff; text-align: center; border-radius: 6px; padding: 5px; position: absolute; z-index: 1; bottom: 125%; left: 50%; margin-left: -70px; opacity: 0; transition: opacity 0.3s; font-size: 0.75rem; font-weight: normal; }
-      .tooltip .tooltiptext::after { content: ""; position: absolute; top: 100%; left: 50%; margin-left: -5px; border-width: 5px; border-style: solid; border-color: #555 transparent transparent transparent; }
-      .tooltip:hover .tooltiptext { visibility: visible; opacity: 1; }
-      .grid-rows-0 { grid-template-rows: 0fr; }
-      .grid-rows-1 { grid-template-rows: 1fr; }
-    </style>
-  </head>
 
-  <body class="bg-gray-100 font-sans text-gray-800" onload="initApp()">
-
-    <nav class="bg-[#002147] text-white p-4 shadow-lg sticky top-0 z-50">
-       <div class="max-w-4xl mx-auto flex justify-between items-center">
-           <div class="flex items-center gap-4">
-               <h1 class="text-xl font-bold flex items-center gap-2">
-                  <span class="bg-white rounded-full h-10 w-10 flex items-center justify-center overflow-hidden">
-                     <img src="https://resources.finalsite.net/images/f_auto,q_auto/v1553625096/cathedralirish/xl1l6hclrbcymjwwyuqi/CHS_CelticCross-large.jpg" alt="Cathedral Logo" class="h-full w-full object-cover">
-                  </span>
-                  <span class="hidden sm:inline">Cathedral Sub Coverage</span>
-               </h1>
-               <button id="navAdminBtn" onclick="toggleAdminDashboard()" class="hidden ml-4 bg-white/20 hover:bg-white/30 text-white text-sm font-semibold py-1.5 px-4 rounded-full transition-colors flex items-center gap-2">
-                   <span>📊</span> Admin Dashboard
-               </button>
-               <button id="navHRBtn" onclick="toggleHRDashboard()" class="hidden ml-4 bg-white/20 hover:bg-white/30 text-white text-sm font-semibold py-1.5 px-4 rounded-full transition-colors flex items-center gap-2">
-                   <span>👥</span> HR Dashboard
-               </button>
-               <button id="navAtAGlanceBtn" onclick="toggleAtAGlanceDashboard()" class="hidden ml-4 bg-white/20 hover:bg-white/30 text-white text-sm font-semibold py-1.5 px-4 rounded-full transition-colors flex items-center gap-2">
-                   <span>📅</span> Today at a Glance
-               </button>
-               <button id="navSettingsBtn" onclick="toggleSettingsDashboard()" class="hidden ml-4 bg-white/20 hover:bg-white/30 text-white text-sm font-semibold py-1.5 px-4 rounded-full transition-colors flex items-center gap-2">
-                   <span>⚙️</span> Settings
-               </button>
-           </div>
-           <div id="userInfo" class="text-sm opacity-90 text-right">
-               <div id="userName" class="font-bold">Loading...</div>
-               <div id="userEmail" class="text-xs italic"><?= userEmail ?></div>
-           </div>
-       </div>
-    </nav>
-
-    <main id="mainContent" class="max-w-4xl mx-auto p-4 mt-4">
-      
-      <div class="bg-white rounded-2xl shadow-sm p-6 mb-6 border-t-4 border-[#00843D]">
-        <h2 class="text-2xl font-bold text-[#002147]">Welcome, <span id="welcomeName">Teacher</span>!</h2>
-        <p class="text-gray-600 mt-1 mb-6">Need coverage for a class? Submit your request below.</p>
-        
-        <button onclick="toggleModal()" class="w-full sm:w-auto bg-[#00843D] hover:bg-green-700 text-white font-bold py-3 px-8 rounded-xl transition-all transform hover:scale-105 shadow-md flex items-center justify-center gap-2">
-          <span>➕</span> New Absence Request
-        </button>
-      </div>
-
-      <div id="adminSection" class="hidden mb-6">
-        <h3 class="text-lg font-bold text-[#002147] mb-3 flex items-center gap-2">
-          <span class="text-orange-500">🚩</span> Quick Cover (2-Day Triage)
-        </h3>
-        <div id="quickCoverContainer" class="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-200">
-           <div class="p-8 text-center text-gray-400 italic">Scanning database...</div>
-        </div>
-      </div>
-
-      <div class="mb-3 flex items-center cursor-pointer select-none" id="headerMyAbsences" onclick="toggleSection('myAbsencesWrapper', 'iconMyAbsences')">
-        <svg id="iconMyAbsences" class="fill-current text-[#002147] mr-2 transition-transform duration-300" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
-        <h3 class="text-lg font-bold text-[#002147]">My Upcoming Absences</h3>
-      </div>
-      <div id="myAbsencesWrapper" class="grid grid-rows-1 transition-all duration-300 ease-in-out mb-6">
-        <div class="overflow-hidden">
-          <div id="myAbsences" class="bg-white rounded-xl shadow-sm p-8 text-center text-gray-400 border border-gray-200">
-              Loading requests...
-          </div>
-        </div>
-      </div>
-
-      <div class="mb-3 flex items-center cursor-pointer select-none" id="headerMySubDuties" onclick="toggleSection('mySubDutiesWrapper', 'iconMySubDuties')">
-        <svg id="iconMySubDuties" class="fill-current text-[#002147] mr-2 transition-transform duration-300" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
-        <h3 class="text-lg font-bold text-[#002147]">My Upcoming Sub-Duties</h3>
-      </div>
-      <div id="mySubDutiesWrapper" class="grid grid-rows-1 transition-all duration-300 ease-in-out mb-6">
-        <div class="overflow-hidden">
-          <div id="mySubDuties" class="bg-white rounded-xl shadow-sm p-8 text-center text-gray-400 border border-gray-200">
-              Loading sub-duties...
-          </div>
-        </div>
-      </div>
-
-      <div class="mb-3 flex items-center cursor-pointer select-none" id="headerTodaysOpenJobs" onclick="toggleSection('todaysOpenJobsWrapper', 'iconTodaysOpenJobs')">
-        <svg id="iconTodaysOpenJobs" class="fill-current text-[#002147] mr-2 transition-transform duration-300" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
-        <h3 class="text-lg font-bold text-[#002147]">Today's Open Jobs</h3>
-      </div>
-      <div id="todaysOpenJobsWrapper" class="grid grid-rows-1 transition-all duration-300 ease-in-out mb-6">
-        <div class="overflow-hidden">
-          <div id="todaysOpenJobs" class="bg-white rounded-xl shadow-sm p-8 text-center text-gray-400 border border-gray-200">
-              Loading open jobs...
-          </div>
-        </div>
-      </div>
-    </main>
-
-    <!-- Admin Dashboard View -->
-    <main id="adminDashboardView" class="max-w-6xl mx-auto p-4 mt-4 hidden">
-      <div class="flex justify-between items-center mb-6">
-        <h2 class="text-2xl font-bold text-[#002147] flex items-center gap-2">
-          <span>📊</span> Sub Coverage Dashboard
-        </h2>
-
-        <div class="flex gap-2">
-           <button id="adminTogglePeriod" onclick="setAdminView('period')" class="flex-1 py-1.5 px-4 rounded-lg border-2 border-[#00843D] bg-[#00843D] text-white font-bold transition-colors">Period View</button>
-           <button id="adminToggleRequest" onclick="setAdminView('request')" class="flex-1 py-1.5 px-4 rounded-lg border-2 border-gray-200 text-gray-500 font-bold transition-colors">Request View</button>
-        </div>
-
-        <button onclick="toggleAdminDashboard()" class="text-[#002147] hover:bg-gray-200 font-semibold py-2 px-4 rounded-lg transition-colors border border-[#002147]">
-           &larr; Return to Homepage
-        </button>
-      </div>
-
-      <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
-        <div class="flex flex-col sm:flex-row gap-4 items-center justify-between">
-            <div class="flex items-center gap-2 w-full sm:w-auto">
-               <label class="text-sm font-bold text-gray-700">From:</label>
-               <input type="date" id="filterStartDate" class="border rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-[#00843D]" onchange="applyAdminFilters()">
-            </div>
-            <div class="flex items-center gap-2 w-full sm:w-auto">
-               <label class="text-sm font-bold text-gray-700">To:</label>
-               <input type="date" id="filterEndDate" class="border rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-[#00843D]" onchange="applyAdminFilters()">
-            </div>
-            <div class="flex items-center gap-2 w-full sm:w-auto flex-1">
-               <input type="text" id="filterSearchText" placeholder="Search across all fields..." class="w-full border rounded px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-[#00843D]" oninput="applyAdminFilters()">
-            </div>
-            <div class="flex items-center gap-2 w-full sm:w-auto ml-auto">
-               <button onclick="resetAdminFilters()" class="text-sm text-gray-500 hover:text-gray-800 underline">Reset Filters</button>
-            </div>
-        </div>
-      </div>
-
-      <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-x-auto">
-        <table class="w-full text-left border-collapse min-w-max">
-          <thead id="adminDashboardTableHeader">
-            <tr class="bg-gray-50 border-b border-gray-200 text-sm text-gray-700 uppercase">
-              <th class="p-3 cursor-pointer hover:bg-gray-100" onclick="sortAdminTable('teacherName')">Name ↕️</th>
-              <th class="p-3 cursor-pointer hover:bg-gray-100" onclick="sortAdminTable('date')">Date ↕️</th>
-              <th class="p-3 cursor-pointer hover:bg-gray-100" onclick="sortAdminTable('period')">Period ↕️</th>
-              <th class="p-3 cursor-pointer hover:bg-gray-100" onclick="sortAdminTable('course')">Course ↕️</th>
-              <th class="p-3 cursor-pointer hover:bg-gray-100" onclick="sortAdminTable('room')">Room ↕️</th>
-              <th class="p-3 cursor-pointer hover:bg-gray-100" onclick="sortAdminTable('assignedSub')">Assigned Sub ↕️</th>
-              <th class="p-3 cursor-pointer hover:bg-gray-100" onclick="sortAdminTable('instructions')">Instructions ↕️</th>
-            </tr>
-          </thead>
-          <tbody id="adminDashboardTableBody" class="divide-y divide-gray-100">
-             <tr><td colspan="7" class="p-8 text-center text-gray-400 italic">Loading dashboard...</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </main>
-
-
-    <!-- HR Dashboard View -->
-    <main id="hrDashboardView" class="max-w-6xl mx-auto p-4 mt-4 hidden">
-      <div class="flex justify-between items-center mb-6">
-        <h2 class="text-2xl font-bold text-[#002147] flex items-center gap-2">
-          <span>👥</span> HR Dashboard
-        </h2>
-        <button onclick="toggleHRDashboard()" class="text-[#002147] hover:bg-gray-200 font-semibold py-2 px-4 rounded-lg transition-colors border border-[#002147]">
-           &larr; Return to Homepage
-        </button>
-      </div>
-
-      <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
-        <div class="flex flex-col sm:flex-row gap-4 items-center justify-between">
-            <div class="flex gap-2">
-               <button id="hrToggleAbsences" onclick="setHRView('absences')" class="flex-1 py-2 px-4 rounded-lg border-2 border-[#00843D] bg-[#00843D] text-white font-bold transition-colors">Absences</button>
-               <button id="hrToggleSubs" onclick="setHRView('subs')" class="flex-1 py-2 px-4 rounded-lg border-2 border-gray-200 text-gray-500 font-bold transition-colors">Sub Coverages</button>
-            </div>
-
-            <div class="flex flex-col gap-3 w-full sm:w-auto ml-auto mt-4 sm:mt-0">
-               <div id="hrPayPeriodContainer" class="flex items-center gap-2 hidden">
-                  <label class="text-sm font-bold text-gray-700 whitespace-nowrap">Pay Period:</label>
-                  <select id="hrPayPeriodSelect" class="border rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-[#00843D] w-full" onchange="applyPayPeriodSelection()">
-                      <!-- Populated dynamically -->
-                  </select>
-               </div>
-               <div class="flex flex-col sm:flex-row gap-4 items-center">
-                  <div class="flex items-center gap-2">
-                     <label class="text-sm font-bold text-gray-700">From:</label>
-                     <input type="date" id="hrFilterStartDate" class="border rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-[#00843D]" onchange="handleHRDateChange()">
-                  </div>
-                  <div class="flex items-center gap-2">
-                     <label class="text-sm font-bold text-gray-700">To:</label>
-                     <input type="date" id="hrFilterEndDate" class="border rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-[#00843D]" onchange="handleHRDateChange()">
-                  </div>
-                  <div class="flex items-center gap-2">
-                     <button onclick="copyHRData()" class="bg-white hover:bg-gray-100 text-[#002147] text-sm font-bold py-1.5 px-4 rounded border border-[#002147] transition-colors shadow-sm flex items-center gap-2">
-                         <span>📋</span> Copy this data
-                     </button>
-                  </div>
-               </div>
-            </div>
-        </div>
-      </div>
-
-      <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-x-auto">
-        <table class="w-full text-left border-collapse min-w-max">
-          <thead id="hrDashboardTableHeader">
-            <tr class="bg-gray-50 border-b border-gray-200 text-sm text-gray-700 uppercase">
-              <th class="p-3">Teacher Name</th>
-              <th id="hrCountHeader" class="p-3">Count</th>
-            </tr>
-          </thead>
-          <tbody id="hrDashboardTableBody" class="divide-y divide-gray-100">
-             <tr><td colspan="2" class="p-8 text-center text-gray-400 italic">Loading HR dashboard...</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </main>
-    <!-- At a Glance Dashboard View -->
-    <main id="atAGlanceDashboardView" class="max-w-6xl mx-auto p-4 mt-4 hidden">
-      <div class="flex justify-between items-center mb-6">
-        <h2 class="text-2xl font-bold text-[#002147] flex items-center gap-2">
-          <span>📅</span> Today at a Glance
-        </h2>
-        <button onclick="toggleAtAGlanceDashboard()" class="text-[#002147] hover:bg-gray-200 font-semibold py-2 px-4 rounded-lg transition-colors border border-[#002147]">
-           &larr; Return to Homepage
-        </button>
-      </div>
-
-      <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
-        <div class="flex flex-col sm:flex-row gap-4 items-center justify-between">
-            <div class="flex items-center gap-2 w-full sm:w-auto">
-               <label class="text-sm font-bold text-gray-700">Date:</label>
-               <input type="date" id="atAGlanceDate" class="border rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-[#00843D]" onchange="applyAtAGlanceFilter()">
-            </div>
-            <div class="flex items-center gap-2 w-full sm:w-auto ml-auto">
-               <button onclick="copyAtAGlance()" class="bg-white hover:bg-gray-100 text-[#002147] text-sm font-bold py-1.5 px-4 rounded border border-[#002147] transition-colors shadow-sm flex items-center gap-2">
-                   <span>📋</span> Copy This Info
-               </button>
-            </div>
-        </div>
-      </div>
-
-      <div id="atAGlanceCopyContainer" class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-x-auto p-4">
-        <!-- The table and footer will be rendered inside this container so it can be easily copied -->
-        <table class="w-full text-left border-collapse min-w-max border border-gray-300">
-          <thead id="atAGlanceTableHeader">
-             <tr class="bg-gray-50 border-b border-gray-300 text-sm text-gray-700 uppercase">
-                <!-- Columns dynamically injected -->
-             </tr>
-          </thead>
-          <tbody id="atAGlanceTableBody" class="divide-y divide-gray-200">
-             <tr><td class="p-8 text-center text-gray-400 italic">Loading Today at a Glance...</td></tr>
-          </tbody>
-        </table>
-        <div id="atAGlanceFooter" class="mt-4 text-sm hidden">
-           <br>
-           Please refer to the <a id="atAGlanceFooterUrl" href="#" style="color: #00843D; text-decoration: underline;">Cathedral Sub App</a> for more information.
-        </div>
-      </div>
-    </main>
-
-    <!-- Settings Dashboard View -->
-    <main id="settingsDashboardView" class="max-w-6xl mx-auto p-4 mt-4 hidden">
-      <div class="flex justify-between items-center mb-6">
-        <h2 class="text-2xl font-bold text-[#002147] flex items-center gap-2">
-          <span>⚙️</span> Settings & Role Management
-        </h2>
-        <button onclick="toggleSettingsDashboard()" class="text-[#002147] hover:bg-gray-200 font-semibold py-2 px-4 rounded-lg transition-colors border border-[#002147]">
-           &larr; Return to Homepage
-        </button>
-      </div>
-
-      <!-- General Settings -->
-      <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
-        <h3 class="text-xl font-bold text-[#002147] mb-4 border-b pb-2">General Settings</h3>
-        <div id="generalSettingsContainer" class="space-y-4">
-           <!-- Dynamic content injected here -->
-           <p class="text-gray-400 italic">Loading settings...</p>
-        </div>
-      </div>
-
-      <!-- Role Management -->
-      <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <div class="flex justify-between items-center mb-4 border-b pb-2">
-           <h3 class="text-xl font-bold text-[#002147]">User Roles</h3>
-           <button onclick="openAddRoleModal()" class="bg-[#00843D] hover:bg-green-700 text-white font-bold py-1.5 px-4 rounded-lg transition-colors text-sm flex items-center gap-2">
-               <span>➕</span> Add User Role
-           </button>
-        </div>
-        <div class="overflow-x-auto">
-          <table class="w-full text-left border-collapse min-w-max">
-            <thead>
-              <tr class="bg-gray-50 border-b border-gray-200 text-sm text-gray-700 uppercase">
-                <th class="p-3">User Email</th>
-                <th class="p-3">Assigned Role</th>
-                <th class="p-3 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody id="roleManagementTableBody" class="divide-y divide-gray-100">
-               <tr><td colspan="3" class="p-8 text-center text-gray-400 italic">Loading roles...</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </main>
-
-    <!-- Settings Form & Logic -->
-    <script>
       let currentAbsenceReasons = [];
 
       function loadSettingsData() {
@@ -619,151 +306,8 @@
           })
           .addUserRole(email, role);
       }
-    </script>
 
-    <!-- Add Role Modal -->
-    <div id="addRoleModal" class="modal opacity-0 pointer-events-none fixed w-full h-full top-0 left-0 flex items-center justify-center z-[110]" onclick="if(event.target === this) attemptCloseAllModals()">
-      <div class="modal-container bg-white w-11/12 md:max-w-md mx-auto rounded-2xl shadow-2xl z-[110] overflow-y-auto max-h-[90vh]">
-        <div class="p-6">
-          <div class="flex justify-between items-center pb-3 border-b">
-            <p class="text-xl font-bold text-[#002147]">Add User Role</p>
-            <div onclick="attemptCloseAllModals()" class="cursor-pointer z-50 p-2 hover:bg-gray-100 rounded-full">
-              <svg class="fill-current text-black" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 18 18"><path d="M14.53 4.53l-1.06-1.06L9 7.94 4.53 3.47 3.47 4.53 7.94 9l-4.47 4.47 1.06 1.06L9 10.06l4.47 4.47 1.06-1.06L10.06 9z"></path></svg>
-            </div>
-          </div>
-          <div class="mt-4 space-y-4">
-             <div>
-               <label class="block text-sm font-bold mb-1">User Email Address</label>
-               <input type="email" id="addRoleEmail" placeholder="e.g. teacher@gocathedral.com" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none">
-             </div>
-             <div>
-               <label class="block text-sm font-bold mb-1">Role</label>
-               <select id="addRoleSelect" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none">
-                 <option value="Admin">Admin</option>
-                 <option value="Sub Coordinator">Sub Coordinator</option>
-                 <option value="HR">HR</option>
-                 <option value="Principal">Principal</option>
-               </select>
-             </div>
-             <div class="mt-4 flex justify-end">
-                <button id="addRoleSubmitBtn" onclick="submitAddRole()" class="bg-[#00843D] hover:bg-green-700 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-md">
-                  Add Role
-                </button>
-             </div>
-          </div>
-        </div>
-      </div>
-    </div>
 
-    <!-- Generic Modal overlay -->
-    <div id="genericModalOverlay" class="modal opacity-0 pointer-events-none fixed w-full h-full top-0 left-0 flex items-center justify-center z-[100]">
-      <div class="modal-overlay absolute w-full h-full bg-gray-900 opacity-50" onclick="attemptCloseAllModals()"></div>
-    </div>
-
-    <div id="detailsModal" class="modal opacity-0 pointer-events-none fixed w-full h-full top-0 left-0 flex items-center justify-center z-[110]" onclick="if(event.target === this) attemptCloseAllModals()">
-      <div class="modal-container bg-white w-11/12 md:max-w-xl mx-auto rounded-2xl shadow-2xl z-[110] overflow-y-auto max-h-[90vh]">
-        <div class="p-6">
-          <div class="flex justify-between items-center pb-3 border-b">
-            <p class="text-2xl font-bold text-[#002147]">Coverage Details</p>
-            <div onclick="attemptCloseAllModals()" class="cursor-pointer z-50 p-2 hover:bg-gray-100 rounded-full">
-              <svg class="fill-current text-black" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 18 18"><path d="M14.53 4.53l-1.06-1.06L9 7.94 4.53 3.47 3.47 4.53 7.94 9l-4.47 4.47 1.06 1.06L9 10.06l4.47 4.47 1.06-1.06L10.06 9z"></path></svg>
-            </div>
-          </div>
-          <div id="detailsContent" class="mt-4 space-y-4">
-             <!-- Populated dynamically -->
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div id="modal" class="modal opacity-0 pointer-events-none fixed w-full h-full top-0 left-0 flex items-center justify-center z-[110]" onclick="if(event.target === this) attemptCloseAllModals()">
-      <div class="modal-container bg-white w-11/12 md:max-w-xl mx-auto rounded-2xl shadow-2xl z-[110] overflow-y-auto max-h-[90vh]">
-        <div class="p-6">
-          <div class="flex justify-between items-center pb-3 border-b">
-            <div class="flex items-center gap-4">
-               <p id="requestModalTitle" class="text-2xl font-bold text-[#002147]">Request Sub</p>
-               <button type="button" id="adminDeleteBtn" onclick="deleteAbsenceFromModal()" class="hidden bg-red-100 hover:bg-red-200 text-red-700 text-xs font-bold py-1 px-3 rounded-lg border border-red-200 transition-colors shadow-sm">Delete Request</button>
-            </div>
-            <div onclick="attemptCloseAllModals()" class="cursor-pointer z-50 p-2 hover:bg-gray-100 rounded-full">
-              <svg class="fill-current text-black" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 18 18"><path d="M14.53 4.53l-1.06-1.06L9 7.94 4.53 3.47 3.47 4.53 7.94 9l-4.47 4.47 1.06 1.06L9 10.06l4.47 4.47 1.06-1.06L10.06 9z"></path></svg>
-            </div>
-          </div>
-
-          <form id="absenceForm" class="space-y-4 mt-4">
-            <input type="hidden" id="editAbsenceId" value="">
-            
-            <div class="grid grid-cols-2 gap-4">
-              <div>
-                <label class="block text-sm font-bold mb-1">Date of Absence</label>
-                <input type="date" id="absDate" required class="w-full p-3 border rounded-xl focus:ring-2 focus:ring-[#00843D] outline-none">
-              </div>
-              <div>
-                <label class="block text-sm font-bold mb-1">Duration</label>
-                <select id="absDuration" class="w-full p-3 border rounded-xl outline-none bg-white">
-                  <option value="Full Day">Full Day</option>
-                  <option value="Half Day">Half Day</option>
-                </select>
-              </div>
-            </div>
-
-            <div>
-              <label class="block text-sm font-bold mb-2">Period(s) Needed</label>
-              <div class="grid grid-cols-4 gap-2">
-                <label class="flex items-center gap-2 p-2 border rounded-lg cursor-pointer hover:bg-gray-50"><input type="checkbox" value="1" class="period-cb h-4 w-4"> 1</label>
-                <label class="flex items-center gap-2 p-2 border rounded-lg cursor-pointer hover:bg-gray-50"><input type="checkbox" value="2" class="period-cb h-4 w-4"> 2</label>
-                <label class="flex items-center gap-2 p-2 border rounded-lg cursor-pointer hover:bg-gray-50"><input type="checkbox" value="3" class="period-cb h-4 w-4"> 3</label>
-                <label class="flex items-center gap-2 p-2 border rounded-lg cursor-pointer hover:bg-gray-50"><input type="checkbox" value="4" class="period-cb h-4 w-4"> 4</label>
-                <label class="flex items-center gap-2 p-2 border rounded-lg cursor-pointer hover:bg-gray-50"><input type="checkbox" value="5" class="period-cb h-4 w-4"> 5</label>
-                <label class="flex items-center gap-2 p-2 border rounded-lg cursor-pointer hover:bg-gray-50"><input type="checkbox" value="6" class="period-cb h-4 w-4"> 6</label>
-                <label class="flex items-center gap-2 p-2 border rounded-lg cursor-pointer hover:bg-gray-50"><input type="checkbox" value="7" class="period-cb h-4 w-4"> 7</label>
-                <label class="flex items-center gap-2 p-2 border rounded-lg cursor-pointer hover:bg-gray-50"><input type="checkbox" value="8" class="period-cb h-4 w-4"> 8</label>
-              </div>
-            </div>
-
-            <div>
-              <label class="block text-sm font-bold mb-1">Reason for Absence</label>
-              <select id="absReason" onchange="checkSpecialReason()" class="w-full p-3 border rounded-xl outline-none bg-white">
-                <!-- Dynamically populated -->
-              </select>
-            </div>
-
-            <div id="hrSection" class="hidden bg-orange-50 p-4 rounded-xl border border-orange-200">
-              <label class="flex items-start gap-3 cursor-pointer">
-                <input type="checkbox" id="hrConfirm" class="mt-1 h-5 w-5 rounded text-orange-600">
-                <span class="text-sm text-orange-800 leading-tight">I confirm I have contacted HR and provided documentation for this special absence.</span>
-              </label>
-            </div>
-
-            <div>
-              <label class="block text-sm font-bold mb-1">Urgency</label>
-              <div class="flex gap-2">
-                <button type="button" onclick="setUrgency('Standard')" id="btnStd" class="flex-1 py-2 rounded-lg border-2 border-[#00843D] bg-[#00843D] text-white font-bold transition-colors">Standard</button>
-                <button type="button" onclick="setUrgency('Urgent')" id="btnUrg" class="flex-1 py-2 rounded-lg border-2 border-gray-200 text-gray-500 font-bold transition-colors">Urgent</button>
-              </div>
-              <input type="hidden" id="urgencyValue" value="Standard">
-            </div>
-
-            <div>
-              <label class="block text-sm font-bold mb-1">Special Instructions (Optional)</label>
-              <textarea id="specialInst" rows="2" class="w-full p-3 border rounded-xl outline-none focus:ring-2 focus:ring-[#00843D]" placeholder="Any extra details..."></textarea>
-            </div>
-
-            <div class="bg-gray-50 p-4 rounded-xl border border-gray-200">
-              <label class="flex items-start gap-3 cursor-pointer">
-                <input type="checkbox" id="agreement" required class="mt-1 h-5 w-5 rounded">
-                <span class="text-xs text-gray-600 leading-tight italic">I confirm I have posted my lesson plans in Canvas and submitted request to Paycom.</span>
-              </label>
-            </div>
-
-            <button type="submit" id="submitBtn" class="w-full bg-[#002147] hover:bg-blue-900 text-white font-bold py-4 rounded-xl transition-all shadow-lg mt-2">
-              Submit Request
-            </button>
-          </form>
-        </div>
-      </div>
-    </div>
-
-    <script>
       function toggleSection(wrapperId, iconId) {
         const wrapper = document.getElementById(wrapperId);
         const icon = document.getElementById(iconId);
@@ -851,7 +395,7 @@
             const data = payload.userData;
             document.getElementById('userName').innerText = data.name;
             document.getElementById('welcomeName').innerText = (data.name.split(',')[1] || data.name).trim();
-            
+
             if (data.appUrl) {
                 const footerLink = document.getElementById('atAGlanceFooterUrl');
                 if (footerLink) footerLink.href = data.appUrl;
@@ -1248,7 +792,7 @@
 
       function renderQuickCover(unfilled) {
             const container = document.getElementById('quickCoverContainer');
-            
+
             if (unfilled.length === 0) {
               container.innerHTML = '<div class="p-8 text-center text-gray-500 font-medium flex flex-col items-center gap-2"><span class="text-3xl">🎉</span> All classes are covered for the next 2 days!</div>';
               return;
@@ -1292,7 +836,7 @@
               `;
             });
             html += '</div>';
-            
+
             container.innerHTML = html;
           }
 
@@ -2073,7 +1617,7 @@
             absences.forEach((abs, index) => {
               let bgClass = abs.urgency === 'Urgent' ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200';
               let textClass = abs.urgency === 'Urgent' ? 'text-red-700' : 'text-[#002147]';
-              
+
               html += `
                 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 border rounded-xl shadow-sm ${bgClass} gap-4">
                   <div>
@@ -2096,7 +1640,7 @@
               `;
             });
             html += '</div>';
-            
+
             container.innerHTML = html;
             container.classList.remove('text-gray-400');
           }
@@ -2278,7 +1822,7 @@
 
       document.getElementById('absenceForm').onsubmit = function(e) {
         e.preventDefault();
-        
+
         const selectedPeriods = Array.from(document.querySelectorAll('.period-cb:checked'))
                                      .map(cb => cb.value).join(', ');
 
@@ -2462,7 +2006,7 @@
 
                  html += `<option value="${idx}" ${isSelected}>Pay Period ${pp.periodNumber} (${displayStart} - ${displayEnd})</option>`;
               });
-              
+
               ppSelect.innerHTML = html;
 
               if (selectedIdx !== -1) {
@@ -2791,6 +2335,3 @@
         selection.removeAllRanges();
         footer.classList.add('hidden');
       }
-    </script>
-  </body>
-</html>
