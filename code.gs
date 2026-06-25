@@ -136,6 +136,40 @@ function getSS() {
   return SpreadsheetApp.getActiveSpreadsheet();
 }
 
+
+/**
+ * Retrieves a sheet by name or throws an error if not found.
+ * @param {SpreadsheetApp.Spreadsheet} ss - The spreadsheet object.
+ * @param {string} sheetName - The exact name of the sheet.
+ * @returns {SpreadsheetApp.Sheet} The requested sheet.
+ * @throws {Error} If the sheet is not found.
+ */
+function getSheetOrThrow(ss, sheetName) {
+  var sheet = ss.getSheetByName(sheetName);
+  if (!sheet) {
+    throw new Error(sheetName + " sheet not found.");
+  }
+  return sheet;
+}
+
+/**
+ * Retrieves a sheet case-insensitively or throws an error if not found.
+ * @param {SpreadsheetApp.Spreadsheet} ss - The spreadsheet object.
+ * @param {string} sheetName - The name of the sheet (case-insensitive).
+ * @returns {SpreadsheetApp.Sheet} The requested sheet.
+ * @throws {Error} If the sheet is not found.
+ */
+function getSheetCaseInsensitiveOrThrow(ss, sheetName) {
+  var allSheets = ss.getSheets();
+  var targetNameLower = sheetName.toLowerCase();
+  for (var i = 0; i < allSheets.length; i++) {
+    if (allSheets[i].getName().toLowerCase() === targetNameLower) {
+      return allSheets[i];
+    }
+  }
+  throw new Error(sheetName + " sheet not found.");
+}
+
 function assertRole(user, allowedRoles, customErrorMessage) {
   if (!user || !user.role) {
     throw new Error(customErrorMessage || "Unauthorized");
@@ -311,8 +345,7 @@ function addUserRole(email, role) {
     var user = getUserData(ss);
     assertRole(user, "admin");
 
-    var roleSheet = ss.getSheetByName("User Roles");
-    if (!roleSheet) throw new Error("User Roles sheet not found.");
+    var roleSheet = getSheetOrThrow(ss, "User Roles");
 
     roleSheet.appendRow([email.toLowerCase().trim(), role.trim()]);
     return { success: true };
@@ -330,8 +363,7 @@ function editUserRole(oldEmail, newEmail, role) {
     var user = getUserData(ss);
     assertRole(user, "admin");
 
-    var roleSheet = ss.getSheetByName("User Roles");
-    if (!roleSheet) throw new Error("User Roles sheet not found.");
+    var roleSheet = getSheetOrThrow(ss, "User Roles");
 
     var data = roleSheet.getDataRange().getValues();
     var targetEmail = oldEmail.toLowerCase().trim();
@@ -357,8 +389,7 @@ function deleteUserRole(email) {
     var user = getUserData(ss);
     assertRole(user, "admin");
 
-    var roleSheet = ss.getSheetByName("User Roles");
-    if (!roleSheet) throw new Error("User Roles sheet not found.");
+    var roleSheet = getSheetOrThrow(ss, "User Roles");
 
     var data = roleSheet.getDataRange().getValues();
     var targetEmail = email.toLowerCase().trim();
@@ -398,8 +429,7 @@ function updateSettings(newSettings) {
     var user = getUserData(ss);
     assertRole(user, "admin");
 
-    var settingsSheet = ss.getSheetByName("Settings");
-    if (!settingsSheet) throw new Error("Settings sheet not found.");
+    var settingsSheet = getSheetOrThrow(ss, "Settings");
 
     var data = settingsSheet.getDataRange().getValues();
     var settingsMap = {};
@@ -989,8 +1019,7 @@ function submitAbsence(formData) {
 function cancelMySubDuty(absenceId, period) {
   try {
     var ss = getSS();
-    var sheet = ss.getSheetByName("Absence Requests");
-    if (!sheet) throw new Error("Absence Requests sheet not found.");
+    var sheet = getSheetOrThrow(ss, "Absence Requests");
 
     var userEmail = Session.getActiveUser().getEmail().toLowerCase();
     var userData = getUserData(ss);
@@ -1097,8 +1126,7 @@ function getAbsenceDetailsLocal(row, period, scheduleLookup, nameLookup) {
 function cancelAbsence(absenceId) {
   try {
     var ss = getSS();
-    var sheet = ss.getSheetByName("Absence Requests");
-    if (!sheet) throw new Error("Absence Requests sheet not found.");
+    var sheet = getSheetOrThrow(ss, "Absence Requests");
 
     var rosterSheet = ss.getSheetByName("Staff Roster");
     var masterScheduleSheet = ss.getSheetByName("Master Schedule");
@@ -1179,8 +1207,7 @@ function cancelAbsence(absenceId) {
 function updateAbsence(absenceId, formData) {
   try {
     var ss = getSS();
-    var sheet = ss.getSheetByName("Absence Requests");
-    if (!sheet) throw new Error("Absence Requests sheet not found.");
+    var sheet = getSheetOrThrow(ss, "Absence Requests");
 
     var rosterSheet = ss.getSheetByName("Staff Roster");
     var masterScheduleSheet = ss.getSheetByName("Master Schedule");
@@ -1477,8 +1504,7 @@ function sendSubNotification(subEmail, type, details) {
 function assignSubToPeriod(absenceId, period, subName) {
   try {
     var ss = getSS();
-    var sheet = ss.getSheetByName("Absence Requests");
-    if (!sheet) throw new Error("Absence Requests sheet not found.");
+    var sheet = getSheetOrThrow(ss, "Absence Requests");
 
     var rosterSheet = ss.getSheetByName("Staff Roster");
     var masterScheduleSheet = ss.getSheetByName("Master Schedule");
