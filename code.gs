@@ -756,15 +756,22 @@ function getStaffList() {
     if (!sheet) return [];
 
     var data = sheet.getDataRange().getValues();
-    var staffNames = [];
+    var staffList = [];
 
     for (var i = 1; i < data.length; i++) {
       var name = String(data[i][0]).trim();
+      var duty = String(data[i][2] || "").trim(); // Column 3 (index 2) is Duty
       if (name) {
-        staffNames.push(name);
+        staffList.push({ name: name, duty: duty });
       }
     }
-    return staffNames.sort();
+
+    // Sort alphabetically by name
+    return staffList.sort(function(a, b) {
+      if (a.name < b.name) return -1;
+      if (a.name > b.name) return 1;
+      return 0;
+    });
   } catch (err) {
     return [];
   }
@@ -1546,7 +1553,10 @@ function getHRDashboardData() {
             var subColumnIndex = 8 + p; // 9 for P1, 10 for P2, etc.
             var assignedSub = data[i][subColumnIndex] || "";
             if (assignedSub && String(assignedSub).trim() !== "") {
-              assignedSubs.push(String(assignedSub).trim());
+              assignedSubs.push({
+                name: String(assignedSub).trim(),
+                period: String(p)
+              });
             }
         }
       }

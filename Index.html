@@ -980,9 +980,13 @@
 
           // Build HTML for subs who are NOT busy
           let optionsHtml = '';
-          staffList.forEach(name => {
-              if (!busySubs.has(name.trim().toLowerCase())) {
-                  optionsHtml += `<option value="${escapeHtml(name)}"></option>`;
+          staffList.forEach(staff => {
+              if (!busySubs.has(staff.name.trim().toLowerCase())) {
+                  let val = staff.name;
+                  if (staff.duty) {
+                      val += ' - ' + staff.duty;
+                  }
+                  optionsHtml += `<option value="${escapeHtml(val)}"></option>`;
               }
           });
 
@@ -1416,9 +1420,15 @@
 
       function handleAdminAssign(absenceId, period, selectElementId) {
         const selectEl = document.getElementById(selectElementId);
-        const subName = selectEl.value; // It can be empty to unassign!
+        let subName = selectEl.value; // It can be empty to unassign!
 
-        if (subName && !staffList.includes(subName)) {
+        // Strip the " - Duty" suffix if it exists
+        if (subName) {
+            subName = subName.replace(/\s+-\s+\d+$/, '').trim();
+            selectEl.value = subName; // Update input field to show the clean name
+        }
+
+        if (subName && !staffList.map(s => s.name).includes(subName)) {
           alert("Please enter a valid staff name from the list, or leave it blank to clear.");
           return;
         }
@@ -1528,14 +1538,18 @@
 
       function handleAssign(absenceId, period, selectElementId, isFromModal = false) {
         const selectEl = document.getElementById(selectElementId);
-        const subName = selectEl.value;
+        let subName = selectEl.value;
 
         if (!subName) {
           alert("Please enter a substitute to assign.");
           return;
         }
 
-        if (!staffList.includes(subName)) {
+        // Strip the " - Duty" suffix if it exists
+        subName = subName.replace(/\s+-\s+\d+$/, '').trim();
+        selectEl.value = subName; // Update input field to show the clean name
+
+        if (!staffList.map(s => s.name).includes(subName)) {
           alert("Please enter a valid staff name from the list.");
           return;
         }
@@ -2033,9 +2047,24 @@
             });
         } else {
             filteredData.forEach(req => {
-                req.assignedSubs.forEach(sub => {
-                    if (!aggregated[sub]) aggregated[sub] = { count: 0 };
-                    aggregated[sub].count += 1; // 1 period
+                req.assignedSubs.forEach(subObj => {
+                    let subName = subObj.name;
+                    let coveredPeriod = subObj.period;
+
+                    if (!aggregated[subName]) {
+                        aggregated[subName] = { duty: 0, extra: 0, total: 0 };
+                    }
+
+                    // Look up the sub's duty period from staffList
+                    let staffInfo = staffList.find(s => s.name === subName);
+                    let subDuty = staffInfo ? staffInfo.duty : null;
+
+                    if (subDuty && coveredPeriod === String(subDuty)) {
+                        aggregated[subName].duty += 1;
+                    } else {
+                        aggregated[subName].extra += 1;
+                    }
+                    aggregated[subName].total += 1;
                 });
             });
         }
@@ -2048,8 +2077,8 @@
                     resultList.push({ name: name, ...aggregated[name] });
                 }
             } else {
-                if (aggregated[name].count > 0) {
-                    resultList.push({ name: name, count: aggregated[name].count });
+                if (aggregated[name].total > 0) {
+                    resultList.push({ name: name, duty: aggregated[name].duty, extra: aggregated[name].extra, total: aggregated[name].total });
                 }
             }
         }
@@ -2086,12 +2115,14 @@
           thead.innerHTML = `
             <tr class="bg-gray-50 border-b border-gray-200 text-sm text-gray-700 uppercase">
               <th class="p-3">Teacher Name</th>
-              <th class="p-3 text-right">Periods</th>
+              <th class="p-3 text-right">Duty</th>
+              <th class="p-3 text-right">Extra</th>
+              <th class="p-3 text-right">Total</th>
             </tr>
           `;
         }
 
-        const colCount = hrCurrentView === 'absences' ? (2 + (dynamicReasons ? dynamicReasons.length : 0)) : 2;
+        const colCount = hrCurrentView === 'absences' ? (2 + (dynamicReasons ? dynamicReasons.length : 0)) : 4;
 
         if (dataList.length === 0) {
           tbody.innerHTML = `<tr><td colspan="${colCount}" class="p-8 text-center text-gray-400 italic">No data found for the selected dates.</td></tr>`;
@@ -2115,10 +2146,13 @@
               </tr>
             `;
           } else {
+            // Because escapeHtml might return a generic falsy string on numeric 0, use standard fallback checks
             html += `
               <tr class="hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0">
                 <td class="p-3 text-sm text-gray-800 font-medium">${escapeHtml(item.name)}</td>
-                <td class="p-3 text-sm text-gray-600 font-bold text-right">${escapeHtml(item.count)}</td>
+                <td class="p-3 text-sm text-gray-600 font-bold text-right">${item.duty === 0 ? '0' : escapeHtml(item.duty)}</td>
+                <td class="p-3 text-sm text-gray-600 font-bold text-right">${item.extra === 0 ? '0' : escapeHtml(item.extra)}</td>
+                <td class="p-3 text-sm text-gray-600 font-bold text-right">${item.total === 0 ? '0' : escapeHtml(item.total)}</td>
               </tr>
             `;
           }
