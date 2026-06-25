@@ -3,7 +3,7 @@
  * Run this function once from the Apps Script editor.
  */
 function setupDatabase() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getSS();
   var sheet = ss.getSheetByName("Absence Requests");
   if (!sheet) {
     sheet = ss.insertSheet("Absence Requests");
@@ -52,23 +52,6 @@ function setupDatabase() {
  * Retrieves settings from the Settings sheet as an object.
  * Uses defaults in memory if the sheet does not exist or user lacks permission.
  */
-function getSheetOrThrow(ss, sheetName) {
-  var sheet = ss.getSheetByName(sheetName);
-  if (!sheet) throw new Error(sheetName + " sheet not found.");
-  return sheet;
-}
-
-function getSheetCaseInsensitiveOrThrow(ss, sheetName) {
-  var sheets = ss.getSheets();
-  var targetName = sheetName.toLowerCase();
-  for (var i = 0; i < sheets.length; i++) {
-    if (sheets[i].getName().toLowerCase() === targetName) {
-      return sheets[i];
-    }
-  }
-  throw new Error(sheetName + " sheet not found.");
-}
-
 function getSettings(ss) {
   var defaults = {
     "Email Mode": "Live",
@@ -86,7 +69,7 @@ function getSettings(ss) {
   };
 
   try {
-    var sheetSS = ss || SpreadsheetApp.getActiveSpreadsheet();
+    var sheetSS = ss || getSS();
     var settingsSheet = sheetSS.getSheetByName("Settings");
 
     var settings = {};
@@ -146,6 +129,30 @@ function doGet(e) {
  * @param {string} [customErrorMessage="Unauthorized"] - Optional custom error message.
  * @throws {Error} If the user's role is not in the allowed list.
  */
+/**
+ * Returns the active spreadsheet.
+ */
+function getSheetOrThrow(ss, sheetName) {
+  var sheet = ss.getSheetByName(sheetName);
+  if (!sheet) throw new Error(sheetName + " sheet not found.");
+  return sheet;
+}
+
+function getSheetCaseInsensitiveOrThrow(ss, sheetName) {
+  var sheets = ss.getSheets();
+  var targetName = sheetName.toLowerCase();
+  for (var i = 0; i < sheets.length; i++) {
+    if (sheets[i].getName().toLowerCase() === targetName) {
+      return sheets[i];
+    }
+  }
+  throw new Error(sheetName + " sheet not found.");
+}
+
+function getSS() {
+  return SpreadsheetApp.getActiveSpreadsheet();
+}
+
 function assertRole(user, allowedRoles, customErrorMessage) {
   if (!user || !user.role) {
     throw new Error(customErrorMessage || "Unauthorized");
@@ -163,7 +170,7 @@ function assertRole(user, allowedRoles, customErrorMessage) {
  */
 function getUserData(ss) {
   var email = Session.getActiveUser().getEmail();
-  var ss = ss || SpreadsheetApp.getActiveSpreadsheet();
+  var ss = ss || getSS();
   
   var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
   var rosterData = rosterSheet.getDataRange().getValues();
@@ -289,7 +296,7 @@ function buildScheduleLookup(scheduleData) {
  */
 function getUserRoles() {
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getSS();
     var user = getUserData(ss);
     assertRole(user, "admin");
 
@@ -316,7 +323,7 @@ function getUserRoles() {
  */
 function addUserRole(email, role) {
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getSS();
     var user = getUserData(ss);
     assertRole(user, "admin");
 
@@ -334,7 +341,7 @@ function addUserRole(email, role) {
  */
 function editUserRole(oldEmail, newEmail, role) {
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getSS();
     var user = getUserData(ss);
     assertRole(user, "admin");
 
@@ -360,7 +367,7 @@ function editUserRole(oldEmail, newEmail, role) {
  */
 function deleteUserRole(email) {
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getSS();
     var user = getUserData(ss);
     assertRole(user, "admin");
 
@@ -386,7 +393,7 @@ function deleteUserRole(email) {
  */
 function getSettingsForFrontend() {
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getSS();
     var user = getUserData(ss);
     assertRole(user, "admin");
     return getSettings();
@@ -400,7 +407,7 @@ function getSettingsForFrontend() {
  */
 function updateSettings(newSettings) {
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getSS();
     var user = getUserData(ss);
     assertRole(user, "admin");
 
@@ -433,7 +440,7 @@ function updateSettings(newSettings) {
 function getMyAbsences() {
   try {
     var email = Session.getActiveUser().getEmail();
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getSS();
     var sheet = getSheetOrThrow(ss, "Absence Requests");
     
     var data = sheet.getDataRange().getValues();
@@ -495,7 +502,7 @@ function getMyAbsences() {
 function getMySubDuties() {
   try {
     var userEmail = Session.getActiveUser().getEmail().toLowerCase();
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getSS();
     var userData = getUserData(ss);
     var userName = String(userData.name).trim().toLowerCase();
 
@@ -598,7 +605,7 @@ function getMySubDuties() {
  */
 function getTodaysOpenJobsData() {
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getSS();
     var mainSheet = getSheetOrThrow(ss, "Absence Requests");
     var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
     var masterScheduleSheet = getSheetOrThrow(ss, "Master Schedule");
@@ -696,7 +703,7 @@ function getTodaysOpenJobsData() {
  */
 function getQuickCoverData() {
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getSS();
     var mainSheet = getSheetOrThrow(ss, "Absence Requests");
     var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
     var masterScheduleSheet = getSheetOrThrow(ss, "Master Schedule");
@@ -809,7 +816,7 @@ function getQuickCoverData() {
  */
 function getStaffList() {
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getSS();
     var sheet = getSheetOrThrow(ss, "Staff Roster");
 
     var data = sheet.getDataRange().getValues();
@@ -847,7 +854,7 @@ function getStaffList() {
 }
 
 function getCoordinatorEmail(ss) {
-  var ss = ss || SpreadsheetApp.getActiveSpreadsheet();
+  var ss = ss || getSS();
   var roleSheet = getSheetOrThrow(ss, "User Roles");
   
   var data = roleSheet.getDataRange().getValues();
@@ -857,9 +864,89 @@ function getCoordinatorEmail(ss) {
   return null;
 }
 
+/**
+ * Helper to calculate if an absence request is urgent based on submission time.
+ */
+function calculateIsUrgentByTime(absenceDateStr, timestamp, ss) {
+  try {
+    var tz = Session.getScriptTimeZone();
+
+    // Parse formData.date (format YYYY-MM-DD)
+    var absParts = absenceDateStr.split("-");
+    var absenceDate = new Date(parseInt(absParts[0], 10), parseInt(absParts[1], 10) - 1, parseInt(absParts[2], 10), 12, 0, 0);
+
+    // Get current date components in the script timezone
+    var nowTzDateStr = Utilities.formatDate(timestamp, tz, "yyyy-MM-dd");
+    var nowTzHourStr = Utilities.formatDate(timestamp, tz, "HH");
+    var nowTzDayStr = Utilities.formatDate(timestamp, tz, "E"); // Mon, Tue, Wed, Thu, Fri, Sat, Sun
+
+    var nowParts = nowTzDateStr.split("-");
+    var currentLocalDate = new Date(parseInt(nowParts[0], 10), parseInt(nowParts[1], 10) - 1, parseInt(nowParts[2], 10), 12, 0, 0);
+    var currentHour = parseInt(nowTzHourStr, 10);
+
+    var settings = getSettings(ss);
+    var cutoffHour = parseInt(settings["Urgency Cutoff Time"] || "15", 10);
+
+    var diffTime = absenceDate.getTime() - currentLocalDate.getTime();
+    var diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays <= 0) {
+      return true; // Same day or past
+    } else if (diffDays === 1) {
+      if (currentHour >= cutoffHour || nowTzDayStr === "Sun") {
+        return true; // Next day after cutoff hour, or Sun for Mon
+      }
+    } else if (diffDays === 2) {
+      if (nowTzDayStr === "Sat") {
+        return true; // Sat for Mon
+      }
+    } else if (diffDays === 3) {
+      if (nowTzDayStr === "Fri" && currentHour >= cutoffHour) {
+        return true; // Fri after cutoff hour for Mon
+      }
+    }
+    return false;
+  } catch (e) {
+    console.error("Error calculating urgency: " + e.message);
+    return false;
+  }
+}
+
+/**
+ * Helper to send an email for urgent coverage requests.
+ */
+function sendUrgentCoverageEmail(ss, teacherName, formData, instructions) {
+  var coordinatorEmail = getCoordinatorEmail(ss);
+  if (coordinatorEmail) {
+    var subject = "URGENT COVERAGE NEEDED: " + teacherName;
+    var settings = getSettings();
+    var appUrl = settings["App URL"] || "https://script.google.com/a/macros/gocathedral.com/s/AKfycbwKZrBo4R-9O97aVNCjOHk9PddWCb6XNKviDS1lj4nNc49khl3T9OL8pGUDa7E1XE0/exec";
+
+    var body = "An urgent absence request has been submitted requiring immediate attention.\n\n" +
+               "Teacher: " + teacherName + "\n" +
+               "Date Needed: " + formData.date + "\n" +
+               "Periods: " + formData.periods + "\n" +
+               "Reason: " + formData.reason + "\n\n" +
+               "Instructions: " + (instructions ? instructions : "None") + "\n\n" +
+               "Please log into the Cathedral Sub App to assign a sub: " + appUrl;
+
+    var htmlBody = "<p>An urgent absence request has been submitted requiring immediate attention.</p>" +
+                   "<ul>" +
+                   "<li><strong>Teacher:</strong> " + teacherName + "</li>" +
+                   "<li><strong>Date Needed:</strong> " + formData.date + "</li>" +
+                   "<li><strong>Periods:</strong> " + formData.periods + "</li>" +
+                   "<li><strong>Reason:</strong> " + formData.reason + "</li>" +
+                   "</ul>" +
+                   "<p><strong>Instructions:</strong> " + (instructions ? instructions : "None") + "</p>" +
+                   "<p>Please log into the <a href='" + appUrl + "'>Cathedral Sub App</a> to assign a sub.</p>";
+
+    sendEmailHelper(coordinatorEmail, subject, body, { htmlBody: htmlBody });
+  }
+}
+
 function submitAbsence(formData) {
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getSS();
     var mainSheet = getSheetOrThrow(ss, "Absence Requests");
     
     var urgencyFormatted = formData.urgency === 'Urgent' ? 'Urgent (Less than 24 hr notice)' : 'Standard (Advanced Notice)';
@@ -884,79 +971,12 @@ function submitAbsence(formData) {
 
     // Check if manually marked urgent
     var isMarkedUrgent = urgencyFormatted === 'Urgent (Less than 24 hr notice)';
-    var isUrgentByTime = false;
-
-    try {
-      // Determine if urgent based on time of submission
-      var tz = Session.getScriptTimeZone();
-
-      // Parse formData.date (format YYYY-MM-DD)
-      var absParts = formData.date.split("-");
-      var absenceDate = new Date(parseInt(absParts[0], 10), parseInt(absParts[1], 10) - 1, parseInt(absParts[2], 10), 12, 0, 0);
-
-      // Get current date components in the script timezone
-      var nowTzDateStr = Utilities.formatDate(timestamp, tz, "yyyy-MM-dd");
-      var nowTzHourStr = Utilities.formatDate(timestamp, tz, "HH");
-      var nowTzDayStr = Utilities.formatDate(timestamp, tz, "E"); // Mon, Tue, Wed, Thu, Fri, Sat, Sun
-
-      var nowParts = nowTzDateStr.split("-");
-      var currentLocalDate = new Date(parseInt(nowParts[0], 10), parseInt(nowParts[1], 10) - 1, parseInt(nowParts[2], 10), 12, 0, 0);
-      var currentHour = parseInt(nowTzHourStr, 10);
-
-      var settings = getSettings(ss);
-      var cutoffHour = parseInt(settings["Urgency Cutoff Time"] || "15", 10);
-
-      var diffTime = absenceDate.getTime() - currentLocalDate.getTime();
-      var diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
-
-      if (diffDays <= 0) {
-        isUrgentByTime = true; // Same day or past
-      } else if (diffDays === 1) {
-        if (currentHour >= cutoffHour || nowTzDayStr === "Sun") {
-          isUrgentByTime = true; // Next day after cutoff hour, or Sun for Mon
-        }
-      } else if (diffDays === 2) {
-        if (nowTzDayStr === "Sat") {
-          isUrgentByTime = true; // Sat for Mon
-        }
-      } else if (diffDays === 3) {
-        if (nowTzDayStr === "Fri" && currentHour >= cutoffHour) {
-          isUrgentByTime = true; // Fri after cutoff hour for Mon
-        }
-      }
-    } catch (e) {
-      console.error("Error calculating urgency: " + e.message);
-    }
+    var isUrgentByTime = calculateIsUrgentByTime(formData.date, timestamp, ss);
 
     var shouldSendUrgentEmail = isMarkedUrgent || isUrgentByTime;
 
     if (shouldSendUrgentEmail) {
-      var coordinatorEmail = getCoordinatorEmail(ss);
-      if (coordinatorEmail) {
-        var subject = "URGENT COVERAGE NEEDED: " + teacherName;
-        var settings = getSettings();
-        var appUrl = settings["App URL"] || "https://script.google.com/a/macros/gocathedral.com/s/AKfycbwKZrBo4R-9O97aVNCjOHk9PddWCb6XNKviDS1lj4nNc49khl3T9OL8pGUDa7E1XE0/exec";
-
-        var body = "An urgent absence request has been submitted requiring immediate attention.\n\n" +
-                   "Teacher: " + teacherName + "\n" +
-                   "Date Needed: " + formData.date + "\n" +
-                   "Periods: " + formData.periods + "\n" +
-                   "Reason: " + formData.reason + "\n\n" +
-                   "Instructions: " + (instructions ? instructions : "None") + "\n\n" +
-                   "Please log into the Cathedral Sub App to assign a sub: " + appUrl;
-
-        var htmlBody = "<p>An urgent absence request has been submitted requiring immediate attention.</p>" +
-                       "<ul>" +
-                       "<li><strong>Teacher:</strong> " + teacherName + "</li>" +
-                       "<li><strong>Date Needed:</strong> " + formData.date + "</li>" +
-                       "<li><strong>Periods:</strong> " + formData.periods + "</li>" +
-                       "<li><strong>Reason:</strong> " + formData.reason + "</li>" +
-                       "</ul>" +
-                       "<p><strong>Instructions:</strong> " + (instructions ? instructions : "None") + "</p>" +
-                       "<p>Please log into the <a href='" + appUrl + "'>Cathedral Sub App</a> to assign a sub.</p>";
-
-        sendEmailHelper(coordinatorEmail, subject, body, { htmlBody: htmlBody });
-      }
+      sendUrgentCoverageEmail(ss, teacherName, formData, instructions);
     }
     
     return { success: true };
@@ -970,7 +990,7 @@ function submitAbsence(formData) {
  */
 function cancelMySubDuty(absenceId, period) {
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getSS();
     var sheet = getSheetOrThrow(ss, "Absence Requests");
 
     var userEmail = Session.getActiveUser().getEmail().toLowerCase();
@@ -1077,7 +1097,7 @@ function getAbsenceDetailsLocal(row, period, scheduleLookup, nameLookup) {
 
 function cancelAbsence(absenceId) {
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getSS();
     var sheet = getSheetOrThrow(ss, "Absence Requests");
 
     var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
@@ -1158,7 +1178,7 @@ function cancelAbsence(absenceId) {
  */
 function updateAbsence(absenceId, formData) {
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getSS();
     var sheet = getSheetOrThrow(ss, "Absence Requests");
 
     var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
@@ -1301,7 +1321,7 @@ function updateAbsence(absenceId, formData) {
  * Helper to get a sub's email from the Staff Roster.
  */
 function getSubEmail(subName) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getSS();
   var sheet = getSheetOrThrow(ss, "Staff Roster");
   var data = sheet.getDataRange().getValues();
   for (var i = 1; i < data.length; i++) {
@@ -1316,7 +1336,7 @@ function getSubEmail(subName) {
  * Helper to get teacher name from email.
  */
 function getTeacherNameFromEmail(email) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getSS();
   var sheet = getSheetOrThrow(ss, "Staff Roster");
   var data = sheet.getDataRange().getValues();
   var targetEmail = email.trim().toLowerCase();
@@ -1332,14 +1352,14 @@ function getTeacherNameFromEmail(email) {
  * Helper to get full absence details.
  */
 function getAbsenceDetails(absenceId, period) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getSS();
   var sheet = getSheetOrThrow(ss, "Absence Requests");
   var masterScheduleSheet = getSheetOrThrow(ss, "Master Schedule");
 
   var data = sheet.getDataRange().getValues();
 
   var scheduleLookup = {};
-    var scheduleData = masterScheduleSheet.getDataRange().getValues();
+  var scheduleData = masterScheduleSheet.getDataRange().getValues();
     if (scheduleData.length > 0) {
       var headers = scheduleData[0];
       var joinIdx = headers.indexOf("EMAIL_PERIOD_JOIN");
@@ -1450,7 +1470,7 @@ function sendSubNotification(subEmail, type, details) {
  */
 function assignSubToPeriod(absenceId, period, subName) {
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getSS();
     var sheet = getSheetOrThrow(ss, "Absence Requests");
 
     var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
@@ -1523,7 +1543,7 @@ function assignSubToPeriod(absenceId, period, subName) {
  */
 function getAdminDashboardData() {
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getSS();
     var user = getUserData(ss);
     assertRole(user, ["admin", "sub coordinator"], "Unauthorized access. Admin or Sub Coordinator role required.");
 
@@ -1627,7 +1647,7 @@ function getAdminDashboardData() {
  */
 function getHRDashboardData() {
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getSS();
     var user = getUserData(ss);
     assertRole(user, ["hr", "principal"], "Unauthorized access. HR or Principal role required.");
 
@@ -1753,7 +1773,7 @@ function getHRDashboardData() {
  */
 function getInitialPayload() {
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getSS();
     var email = Session.getActiveUser().getEmail();
     var targetEmail = String(email).toLowerCase();
 
