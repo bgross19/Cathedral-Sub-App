@@ -791,22 +791,15 @@ function getStaffList() {
     if (!sheet) return [];
 
     var data = sheet.getDataRange().getValues();
-    var staffList = [];
+    var staffNames = [];
 
     for (var i = 1; i < data.length; i++) {
       var name = String(data[i][0]).trim();
-      var duty = String(data[i][2] || "").trim(); // Column 3 (index 2) is Duty
       if (name) {
-        staffList.push({ name: name, duty: duty });
+        staffNames.push(name);
       }
     }
-
-    // Sort alphabetically by name
-    return staffList.sort(function(a, b) {
-      if (a.name < b.name) return -1;
-      if (a.name > b.name) return 1;
-      return 0;
-    });
+    return staffNames.sort();
   } catch (err) {
     return [];
   }
@@ -1618,7 +1611,16 @@ function getHRDashboardData() {
 
     var mainSheet = ss.getSheetByName("Absence Requests");
     var rosterSheet = ss.getSheetByName("Staff Roster");
-    var payPeriodsSheet = ss.getSheetByName("Payperiods");
+    
+    // Look for Payperiods sheet case-insensitively
+    var allSheets = ss.getSheets();
+    var payPeriodsSheet = null;
+    for (var s = 0; s < allSheets.length; s++) {
+      if (allSheets[s].getName().toLowerCase() === "payperiods") {
+        payPeriodsSheet = allSheets[s];
+        break;
+      }
+    }
 
     if (!mainSheet) return { requests: [], payPeriods: [] };
 
@@ -1631,12 +1633,18 @@ function getHRDashboardData() {
     var hrData = [];
     var payPeriods = [];
 
-    // Process Payperiods
-    for (var p = 1; p < payPeriodsData.length; p++) {
+    // Process Payperiods - start from 0 in case there is no header
+    for (var p = 0; p < payPeriodsData.length; p++) {
       var periodNum = String(payPeriodsData[p][0]).trim();
       var startDateRaw = payPeriodsData[p][1];
       var endDateRaw = payPeriodsData[p][2];
-
+      
+      // Attempt to validate dates to skip headers
+      var isHeader = false;
+      if (typeof startDateRaw === 'string' && startDateRaw.toLowerCase().includes('start')) isHeader = true;
+      if (typeof endDateRaw === 'string' && endDateRaw.toLowerCase().includes('end')) isHeader = true;
+      if (isHeader) continue;
+      
       if (periodNum && startDateRaw && endDateRaw) {
         var startFormatted = "";
         if (startDateRaw instanceof Date) {
@@ -1648,7 +1656,7 @@ function getHRDashboardData() {
              startFormatted = String(startDateRaw);
           }
         }
-
+        
         var endFormatted = "";
         if (endDateRaw instanceof Date) {
           endFormatted = Utilities.formatDate(endDateRaw, Session.getScriptTimeZone(), "yyyy-MM-dd");
@@ -1701,10 +1709,7 @@ function getHRDashboardData() {
             var subColumnIndex = 8 + p; // 9 for P1, 10 for P2, etc.
             var assignedSub = data[i][subColumnIndex] || "";
             if (assignedSub && String(assignedSub).trim() !== "") {
-              assignedSubs.push({
-                name: String(assignedSub).trim(),
-                period: String(p)
-              });
+              assignedSubs.push(String(assignedSub).trim());
             }
         }
       }
