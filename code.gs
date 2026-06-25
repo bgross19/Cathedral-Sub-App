@@ -1618,15 +1618,55 @@ function getHRDashboardData() {
 
     var mainSheet = ss.getSheetByName("Absence Requests");
     var rosterSheet = ss.getSheetByName("Staff Roster");
+    var payPeriodsSheet = ss.getSheetByName("Payperiods");
 
-    if (!mainSheet) return [];
+    if (!mainSheet) return { requests: [], payPeriods: [] };
 
     var data = mainSheet.getDataRange().getValues();
     var rosterData = rosterSheet ? rosterSheet.getDataRange().getValues() : [];
+    var payPeriodsData = payPeriodsSheet ? payPeriodsSheet.getDataRange().getValues() : [];
 
     var nameLookup = buildNameLookup(rosterData);
 
     var hrData = [];
+    var payPeriods = [];
+
+    // Process Payperiods
+    for (var p = 1; p < payPeriodsData.length; p++) {
+      var periodNum = String(payPeriodsData[p][0]).trim();
+      var startDateRaw = payPeriodsData[p][1];
+      var endDateRaw = payPeriodsData[p][2];
+
+      if (periodNum && startDateRaw && endDateRaw) {
+        var startFormatted = "";
+        if (startDateRaw instanceof Date) {
+          startFormatted = Utilities.formatDate(startDateRaw, Session.getScriptTimeZone(), "yyyy-MM-dd");
+        } else {
+          try {
+             startFormatted = Utilities.formatDate(new Date(startDateRaw), Session.getScriptTimeZone(), "yyyy-MM-dd");
+          } catch(e) {
+             startFormatted = String(startDateRaw);
+          }
+        }
+
+        var endFormatted = "";
+        if (endDateRaw instanceof Date) {
+          endFormatted = Utilities.formatDate(endDateRaw, Session.getScriptTimeZone(), "yyyy-MM-dd");
+        } else {
+          try {
+             endFormatted = Utilities.formatDate(new Date(endDateRaw), Session.getScriptTimeZone(), "yyyy-MM-dd");
+          } catch(e) {
+             endFormatted = String(endDateRaw);
+          }
+        }
+
+        payPeriods.push({
+          periodNumber: periodNum,
+          startDate: startFormatted,
+          endDate: endFormatted
+        });
+      }
+    }
 
     // Skip header row
     for (var i = 1; i < data.length; i++) {
@@ -1679,7 +1719,10 @@ function getHRDashboardData() {
       });
     }
 
-    return hrData;
+    return {
+      requests: hrData,
+      payPeriods: payPeriods
+    };
 
   } catch (e) {
     console.error("Error fetching HR Dashboard Data: " + e.message);
