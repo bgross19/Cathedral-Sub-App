@@ -805,7 +805,6 @@
         });
       }
 
-      let currentUser = {};
       let staffList = [];
       let currentUnfilledData = [];
       let myAbsencesData = [];
@@ -848,7 +847,6 @@
         google.script.run
           .withSuccessHandler(payload => {
             const data = payload.userData;
-            currentUser = data;
             document.getElementById('userName').innerText = data.name;
             document.getElementById('welcomeName').innerText = (data.name.split(',')[1] || data.name).trim();
             
@@ -1076,8 +1074,8 @@
         btn.disabled = true;
         btn.innerText = "Assigning...";
 
-        // currentUser.name is already loaded in initApp
-        const subName = currentUser.name;
+        // Get user name loaded in initApp
+        const subName = document.getElementById('userName').innerText;
 
         if (!subName || subName === "Loading...") {
           alert("Error: User name not fully loaded yet. Please try again in a moment.");
