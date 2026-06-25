@@ -451,6 +451,7 @@
             if (lowerRole === 'admin' || lowerRole === 'sub coordinator') {
               document.getElementById('adminSection').classList.remove('hidden');
               document.getElementById('navAdminBtn').classList.remove('hidden');
+              loadAdminDataRawSilent(); // Keep the raw data updated for our dropdown logic
               loadStaffList();
               loadQuickCover(); 
             }
@@ -628,6 +629,7 @@
 
               if (!document.getElementById('adminSection').classList.contains('hidden')) {
                  loadQuickCover();
+                 loadAdminDataRawSilent();
               }
             } else {
               alert("Failed to assign sub: " + (result ? result.error : "Unknown error"));
@@ -643,6 +645,31 @@
           .assignSubToPeriod(absenceId, period, subName);
       }
 
+      function updateDynamicStaffList(dateStr, period) {
+          const datalist = document.getElementById('dynamicStaffDataList');
+          if (!datalist) return;
+
+          // Find all subs currently busy at this exact date and period
+          const busySubs = new Set();
+          adminDataRaw.forEach(req => {
+              if (req.formDateString === dateStr && String(req.period) === String(period)) {
+                  if (req.assignedSub) {
+                      busySubs.add(req.assignedSub.trim().toLowerCase());
+                  }
+              }
+          });
+
+          // Build HTML for subs who are NOT busy
+          let optionsHtml = '';
+          staffList.forEach(name => {
+              if (!busySubs.has(name.trim().toLowerCase())) {
+                  optionsHtml += `<option value="${escapeHtml(name)}"></option>`;
+              }
+          });
+
+          datalist.innerHTML = optionsHtml;
+      }
+
       function loadQuickCover() {
         google.script.run
           .withSuccessHandler(unfilled => {
@@ -655,13 +682,12 @@
 
             let html = '<div class="divide-y divide-gray-200">';
 
-            let optionsHtml = '';
-            staffList.forEach(name => {
-              optionsHtml += `<option value="${name}"></option>`;
-            });
-
-            // Ensure datalist only gets rendered once
-            html += `<datalist id="staffDataList">${optionsHtml}</datalist>`;
+            // Add a container for dynamic datalists at the top level of this section
+            if (!document.getElementById('dynamicStaffDataList')) {
+                const dynamicListEl = document.createElement('datalist');
+                dynamicListEl.id = 'dynamicStaffDataList';
+                document.body.appendChild(dynamicListEl);
+            }
 
             currentUnfilledData = unfilled;
             unfilled.forEach((req, index) => {
@@ -683,7 +709,7 @@
                     </div>
                   </div>
                   <div class="flex items-center gap-2 w-full sm:w-auto" onclick="event.stopPropagation()">
-                    <input type="text" id="${escapeHtml(assignId)}" list="staffDataList" placeholder="Enter sub name..." class="flex-1 sm:w-48 p-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#00843D] bg-white">
+                    <input type="text" id="${escapeHtml(assignId)}" list="dynamicStaffDataList" onfocus="updateDynamicStaffList('${escapeJs(req.formDateString)}', '${escapeJs(req.period)}')" placeholder="Enter sub name..." class="flex-1 sm:w-48 p-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#00843D] bg-white">
                     <button onclick="handleAssign('${escapeJs(req.id)}', '${escapeJs(req.period)}', '${escapeJs(assignId)}')" class="bg-[#00843D] hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg text-sm transition-colors shadow-sm">
                       Assign
                     </button>
@@ -835,6 +861,14 @@
         });
 
         tbody.innerHTML = html;
+      }
+
+      function loadAdminDataRawSilent() {
+        google.script.run
+          .withSuccessHandler(data => {
+             adminDataRaw = data || [];
+          })
+          .getAdminDashboardData();
       }
 
       function loadAdminDashboardData(renderAtAGlance = false) {
@@ -1012,7 +1046,7 @@
           <div class="mt-6 border-t pt-4">
              <p class="font-bold text-sm text-gray-700 mb-2">Assign/Edit Substitute</p>
              <div class="flex items-center gap-2">
-                <input type="text" id="${escapeHtml(assignId)}" list="staffDataList" value="${escapeHtml(req.assignedSub) || ''}" placeholder="Enter sub name..." class="flex-1 p-3 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#00843D] bg-white">
+                <input type="text" id="${escapeHtml(assignId)}" list="dynamicStaffDataList" onfocus="updateDynamicStaffList('${escapeJs(req.formDateString || req.date)}', '${escapeJs(req.period)}')" value="${escapeHtml(req.assignedSub) || ''}" placeholder="Enter sub name..." class="flex-1 p-3 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#00843D] bg-white">
                 <button onclick="handleAdminAssign('${escapeJs(req.id)}', '${escapeJs(req.period)}', '${escapeJs(assignId)}')" class="bg-[#00843D] hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg transition-colors shadow-sm">
                   Save
                 </button>
@@ -1062,6 +1096,7 @@
 
               // Also refresh quick cover if it's the same 2-day window
               loadQuickCover();
+              loadAdminDataRawSilent();
             } else {
               alert("Failed to assign sub: " + (result ? result.error : "Unknown error"));
               btn.disabled = false;
@@ -1112,7 +1147,7 @@
           <div class="mt-6 border-t pt-4">
              <p class="font-bold text-sm text-gray-700 mb-2">Assign Substitute</p>
              <div class="flex items-center gap-2">
-                <input type="text" id="${escapeHtml(assignId)}" list="staffDataList" placeholder="Enter sub name..." class="flex-1 p-3 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#00843D] bg-white">
+                <input type="text" id="${escapeHtml(assignId)}" list="dynamicStaffDataList" onfocus="updateDynamicStaffList('${escapeJs(req.formDateString || req.date)}', '${escapeJs(req.period)}')" placeholder="Enter sub name..." class="flex-1 p-3 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#00843D] bg-white">
                 <button onclick="handleAssign('${escapeJs(req.id)}', '${escapeJs(req.period)}', '${escapeJs(assignId)}', true)" class="bg-[#00843D] hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg transition-colors shadow-sm">
                   Assign
                 </button>
@@ -1171,6 +1206,7 @@
                  closeDetailsModal();
               }
               loadQuickCover(); // Refresh the list
+              loadAdminDataRawSilent();
             } else {
               alert("Failed to assign sub: " + (result ? result.error : "Unknown error"));
               btn.disabled = false;
@@ -1283,6 +1319,7 @@
                loadMySubDuties();
                if (!document.getElementById('adminSection').classList.contains('hidden')) {
                  loadQuickCover();
+                 loadAdminDataRawSilent();
                }
              } else {
                alert("Failed to cancel sub-duty: " + (result ? result.error : "Unknown"));
@@ -1407,6 +1444,7 @@
                loadMyAbsences();
                if (!document.getElementById('adminSection').classList.contains('hidden')) {
                  loadQuickCover();
+                 loadAdminDataRawSilent();
                }
              } else {
                alert("Failed to cancel: " + (result ? result.error : "Unknown"));
@@ -1471,6 +1509,7 @@
                 loadMyAbsences();
                 if (!document.getElementById('adminSection').classList.contains('hidden')) {
                   loadQuickCover();
+                  loadAdminDataRawSilent();
                 }
               } else {
                 alert("Database Error: " + (result ? result.error : "Unknown issue"));
@@ -1499,6 +1538,7 @@
 
                 if (!document.getElementById('adminSection').classList.contains('hidden')) {
                   loadQuickCover();
+                  loadAdminDataRawSilent();
                 }
               } else {
                 alert("Database Error: " + (result ? result.error : "Unknown issue"));

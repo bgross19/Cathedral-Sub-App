@@ -227,6 +227,7 @@ function getMySubDuties() {
         var periodsRequested = String(data[i][4]).split(",").map(function(p) { return p.trim(); });
         var rowId = String(data[i][0]);
         var formattedDate = String(Utilities.formatDate(rowDate, Session.getScriptTimeZone(), "MMM d, yyyy"));
+        var formDateString = String(Utilities.formatDate(rowDate, Session.getScriptTimeZone(), "yyyy-MM-dd"));
         var rawDate = Number(rowDate.getTime());
 
         var reason = String(data[i][5]);
@@ -250,6 +251,7 @@ function getMySubDuties() {
                 teacherName: String(teacherName),
                 teacherEmail: String(teacherEmail),
                 date: formattedDate,
+                formDateString: formDateString,
                 period: String(p),
                 rawDate: rawDate,
                 room: roomStr,
@@ -326,6 +328,7 @@ function getTodaysOpenJobsData() {
         var periodsRequested = String(data[i][4]).split(",").map(function(p) { return p.trim(); });
         var rowId = String(data[i][0]);
         var formattedDate = String(Utilities.formatDate(rowDate, Session.getScriptTimeZone(), "MMM d, yyyy"));
+        var formDateString = String(Utilities.formatDate(rowDate, Session.getScriptTimeZone(), "yyyy-MM-dd"));
         var rawDate = Number(rowDate.getTime());
 
         var reason = String(data[i][5]);
@@ -348,6 +351,7 @@ function getTodaysOpenJobsData() {
                 teacherName: String(teacherName),
                 teacherEmail: String(teacherEmail),
                 date: formattedDate,
+                formDateString: formDateString,
                 period: String(p),
                 rawDate: rawDate,
                 room: roomStr,
@@ -437,6 +441,7 @@ function getQuickCoverData() {
         var periodsRequested = String(data[i][4]).split(",").map(function(p) { return p.trim(); });
         var rowId = String(data[i][0]);
         var formattedDate = String(Utilities.formatDate(rowDate, Session.getScriptTimeZone(), "MMM d, yyyy"));
+        var formDateString = String(Utilities.formatDate(rowDate, Session.getScriptTimeZone(), "yyyy-MM-dd"));
         var rawDate = Number(rowDate.getTime());
 
         var reason = String(data[i][5]);
@@ -460,6 +465,7 @@ function getQuickCoverData() {
                 teacherName: String(teacherName),
                 teacherEmail: String(teacherEmail),
                 date: formattedDate,
+                formDateString: formDateString,
                 period: String(p),
                 rawDate: rawDate,
                 room: roomStr,
@@ -1197,6 +1203,7 @@ function getAdminDashboardData() {
               id: String(id || ""),
               originalDate: String(dateStr || ""),
               date: String(dateFormatted || ""),
+              formDateString: String(dateFormatted || ""), // Included for uniform date matching
               period: p,
               teacherName: String(teacherName || ""),
               teacherEmail: String(email || ""),
