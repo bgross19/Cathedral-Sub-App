@@ -52,6 +52,23 @@ function setupDatabase() {
  * Retrieves settings from the Settings sheet as an object.
  * Uses defaults in memory if the sheet does not exist or user lacks permission.
  */
+function getSheetOrThrow(ss, sheetName) {
+  var sheet = ss.getSheetByName(sheetName);
+  if (!sheet) throw new Error(sheetName + " sheet not found.");
+  return sheet;
+}
+
+function getSheetCaseInsensitiveOrThrow(ss, sheetName) {
+  var sheets = ss.getSheets();
+  var targetName = sheetName.toLowerCase();
+  for (var i = 0; i < sheets.length; i++) {
+    if (sheets[i].getName().toLowerCase() === targetName) {
+      return sheets[i];
+    }
+  }
+  throw new Error(sheetName + " sheet not found.");
+}
+
 function getSettings(ss) {
   var defaults = {
     "Email Mode": "Live",
@@ -148,8 +165,8 @@ function getUserData(ss) {
   var email = Session.getActiveUser().getEmail();
   var ss = ss || SpreadsheetApp.getActiveSpreadsheet();
   
-  var rosterSheet = ss.getSheetByName("Staff Roster");
-  var rosterData = rosterSheet ? rosterSheet.getDataRange().getValues() : [];
+  var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
+  var rosterData = rosterSheet.getDataRange().getValues();
   var name = "Teacher"; 
   var targetEmail = String(email).toLowerCase();
   
@@ -160,8 +177,8 @@ function getUserData(ss) {
     }
   }
   
-  var roleSheet = ss.getSheetByName("User Roles");
-  var roleData = roleSheet ? roleSheet.getDataRange().getValues() : [];
+  var roleSheet = getSheetOrThrow(ss, "User Roles");
+  var roleData = roleSheet.getDataRange().getValues();
   var role = "User"; 
   
   for (var j = 1; j < roleData.length; j++) {
@@ -276,8 +293,7 @@ function getUserRoles() {
     var user = getUserData(ss);
     assertRole(user, "admin");
 
-    var roleSheet = ss.getSheetByName("User Roles");
-    if (!roleSheet) return [];
+    var roleSheet = getSheetOrThrow(ss, "User Roles");
 
     var data = roleSheet.getDataRange().getValues();
     var roles = [];
@@ -304,8 +320,7 @@ function addUserRole(email, role) {
     var user = getUserData(ss);
     assertRole(user, "admin");
 
-    var roleSheet = ss.getSheetByName("User Roles");
-    if (!roleSheet) throw new Error("User Roles sheet not found.");
+    var roleSheet = getSheetOrThrow(ss, "User Roles");
 
     roleSheet.appendRow([email.toLowerCase().trim(), role.trim()]);
     return { success: true };
@@ -323,8 +338,7 @@ function editUserRole(oldEmail, newEmail, role) {
     var user = getUserData(ss);
     assertRole(user, "admin");
 
-    var roleSheet = ss.getSheetByName("User Roles");
-    if (!roleSheet) throw new Error("User Roles sheet not found.");
+    var roleSheet = getSheetOrThrow(ss, "User Roles");
 
     var data = roleSheet.getDataRange().getValues();
     var targetEmail = oldEmail.toLowerCase().trim();
@@ -350,8 +364,7 @@ function deleteUserRole(email) {
     var user = getUserData(ss);
     assertRole(user, "admin");
 
-    var roleSheet = ss.getSheetByName("User Roles");
-    if (!roleSheet) throw new Error("User Roles sheet not found.");
+    var roleSheet = getSheetOrThrow(ss, "User Roles");
 
     var data = roleSheet.getDataRange().getValues();
     var targetEmail = email.toLowerCase().trim();
@@ -391,8 +404,7 @@ function updateSettings(newSettings) {
     var user = getUserData(ss);
     assertRole(user, "admin");
 
-    var settingsSheet = ss.getSheetByName("Settings");
-    if (!settingsSheet) throw new Error("Settings sheet not found.");
+    var settingsSheet = getSheetOrThrow(ss, "Settings");
 
     var data = settingsSheet.getDataRange().getValues();
     var settingsMap = {};
@@ -422,9 +434,7 @@ function getMyAbsences() {
   try {
     var email = Session.getActiveUser().getEmail();
     var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var sheet = ss.getSheetByName("Absence Requests");
-    
-    if (!sheet) return []; 
+    var sheet = getSheetOrThrow(ss, "Absence Requests");
     
     var data = sheet.getDataRange().getValues();
     var myAbsences = [];
@@ -489,16 +499,14 @@ function getMySubDuties() {
     var userData = getUserData(ss);
     var userName = String(userData.name).trim().toLowerCase();
 
-    var mainSheet = ss.getSheetByName("Absence Requests");
-    var rosterSheet = ss.getSheetByName("Staff Roster");
-    var masterScheduleSheet = ss.getSheetByName("Master Schedule");
-
-    if (!mainSheet) return [];
+    var mainSheet = getSheetOrThrow(ss, "Absence Requests");
+    var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
+    var masterScheduleSheet = getSheetOrThrow(ss, "Master Schedule");
 
     var data = mainSheet.getDataRange().getValues();
-    var rosterData = rosterSheet ? rosterSheet.getDataRange().getValues() : [];
+    var rosterData = rosterSheet.getDataRange().getValues();
 
-    var scheduleData = masterScheduleSheet ? masterScheduleSheet.getDataRange().getValues() : [];
+    var scheduleData = masterScheduleSheet.getDataRange().getValues();
     var scheduleLookup = buildScheduleLookup(scheduleData);
     var nameLookup = buildNameLookup(rosterData);
 
@@ -591,16 +599,14 @@ function getMySubDuties() {
 function getTodaysOpenJobsData() {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var mainSheet = ss.getSheetByName("Absence Requests");
-    var rosterSheet = ss.getSheetByName("Staff Roster");
-    var masterScheduleSheet = ss.getSheetByName("Master Schedule");
-
-    if (!mainSheet) return [];
+    var mainSheet = getSheetOrThrow(ss, "Absence Requests");
+    var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
+    var masterScheduleSheet = getSheetOrThrow(ss, "Master Schedule");
 
     var data = mainSheet.getDataRange().getValues();
-    var rosterData = rosterSheet ? rosterSheet.getDataRange().getValues() : [];
+    var rosterData = rosterSheet.getDataRange().getValues();
 
-    var scheduleData = masterScheduleSheet ? masterScheduleSheet.getDataRange().getValues() : [];
+    var scheduleData = masterScheduleSheet.getDataRange().getValues();
     var scheduleLookup = buildScheduleLookup(scheduleData);
     var nameLookup = buildNameLookup(rosterData);
 
@@ -691,16 +697,14 @@ function getTodaysOpenJobsData() {
 function getQuickCoverData() {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var mainSheet = ss.getSheetByName("Absence Requests");
-    var rosterSheet = ss.getSheetByName("Staff Roster");
-    var masterScheduleSheet = ss.getSheetByName("Master Schedule");
-
-    if (!mainSheet) return [];
+    var mainSheet = getSheetOrThrow(ss, "Absence Requests");
+    var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
+    var masterScheduleSheet = getSheetOrThrow(ss, "Master Schedule");
 
     var data = mainSheet.getDataRange().getValues();
-    var rosterData = rosterSheet ? rosterSheet.getDataRange().getValues() : [];
+    var rosterData = rosterSheet.getDataRange().getValues();
 
-    var scheduleData = masterScheduleSheet ? masterScheduleSheet.getDataRange().getValues() : [];
+    var scheduleData = masterScheduleSheet.getDataRange().getValues();
     var scheduleLookup = buildScheduleLookup(scheduleData);
     var nameLookup = buildNameLookup(rosterData);
 
@@ -806,8 +810,7 @@ function getQuickCoverData() {
 function getStaffList() {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var sheet = ss.getSheetByName("Staff Roster");
-    if (!sheet) return [];
+    var sheet = getSheetOrThrow(ss, "Staff Roster");
 
     var data = sheet.getDataRange().getValues();
     var staffList = [];
@@ -845,8 +848,7 @@ function getStaffList() {
 
 function getCoordinatorEmail(ss) {
   var ss = ss || SpreadsheetApp.getActiveSpreadsheet();
-  var roleSheet = ss.getSheetByName("User Roles");
-  if (!roleSheet) return null;
+  var roleSheet = getSheetOrThrow(ss, "User Roles");
   
   var data = roleSheet.getDataRange().getValues();
   for (var i = 1; i < data.length; i++) {
@@ -858,7 +860,7 @@ function getCoordinatorEmail(ss) {
 function submitAbsence(formData) {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var mainSheet = ss.getSheetByName("Absence Requests"); 
+    var mainSheet = getSheetOrThrow(ss, "Absence Requests");
     
     var urgencyFormatted = formData.urgency === 'Urgent' ? 'Urgent (Less than 24 hr notice)' : 'Standard (Advanced Notice)';
     var instructions = formData.specialInstructions;
@@ -969,8 +971,7 @@ function submitAbsence(formData) {
 function cancelMySubDuty(absenceId, period) {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var sheet = ss.getSheetByName("Absence Requests");
-    if (!sheet) throw new Error("Absence Requests sheet not found.");
+    var sheet = getSheetOrThrow(ss, "Absence Requests");
 
     var userEmail = Session.getActiveUser().getEmail().toLowerCase();
     var userData = getUserData(ss);
@@ -1077,13 +1078,12 @@ function getAbsenceDetailsLocal(row, period, scheduleLookup, nameLookup) {
 function cancelAbsence(absenceId) {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var sheet = ss.getSheetByName("Absence Requests");
-    if (!sheet) throw new Error("Absence Requests sheet not found.");
+    var sheet = getSheetOrThrow(ss, "Absence Requests");
 
-    var rosterSheet = ss.getSheetByName("Staff Roster");
-    var masterScheduleSheet = ss.getSheetByName("Master Schedule");
-    var rosterData = rosterSheet ? rosterSheet.getDataRange().getValues() : [];
-    var scheduleData = masterScheduleSheet ? masterScheduleSheet.getDataRange().getValues() : [];
+    var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
+    var masterScheduleSheet = getSheetOrThrow(ss, "Master Schedule");
+    var rosterData = rosterSheet.getDataRange().getValues();
+    var scheduleData = masterScheduleSheet.getDataRange().getValues();
 
     // We want a lookup of Sub Name -> Email
     var subEmailLookup = {};
@@ -1159,13 +1159,12 @@ function cancelAbsence(absenceId) {
 function updateAbsence(absenceId, formData) {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var sheet = ss.getSheetByName("Absence Requests");
-    if (!sheet) throw new Error("Absence Requests sheet not found.");
+    var sheet = getSheetOrThrow(ss, "Absence Requests");
 
-    var rosterSheet = ss.getSheetByName("Staff Roster");
-    var masterScheduleSheet = ss.getSheetByName("Master Schedule");
-    var rosterData = rosterSheet ? rosterSheet.getDataRange().getValues() : [];
-    var scheduleData = masterScheduleSheet ? masterScheduleSheet.getDataRange().getValues() : [];
+    var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
+    var masterScheduleSheet = getSheetOrThrow(ss, "Master Schedule");
+    var rosterData = rosterSheet.getDataRange().getValues();
+    var scheduleData = masterScheduleSheet.getDataRange().getValues();
 
     var subEmailLookup = {};
     for (var r = 1; r < rosterData.length; r++) {
@@ -1303,8 +1302,7 @@ function updateAbsence(absenceId, formData) {
  */
 function getSubEmail(subName) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = ss.getSheetByName("Staff Roster");
-  if (!sheet) return null;
+  var sheet = getSheetOrThrow(ss, "Staff Roster");
   var data = sheet.getDataRange().getValues();
   for (var i = 1; i < data.length; i++) {
     if (String(data[i][0]).trim() === subName.trim()) {
@@ -1319,8 +1317,7 @@ function getSubEmail(subName) {
  */
 function getTeacherNameFromEmail(email) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = ss.getSheetByName("Staff Roster");
-  if (!sheet) return email;
+  var sheet = getSheetOrThrow(ss, "Staff Roster");
   var data = sheet.getDataRange().getValues();
   var targetEmail = email.trim().toLowerCase();
   for (var i = 1; i < data.length; i++) {
@@ -1336,14 +1333,12 @@ function getTeacherNameFromEmail(email) {
  */
 function getAbsenceDetails(absenceId, period) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = ss.getSheetByName("Absence Requests");
-  var masterScheduleSheet = ss.getSheetByName("Master Schedule");
+  var sheet = getSheetOrThrow(ss, "Absence Requests");
+  var masterScheduleSheet = getSheetOrThrow(ss, "Master Schedule");
 
-  if (!sheet) return null;
   var data = sheet.getDataRange().getValues();
 
   var scheduleLookup = {};
-  if (masterScheduleSheet) {
     var scheduleData = masterScheduleSheet.getDataRange().getValues();
     if (scheduleData.length > 0) {
       var headers = scheduleData[0];
@@ -1359,7 +1354,6 @@ function getAbsenceDetails(absenceId, period) {
         }
       }
     }
-  }
 
   for (var i = 1; i < data.length; i++) {
     if (String(data[i][0]) === String(absenceId)) {
@@ -1457,13 +1451,12 @@ function sendSubNotification(subEmail, type, details) {
 function assignSubToPeriod(absenceId, period, subName) {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var sheet = ss.getSheetByName("Absence Requests");
-    if (!sheet) throw new Error("Absence Requests sheet not found.");
+    var sheet = getSheetOrThrow(ss, "Absence Requests");
 
-    var rosterSheet = ss.getSheetByName("Staff Roster");
-    var masterScheduleSheet = ss.getSheetByName("Master Schedule");
-    var rosterData = rosterSheet ? rosterSheet.getDataRange().getValues() : [];
-    var scheduleData = masterScheduleSheet ? masterScheduleSheet.getDataRange().getValues() : [];
+    var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
+    var masterScheduleSheet = getSheetOrThrow(ss, "Master Schedule");
+    var rosterData = rosterSheet.getDataRange().getValues();
+    var scheduleData = masterScheduleSheet.getDataRange().getValues();
 
     var subEmailLookup = {};
     for (var r = 1; r < rosterData.length; r++) {
@@ -1534,16 +1527,14 @@ function getAdminDashboardData() {
     var user = getUserData(ss);
     assertRole(user, ["admin", "sub coordinator"], "Unauthorized access. Admin or Sub Coordinator role required.");
 
-    var mainSheet = ss.getSheetByName("Absence Requests");
-    var rosterSheet = ss.getSheetByName("Staff Roster");
-    var masterScheduleSheet = ss.getSheetByName("Master Schedule");
-
-    if (!mainSheet) return [];
+    var mainSheet = getSheetOrThrow(ss, "Absence Requests");
+    var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
+    var masterScheduleSheet = getSheetOrThrow(ss, "Master Schedule");
 
     var data = mainSheet.getDataRange().getValues();
-    var rosterData = rosterSheet ? rosterSheet.getDataRange().getValues() : [];
+    var rosterData = rosterSheet.getDataRange().getValues();
 
-    var scheduleData = masterScheduleSheet ? masterScheduleSheet.getDataRange().getValues() : [];
+    var scheduleData = masterScheduleSheet.getDataRange().getValues();
     var scheduleLookup = buildScheduleLookup(scheduleData);
     var nameLookup = buildNameLookup(rosterData);
 
@@ -1640,24 +1631,13 @@ function getHRDashboardData() {
     var user = getUserData(ss);
     assertRole(user, ["hr", "principal"], "Unauthorized access. HR or Principal role required.");
 
-    var mainSheet = ss.getSheetByName("Absence Requests");
-    var rosterSheet = ss.getSheetByName("Staff Roster");
-    
-    // Look for Payperiods sheet case-insensitively
-    var allSheets = ss.getSheets();
-    var payPeriodsSheet = null;
-    for (var s = 0; s < allSheets.length; s++) {
-      if (allSheets[s].getName().toLowerCase() === "payperiods") {
-        payPeriodsSheet = allSheets[s];
-        break;
-      }
-    }
-
-    if (!mainSheet) return { requests: [], payPeriods: [] };
+    var mainSheet = getSheetOrThrow(ss, "Absence Requests");
+    var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
+    var payPeriodsSheet = getSheetCaseInsensitiveOrThrow(ss, "Payperiods");
 
     var data = mainSheet.getDataRange().getValues();
-    var rosterData = rosterSheet ? rosterSheet.getDataRange().getValues() : [];
-    var payPeriodsData = payPeriodsSheet ? payPeriodsSheet.getDataRange().getValues() : [];
+    var rosterData = rosterSheet.getDataRange().getValues();
+    var payPeriodsData = payPeriodsSheet.getDataRange().getValues();
 
     var nameLookup = buildNameLookup(rosterData);
 
@@ -1778,30 +1758,22 @@ function getInitialPayload() {
     var targetEmail = String(email).toLowerCase();
 
     // 1. Fetch all required sheets
-    var rosterSheet = ss.getSheetByName("Staff Roster");
-    var rosterData = rosterSheet ? rosterSheet.getDataRange().getValues() : [];
+    var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
+    var rosterData = rosterSheet.getDataRange().getValues();
 
-    var roleSheet = ss.getSheetByName("User Roles");
-    var roleData = roleSheet ? roleSheet.getDataRange().getValues() : [];
+    var roleSheet = getSheetOrThrow(ss, "User Roles");
+    var roleData = roleSheet.getDataRange().getValues();
 
     var settings = getSettings(ss); // Already passes ss to avoid fetching again
 
-    var mainSheet = ss.getSheetByName("Absence Requests");
-    var absenceData = mainSheet ? mainSheet.getDataRange().getValues() : [];
+    var mainSheet = getSheetOrThrow(ss, "Absence Requests");
+    var absenceData = mainSheet.getDataRange().getValues();
 
-    var masterScheduleSheet = ss.getSheetByName("Master Schedule");
-    var scheduleData = masterScheduleSheet ? masterScheduleSheet.getDataRange().getValues() : [];
+    var masterScheduleSheet = getSheetOrThrow(ss, "Master Schedule");
+    var scheduleData = masterScheduleSheet.getDataRange().getValues();
 
-    // Look for Payperiods sheet case-insensitively
-    var allSheets = ss.getSheets();
-    var payPeriodsSheet = null;
-    for (var s = 0; s < allSheets.length; s++) {
-      if (allSheets[s].getName().toLowerCase() === "payperiods") {
-        payPeriodsSheet = allSheets[s];
-        break;
-      }
-    }
-    var payPeriodsData = payPeriodsSheet ? payPeriodsSheet.getDataRange().getValues() : [];
+    var payPeriodsSheet = getSheetCaseInsensitiveOrThrow(ss, "Payperiods");
+    var payPeriodsData = payPeriodsSheet.getDataRange().getValues();
 
 
     // --- Build lookups ---
