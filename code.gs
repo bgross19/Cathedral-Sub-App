@@ -855,6 +855,86 @@ function getCoordinatorEmail(ss) {
   return null;
 }
 
+/**
+ * Helper to calculate if an absence request is urgent based on submission time.
+ */
+function calculateIsUrgentByTime(absenceDateStr, timestamp, ss) {
+  try {
+    var tz = Session.getScriptTimeZone();
+
+    // Parse formData.date (format YYYY-MM-DD)
+    var absParts = absenceDateStr.split("-");
+    var absenceDate = new Date(parseInt(absParts[0], 10), parseInt(absParts[1], 10) - 1, parseInt(absParts[2], 10), 12, 0, 0);
+
+    // Get current date components in the script timezone
+    var nowTzDateStr = Utilities.formatDate(timestamp, tz, "yyyy-MM-dd");
+    var nowTzHourStr = Utilities.formatDate(timestamp, tz, "HH");
+    var nowTzDayStr = Utilities.formatDate(timestamp, tz, "E"); // Mon, Tue, Wed, Thu, Fri, Sat, Sun
+
+    var nowParts = nowTzDateStr.split("-");
+    var currentLocalDate = new Date(parseInt(nowParts[0], 10), parseInt(nowParts[1], 10) - 1, parseInt(nowParts[2], 10), 12, 0, 0);
+    var currentHour = parseInt(nowTzHourStr, 10);
+
+    var settings = getSettings(ss);
+    var cutoffHour = parseInt(settings["Urgency Cutoff Time"] || "15", 10);
+
+    var diffTime = absenceDate.getTime() - currentLocalDate.getTime();
+    var diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays <= 0) {
+      return true; // Same day or past
+    } else if (diffDays === 1) {
+      if (currentHour >= cutoffHour || nowTzDayStr === "Sun") {
+        return true; // Next day after cutoff hour, or Sun for Mon
+      }
+    } else if (diffDays === 2) {
+      if (nowTzDayStr === "Sat") {
+        return true; // Sat for Mon
+      }
+    } else if (diffDays === 3) {
+      if (nowTzDayStr === "Fri" && currentHour >= cutoffHour) {
+        return true; // Fri after cutoff hour for Mon
+      }
+    }
+    return false;
+  } catch (e) {
+    console.error("Error calculating urgency: " + e.message);
+    return false;
+  }
+}
+
+/**
+ * Helper to send an email for urgent coverage requests.
+ */
+function sendUrgentCoverageEmail(ss, teacherName, formData, instructions) {
+  var coordinatorEmail = getCoordinatorEmail(ss);
+  if (coordinatorEmail) {
+    var subject = "URGENT COVERAGE NEEDED: " + teacherName;
+    var settings = getSettings();
+    var appUrl = settings["App URL"] || "https://script.google.com/a/macros/gocathedral.com/s/AKfycbwKZrBo4R-9O97aVNCjOHk9PddWCb6XNKviDS1lj4nNc49khl3T9OL8pGUDa7E1XE0/exec";
+
+    var body = "An urgent absence request has been submitted requiring immediate attention.\n\n" +
+               "Teacher: " + teacherName + "\n" +
+               "Date Needed: " + formData.date + "\n" +
+               "Periods: " + formData.periods + "\n" +
+               "Reason: " + formData.reason + "\n\n" +
+               "Instructions: " + (instructions ? instructions : "None") + "\n\n" +
+               "Please log into the Cathedral Sub App to assign a sub: " + appUrl;
+
+    var htmlBody = "<p>An urgent absence request has been submitted requiring immediate attention.</p>" +
+                   "<ul>" +
+                   "<li><strong>Teacher:</strong> " + teacherName + "</li>" +
+                   "<li><strong>Date Needed:</strong> " + formData.date + "</li>" +
+                   "<li><strong>Periods:</strong> " + formData.periods + "</li>" +
+                   "<li><strong>Reason:</strong> " + formData.reason + "</li>" +
+                   "</ul>" +
+                   "<p><strong>Instructions:</strong> " + (instructions ? instructions : "None") + "</p>" +
+                   "<p>Please log into the <a href='" + appUrl + "'>Cathedral Sub App</a> to assign a sub.</p>";
+
+    sendEmailHelper(coordinatorEmail, subject, body, { htmlBody: htmlBody });
+  }
+}
+
 function submitAbsence(formData) {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -882,79 +962,12 @@ function submitAbsence(formData) {
 
     // Check if manually marked urgent
     var isMarkedUrgent = urgencyFormatted === 'Urgent (Less than 24 hr notice)';
-    var isUrgentByTime = false;
-
-    try {
-      // Determine if urgent based on time of submission
-      var tz = Session.getScriptTimeZone();
-
-      // Parse formData.date (format YYYY-MM-DD)
-      var absParts = formData.date.split("-");
-      var absenceDate = new Date(parseInt(absParts[0], 10), parseInt(absParts[1], 10) - 1, parseInt(absParts[2], 10), 12, 0, 0);
-
-      // Get current date components in the script timezone
-      var nowTzDateStr = Utilities.formatDate(timestamp, tz, "yyyy-MM-dd");
-      var nowTzHourStr = Utilities.formatDate(timestamp, tz, "HH");
-      var nowTzDayStr = Utilities.formatDate(timestamp, tz, "E"); // Mon, Tue, Wed, Thu, Fri, Sat, Sun
-
-      var nowParts = nowTzDateStr.split("-");
-      var currentLocalDate = new Date(parseInt(nowParts[0], 10), parseInt(nowParts[1], 10) - 1, parseInt(nowParts[2], 10), 12, 0, 0);
-      var currentHour = parseInt(nowTzHourStr, 10);
-
-      var settings = getSettings(ss);
-      var cutoffHour = parseInt(settings["Urgency Cutoff Time"] || "15", 10);
-
-      var diffTime = absenceDate.getTime() - currentLocalDate.getTime();
-      var diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
-
-      if (diffDays <= 0) {
-        isUrgentByTime = true; // Same day or past
-      } else if (diffDays === 1) {
-        if (currentHour >= cutoffHour || nowTzDayStr === "Sun") {
-          isUrgentByTime = true; // Next day after cutoff hour, or Sun for Mon
-        }
-      } else if (diffDays === 2) {
-        if (nowTzDayStr === "Sat") {
-          isUrgentByTime = true; // Sat for Mon
-        }
-      } else if (diffDays === 3) {
-        if (nowTzDayStr === "Fri" && currentHour >= cutoffHour) {
-          isUrgentByTime = true; // Fri after cutoff hour for Mon
-        }
-      }
-    } catch (e) {
-      console.error("Error calculating urgency: " + e.message);
-    }
+    var isUrgentByTime = calculateIsUrgentByTime(formData.date, timestamp, ss);
 
     var shouldSendUrgentEmail = isMarkedUrgent || isUrgentByTime;
 
     if (shouldSendUrgentEmail) {
-      var coordinatorEmail = getCoordinatorEmail(ss);
-      if (coordinatorEmail) {
-        var subject = "URGENT COVERAGE NEEDED: " + teacherName;
-        var settings = getSettings();
-        var appUrl = settings["App URL"] || "https://script.google.com/a/macros/gocathedral.com/s/AKfycbwKZrBo4R-9O97aVNCjOHk9PddWCb6XNKviDS1lj4nNc49khl3T9OL8pGUDa7E1XE0/exec";
-
-        var body = "An urgent absence request has been submitted requiring immediate attention.\n\n" +
-                   "Teacher: " + teacherName + "\n" +
-                   "Date Needed: " + formData.date + "\n" +
-                   "Periods: " + formData.periods + "\n" +
-                   "Reason: " + formData.reason + "\n\n" +
-                   "Instructions: " + (instructions ? instructions : "None") + "\n\n" +
-                   "Please log into the Cathedral Sub App to assign a sub: " + appUrl;
-
-        var htmlBody = "<p>An urgent absence request has been submitted requiring immediate attention.</p>" +
-                       "<ul>" +
-                       "<li><strong>Teacher:</strong> " + teacherName + "</li>" +
-                       "<li><strong>Date Needed:</strong> " + formData.date + "</li>" +
-                       "<li><strong>Periods:</strong> " + formData.periods + "</li>" +
-                       "<li><strong>Reason:</strong> " + formData.reason + "</li>" +
-                       "</ul>" +
-                       "<p><strong>Instructions:</strong> " + (instructions ? instructions : "None") + "</p>" +
-                       "<p>Please log into the <a href='" + appUrl + "'>Cathedral Sub App</a> to assign a sub.</p>";
-
-        sendEmailHelper(coordinatorEmail, subject, body, { htmlBody: htmlBody });
-      }
+      sendUrgentCoverageEmail(ss, teacherName, formData, instructions);
     }
     
     return { success: true };
