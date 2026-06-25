@@ -1036,6 +1036,38 @@ function cancelAbsence(absenceId) {
             }
           }
         }
+
+        // Notify teacher if deleted by someone else
+        var currentUserEmail = Session.getActiveUser().getEmail().toLowerCase();
+        var teacherEmail = String(data[i][2]).toLowerCase();
+        if (currentUserEmail !== teacherEmail) {
+           // We can't use getAbsenceDetailsLocal because we don't have scheduleLookup/nameLookup
+           // in this function's scope by default, and getting them adds spreadsheet calls.
+           // Since we only need the date, we can format it directly from data[i][3].
+           var rawDate = data[i][3];
+           var formattedDateForEmail = rawDate;
+           if (rawDate instanceof Date) {
+               formattedDateForEmail = Utilities.formatDate(rawDate, Session.getScriptTimeZone(), "MMM d, yyyy");
+           } else {
+               try {
+                   formattedDateForEmail = Utilities.formatDate(new Date(rawDate), Session.getScriptTimeZone(), "MMM d, yyyy");
+               } catch(e) {}
+           }
+
+           var teacherSubject = "Absence Request Canceled by Administrator";
+           var teacherBody = "Your absence request for " + formattedDateForEmail + " has been canceled by an administrator.\n\n" +
+                             "Reason: " + data[i][5] + "\n" +
+                             "Periods: " + data[i][4] + "\n\n" +
+                             "If you have questions, please contact the sub coordinator.";
+
+           var teacherHtml = "<p>Your absence request for <strong>" + formattedDateForEmail + "</strong> has been canceled by an administrator.</p>" +
+                             "<ul><li><strong>Reason:</strong> " + data[i][5] + "</li>" +
+                             "<li><strong>Periods:</strong> " + data[i][4] + "</li></ul>" +
+                             "<p>If you have questions, please contact the sub coordinator.</p>";
+
+           sendEmailHelper(teacherEmail, teacherSubject, teacherBody, {htmlBody: teacherHtml});
+        }
+
         return { success: true };
       }
     }
@@ -1143,6 +1175,42 @@ function updateAbsence(absenceId, formData) {
                sheet.getRange(i + 1, subIndex + 1).setValue("");
             }
           }
+        }
+
+        // Notify teacher if updated by someone else
+        var currentUserEmail = Session.getActiveUser().getEmail().toLowerCase();
+        var teacherEmail = String(data[i][2]).toLowerCase();
+        if (currentUserEmail !== teacherEmail) {
+           // We can't use getAbsenceDetailsLocal because we don't have scheduleLookup/nameLookup
+           // in this function's scope by default, and getting them adds spreadsheet calls.
+           // Since we only need the date, we can format it directly from data[i][3].
+           var rawDate = data[i][3];
+           var formattedDateForEmail = rawDate;
+           if (rawDate instanceof Date) {
+               formattedDateForEmail = Utilities.formatDate(rawDate, Session.getScriptTimeZone(), "MMM d, yyyy");
+           } else {
+               try {
+                   formattedDateForEmail = Utilities.formatDate(new Date(rawDate), Session.getScriptTimeZone(), "MMM d, yyyy");
+               } catch(e) {}
+           }
+
+           var teacherSubject = "Absence Request Updated by Administrator";
+           var teacherBody = "Your absence request for " + formattedDateForEmail + " has been updated by an administrator.\n\n" +
+                             "Updated Details:\n" +
+                             "Date: " + formData.date + "\n" +
+                             "Periods: " + formData.periods + "\n" +
+                             "Reason: " + formData.reason + "\n" +
+                             "Duration: " + formData.duration + "\n\n" +
+                             "If you have questions, please contact the sub coordinator.";
+
+           var teacherHtml = "<p>Your absence request for <strong>" + formattedDateForEmail + "</strong> has been updated by an administrator.</p>" +
+                             "<ul><li><strong>Date:</strong> " + formData.date + "</li>" +
+                             "<li><strong>Periods:</strong> " + formData.periods + "</li>" +
+                             "<li><strong>Reason:</strong> " + formData.reason + "</li>" +
+                             "<li><strong>Duration:</strong> " + formData.duration + "</li></ul>" +
+                             "<p>If you have questions, please contact the sub coordinator.</p>";
+
+           sendEmailHelper(teacherEmail, teacherSubject, teacherBody, {htmlBody: teacherHtml});
         }
 
         return { success: true };
@@ -1459,6 +1527,8 @@ function getAdminDashboardData() {
               date: String(dateFormatted || ""),
               formDateString: String(dateFormatted || ""), // Included for uniform date matching
               period: p,
+              periodsString: String(periodsStr || ""), // Needed for edit modal
+              urgency: String(data[i][7] || ""), // Urgency is index 7. Needed for edit modal
               teacherName: String(teacherName || ""),
               teacherEmail: String(email || ""),
               course: String(course || ""),

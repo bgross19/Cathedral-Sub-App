@@ -112,6 +112,12 @@
         <h2 class="text-2xl font-bold text-[#002147] flex items-center gap-2">
           <span>📊</span> Sub Coverage Dashboard
         </h2>
+
+        <div class="flex gap-2">
+           <button id="adminTogglePeriod" onclick="setAdminView('period')" class="flex-1 py-1.5 px-4 rounded-lg border-2 border-[#00843D] bg-[#00843D] text-white font-bold transition-colors">Period View</button>
+           <button id="adminToggleRequest" onclick="setAdminView('request')" class="flex-1 py-1.5 px-4 rounded-lg border-2 border-gray-200 text-gray-500 font-bold transition-colors">Request View</button>
+        </div>
+
         <button onclick="toggleAdminDashboard()" class="text-[#002147] hover:bg-gray-200 font-semibold py-2 px-4 rounded-lg transition-colors border border-[#002147]">
            &larr; Return to Homepage
         </button>
@@ -138,7 +144,7 @@
 
       <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-x-auto">
         <table class="w-full text-left border-collapse min-w-max">
-          <thead>
+          <thead id="adminDashboardTableHeader">
             <tr class="bg-gray-50 border-b border-gray-200 text-sm text-gray-700 uppercase">
               <th class="p-3 cursor-pointer hover:bg-gray-100" onclick="sortAdminTable('teacherName')">Name ↕️</th>
               <th class="p-3 cursor-pointer hover:bg-gray-100" onclick="sortAdminTable('date')">Date ↕️</th>
@@ -584,7 +590,10 @@
       <div class="modal-container bg-white w-11/12 md:max-w-xl mx-auto rounded-2xl shadow-2xl z-[110] overflow-y-auto max-h-[90vh]">
         <div class="p-6">
           <div class="flex justify-between items-center pb-3 border-b">
-            <p id="requestModalTitle" class="text-2xl font-bold text-[#002147]">Request Sub</p>
+            <div class="flex items-center gap-4">
+               <p id="requestModalTitle" class="text-2xl font-bold text-[#002147]">Request Sub</p>
+               <button type="button" id="adminDeleteBtn" onclick="deleteAbsenceFromModal()" class="hidden bg-red-100 hover:bg-red-200 text-red-700 text-xs font-bold py-1 px-3 rounded-lg border border-red-200 transition-colors shadow-sm">Delete Request</button>
+            </div>
             <div onclick="toggleModal()" class="cursor-pointer z-50 p-2 hover:bg-gray-100 rounded-full">
               <svg class="fill-current text-black" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 18 18"><path d="M14.53 4.53l-1.06-1.06L9 7.94 4.53 3.47 3.47 4.53 7.94 9l-4.47 4.47 1.06 1.06L9 10.06l4.47 4.47 1.06-1.06L10.06 9z"></path></svg>
             </div>
@@ -746,6 +755,7 @@
       let adminDataFiltered = [];
       let adminSortCol = 'date';
       let adminSortAsc = true;
+      let adminCurrentView = 'period'; // 'period' or 'request'
       let hrDataRaw = [];
       let hrCurrentView = 'absences'; // 'absences' or 'subs'
 
@@ -831,6 +841,7 @@
              document.getElementById('submitBtn').innerText = "Submit Request";
              setUrgency('Standard');
              checkSpecialReason();
+             document.getElementById('adminDeleteBtn').classList.add('hidden');
 
              // Uncheck all periods
              document.querySelectorAll('.period-cb').forEach(cb => cb.checked = false);
@@ -1082,8 +1093,19 @@
           if (atAGlanceView) atAGlanceView.classList.add('hidden');
           if (settingsView) settingsView.classList.add('hidden');
           adminView.classList.remove('hidden');
+
+          const today = new Date();
+          const offset = today.getTimezoneOffset() * 60000;
+          const localISOTime = (new Date(today - offset)).toISOString().split('T')[0];
+
+          if (!document.getElementById('filterStartDate').value && !document.getElementById('filterEndDate').value) {
+              document.getElementById('filterStartDate').value = localISOTime;
+          }
+
           if (adminDataRaw.length === 0) {
             loadAdminDashboardData();
+          } else {
+            applyAdminFilters();
           }
         } else {
           adminView.classList.add('hidden');
@@ -1288,6 +1310,22 @@
         applyAdminFilters();
       }
 
+      function setAdminView(viewType) {
+        adminCurrentView = viewType;
+        const btnPeriod = document.getElementById('adminTogglePeriod');
+        const btnRequest = document.getElementById('adminToggleRequest');
+
+        if (viewType === 'period') {
+          btnPeriod.className = "flex-1 py-1.5 px-4 rounded-lg border-2 border-[#00843D] bg-[#00843D] text-white font-bold transition-colors";
+          btnRequest.className = "flex-1 py-1.5 px-4 rounded-lg border-2 border-gray-200 text-gray-500 font-bold transition-colors";
+        } else {
+          btnRequest.className = "flex-1 py-1.5 px-4 rounded-lg border-2 border-[#00843D] bg-[#00843D] text-white font-bold transition-colors";
+          btnPeriod.className = "flex-1 py-1.5 px-4 rounded-lg border-2 border-gray-200 text-gray-500 font-bold transition-colors";
+        }
+
+        renderAdminTable();
+      }
+
       function sortAdminTable(col) {
         if (adminSortCol === col) {
           adminSortAsc = !adminSortAsc;
@@ -1298,62 +1336,144 @@
         renderAdminTable();
       }
 
+      function getUniqueRequests(filteredData) {
+        const unique = {};
+        filteredData.forEach(req => {
+          if (!unique[req.id]) {
+            unique[req.id] = {
+              id: req.id,
+              teacherName: req.teacherName,
+              teacherEmail: req.teacherEmail,
+              date: req.date,
+              formDateString: req.formDateString,
+              reason: req.reason,
+              duration: req.duration,
+              periodsString: req.periodsString,
+              urgency: req.urgency,
+              instructions: req.instructions,
+              // Storing one raw index to use if we needed it, though edit modal uses id
+              rawIdx: adminDataRaw.findIndex(r => r.id === req.id)
+            };
+          }
+        });
+        return Object.values(unique);
+      }
+
       function renderAdminTable() {
+        const thead = document.getElementById('adminDashboardTableHeader');
         const tbody = document.getElementById('adminDashboardTableBody');
         if (adminDataFiltered.length === 0) {
           tbody.innerHTML = '<tr><td colspan="7" class="p-8 text-center text-gray-400 italic">No absence requests found for these filters.</td></tr>';
           return;
         }
 
-        // Sort data
-        adminDataFiltered.sort((a, b) => {
-          let valA = a[adminSortCol] || '';
-          let valB = b[adminSortCol] || '';
-
-          if (adminSortCol === 'period') {
-             valA = parseInt(valA) || 0;
-             valB = parseInt(valB) || 0;
-          } else {
-             valA = String(valA).toLowerCase();
-             valB = String(valB).toLowerCase();
-          }
-
-          if (valA < valB) return adminSortAsc ? -1 : 1;
-          if (valA > valB) return adminSortAsc ? 1 : -1;
-          return 0;
-        });
-
-        let html = '';
-        adminDataFiltered.forEach((req, idx) => {
-          // Find index in raw data for correct modal launching
-          const rawIdx = adminDataRaw.findIndex(r => r.id === req.id && r.period === req.period);
-
-          let courseHtml = req.course ? `<span class="inline-block max-w-[150px] sm:max-w-[180px] md:max-w-[240px] truncate align-middle" title="${escapeHtml(req.course)}">${escapeHtml(req.course)}</span>` : '';
-          if (req.course === "No Class Assigned" || !req.course) {
-             courseHtml = `<span class="tooltip text-red-500 font-bold px-2 py-1 bg-red-50 rounded cursor-help">--<span class="tooltiptext">No course found</span></span>`;
-          }
-
-          let roomHtml = escapeHtml(req.room);
-          if (req.room === "No Class Assigned" || !req.room) {
-             roomHtml = `<span class="tooltip text-red-500 font-bold px-2 py-1 bg-red-50 rounded cursor-help">--<span class="tooltiptext">No room found</span></span>`;
-          }
-
-          let subHtml = req.assignedSub ? `<span class="bg-green-100 text-green-800 border border-green-200 px-2 py-1 rounded font-bold">${escapeHtml(req.assignedSub)}</span>` : `<span class="text-gray-400 italic font-medium">Unassigned</span>`;
-
-          html += `
-            <tr class="hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0">
-              <td class="p-3 text-sm text-gray-800 font-medium"><a href="mailto:${escapeHtml(req.teacherEmail)}" class="hover:underline text-blue-600">${escapeHtml(req.teacherName)}</a></td>
-              <td class="p-3 text-sm text-gray-600">${escapeHtml(req.date)}</td>
-              <td class="p-3 text-sm font-bold text-gray-700">Period ${escapeHtml(req.period)}</td>
-              <td class="p-3 text-sm text-gray-600">${courseHtml}</td>
-              <td class="p-3 text-sm text-gray-600">${roomHtml}</td>
-              <td class="p-3 text-sm cursor-pointer hover:bg-gray-100" onclick="openDetailsModalForAdmin(${rawIdx})">${subHtml}</td>
-              <td class="p-3 text-sm text-gray-500 max-w-xs truncate" title="${escapeHtml(req.instructions) || ''}">${escapeHtml(req.instructions) || '-'}</td>
+        if (adminCurrentView === 'period') {
+          thead.innerHTML = `
+            <tr class="bg-gray-50 border-b border-gray-200 text-sm text-gray-700 uppercase">
+              <th class="p-3 cursor-pointer hover:bg-gray-100" onclick="sortAdminTable('teacherName')">Name ↕️</th>
+              <th class="p-3 cursor-pointer hover:bg-gray-100" onclick="sortAdminTable('date')">Date ↕️</th>
+              <th class="p-3 cursor-pointer hover:bg-gray-100" onclick="sortAdminTable('period')">Period ↕️</th>
+              <th class="p-3 cursor-pointer hover:bg-gray-100" onclick="sortAdminTable('course')">Course ↕️</th>
+              <th class="p-3 cursor-pointer hover:bg-gray-100" onclick="sortAdminTable('room')">Room ↕️</th>
+              <th class="p-3 cursor-pointer hover:bg-gray-100" onclick="sortAdminTable('assignedSub')">Assigned Sub ↕️</th>
+              <th class="p-3 cursor-pointer hover:bg-gray-100" onclick="sortAdminTable('instructions')">Instructions ↕️</th>
             </tr>
           `;
-        });
 
-        tbody.innerHTML = html;
+          // Sort data
+          adminDataFiltered.sort((a, b) => {
+            let valA = a[adminSortCol] || '';
+            let valB = b[adminSortCol] || '';
+
+            if (adminSortCol === 'period') {
+               valA = parseInt(valA) || 0;
+               valB = parseInt(valB) || 0;
+            } else {
+               valA = String(valA).toLowerCase();
+               valB = String(valB).toLowerCase();
+            }
+
+            if (valA < valB) return adminSortAsc ? -1 : 1;
+            if (valA > valB) return adminSortAsc ? 1 : -1;
+            return 0;
+          });
+
+          let html = '';
+          adminDataFiltered.forEach((req, idx) => {
+            // Find index in raw data for correct modal launching
+            const rawIdx = adminDataRaw.findIndex(r => r.id === req.id && r.period === req.period);
+
+            let courseHtml = req.course ? `<span class="inline-block max-w-[150px] sm:max-w-[180px] md:max-w-[240px] truncate align-middle" title="${escapeHtml(req.course)}">${escapeHtml(req.course)}</span>` : '';
+            if (req.course === "No Class Assigned" || !req.course) {
+               courseHtml = `<span class="tooltip text-red-500 font-bold px-2 py-1 bg-red-50 rounded cursor-help">--<span class="tooltiptext">No course found</span></span>`;
+            }
+
+            let roomHtml = escapeHtml(req.room);
+            if (req.room === "No Class Assigned" || !req.room) {
+               roomHtml = `<span class="tooltip text-red-500 font-bold px-2 py-1 bg-red-50 rounded cursor-help">--<span class="tooltiptext">No room found</span></span>`;
+            }
+
+            let subHtml = req.assignedSub ? `<span class="bg-green-100 text-green-800 border border-green-200 px-2 py-1 rounded font-bold">${escapeHtml(req.assignedSub)}</span>` : `<span class="text-gray-400 italic font-medium">Unassigned</span>`;
+
+            html += `
+              <tr class="hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0">
+                <td class="p-3 text-sm text-gray-800 font-medium"><a href="mailto:${escapeHtml(req.teacherEmail)}" class="hover:underline text-blue-600">${escapeHtml(req.teacherName)}</a></td>
+                <td class="p-3 text-sm text-gray-600">${escapeHtml(req.date)}</td>
+                <td class="p-3 text-sm font-bold text-gray-700">Period ${escapeHtml(req.period)}</td>
+                <td class="p-3 text-sm text-gray-600">${courseHtml}</td>
+                <td class="p-3 text-sm text-gray-600">${roomHtml}</td>
+                <td class="p-3 text-sm cursor-pointer hover:bg-gray-100" onclick="openDetailsModalForAdmin(${rawIdx})">${subHtml}</td>
+                <td class="p-3 text-sm text-gray-500 max-w-xs truncate" title="${escapeHtml(req.instructions) || ''}">${escapeHtml(req.instructions) || '-'}</td>
+              </tr>
+            `;
+          });
+
+          tbody.innerHTML = html;
+        } else {
+          // Request View
+          thead.innerHTML = `
+            <tr class="bg-gray-50 border-b border-gray-200 text-sm text-gray-700 uppercase">
+              <th class="p-3 cursor-pointer hover:bg-gray-100" onclick="sortAdminTable('teacherName')">Name ↕️</th>
+              <th class="p-3 cursor-pointer hover:bg-gray-100" onclick="sortAdminTable('date')">Date ↕️</th>
+              <th class="p-3 cursor-pointer hover:bg-gray-100" onclick="sortAdminTable('reason')">Reason ↕️</th>
+              <th class="p-3">Duration</th>
+              <th class="p-3">Periods</th>
+            </tr>
+          `;
+
+          let uniqueRequests = getUniqueRequests(adminDataFiltered);
+
+          // Sort unique data
+          uniqueRequests.sort((a, b) => {
+            let valA = a[adminSortCol] || '';
+            let valB = b[adminSortCol] || '';
+            valA = String(valA).toLowerCase();
+            valB = String(valB).toLowerCase();
+
+            if (valA < valB) return adminSortAsc ? -1 : 1;
+            if (valA > valB) return adminSortAsc ? 1 : -1;
+            return 0;
+          });
+
+          let html = '';
+          uniqueRequests.forEach((req, idx) => {
+            html += `
+              <tr class="hover:bg-gray-100 transition-colors border-b border-gray-100 last:border-b-0 cursor-pointer" onclick="openAdminEditModal('${escapeJs(req.id)}')">
+                <td class="p-3 text-sm text-gray-800 font-medium">${escapeHtml(req.teacherName)}</td>
+                <td class="p-3 text-sm text-gray-600">${escapeHtml(req.date)}</td>
+                <td class="p-3 text-sm text-gray-600">${escapeHtml(req.reason)}</td>
+                <td class="p-3 text-sm text-gray-600">${escapeHtml(req.duration)}</td>
+                <td class="p-3 text-sm text-gray-600 font-bold">${escapeHtml(req.periodsString)}</td>
+              </tr>
+            `;
+          });
+
+          if (uniqueRequests.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="p-8 text-center text-gray-400 italic">No absence requests found for these filters.</td></tr>';
+          } else {
+            tbody.innerHTML = html;
+          }
+        }
       }
 
       function openDetailsModalForAdmin(index) {
@@ -1774,7 +1894,93 @@
 
         document.getElementById('agreement').checked = true; // Pre-check for convenience on edit
 
+        document.getElementById('adminDeleteBtn').classList.add('hidden'); // Regular users don't see delete in the modal, they use the cancel button on the list
         toggleModal(true);
+      }
+
+      function openAdminEditModal(reqId) {
+         // Find the request from adminDataFiltered based on id
+         const req = adminDataFiltered.find(r => r.id === reqId);
+         if (!req) return;
+
+         document.getElementById('requestModalTitle').innerText = "Edit Request (Admin)";
+         document.getElementById('editAbsenceId').value = req.id;
+         document.getElementById('submitBtn').innerText = "Save Changes";
+         document.getElementById('adminDeleteBtn').classList.remove('hidden');
+
+         // Handle date
+         if (req.formDateString) {
+             document.getElementById('absDate').value = req.formDateString;
+         } else {
+             document.getElementById('absDate').value = req.date;
+         }
+
+         document.getElementById('absDuration').value = req.duration || "Full Day";
+
+         let pArr = (req.periodsString || "").split(",").map(p => p.trim());
+         document.querySelectorAll('.period-cb').forEach(cb => {
+            cb.checked = pArr.includes(cb.value);
+         });
+
+         document.getElementById('absReason').value = req.reason;
+         checkSpecialReason();
+
+         setUrgency(req.urgency.includes('Urgent') ? 'Urgent' : 'Standard');
+
+         // Parse instructions for HR confirmation flag
+         let inst = req.instructions || "";
+         let hrConfirmed = false;
+         if (inst.startsWith("[HR Docs Provided] ")) {
+            hrConfirmed = true;
+            inst = inst.replace("[HR Docs Provided] ", "");
+         }
+         document.getElementById('specialInst').value = inst;
+
+         if (hrConfirmed && !document.getElementById('hrSection').classList.contains('hidden')) {
+            document.getElementById('hrConfirm').checked = true;
+         } else {
+            document.getElementById('hrConfirm').checked = false;
+         }
+
+         document.getElementById('agreement').checked = true;
+
+         toggleModal(true);
+      }
+
+      function deleteAbsenceFromModal() {
+         const id = document.getElementById('editAbsenceId').value;
+         if (!id) return;
+
+         if (!confirm("Are you sure you want to completely delete this absence request? The teacher will be notified.")) return;
+
+         const btn = document.getElementById('adminDeleteBtn');
+         const originalText = btn.innerText;
+         btn.disabled = true;
+         btn.innerText = "Deleting...";
+
+         google.script.run
+           .withSuccessHandler(result => {
+              if (result && result.success) {
+                alert("Request cancelled successfully.");
+                toggleModal(); // close modal
+                if (!document.getElementById('adminSection').classList.contains('hidden')) {
+                  loadQuickCover();
+                  loadAdminDataRawSilent();
+                  // Admin dashboard view handles its own UI refresh when raw data is reloaded, but let's force a refresh
+                  loadAdminDashboardData();
+                }
+              } else {
+                alert("Failed to cancel: " + (result ? result.error : "Unknown"));
+                btn.disabled = false;
+                btn.innerText = originalText;
+              }
+           })
+           .withFailureHandler(err => {
+              alert("Error: " + err.message);
+              btn.disabled = false;
+              btn.innerText = originalText;
+           })
+           .cancelAbsence(id);
       }
 
       function cancelAbsence(id) {
@@ -1856,6 +2062,8 @@
                 if (!document.getElementById('adminSection').classList.contains('hidden')) {
                   loadQuickCover();
                   loadAdminDataRawSilent();
+                  // Admin dashboard view handles its own UI refresh when raw data is reloaded, but let's force a refresh
+                  loadAdminDashboardData();
                 }
               } else {
                 alert("Database Error: " + (result ? result.error : "Unknown issue"));
