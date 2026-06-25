@@ -169,7 +169,7 @@
         <h2 class="text-2xl font-bold text-[#002147] flex items-center gap-2">
           <span>👥</span> HR Dashboard
         </h2>
-        <button onclick="toggleHRDashboard()" class="text-[#002147] hover:bg-gray-200 font-semibold py-2 px-4 rounded-lg transition-colors border border-[#002147]">
+        <button id="hrReturnBtn" onclick="toggleHRDashboard()" class="text-[#002147] hover:bg-gray-200 font-semibold py-2 px-4 rounded-lg transition-colors border border-[#002147]">
            &larr; Return to Homepage
         </button>
       </div>
@@ -879,19 +879,30 @@
             if (lowerRole === 'sub coordinator') {
               document.getElementById('navAtAGlanceBtn').classList.remove('hidden');
             }
-            if (lowerRole === 'hr' || lowerRole === 'principal') {
+            if (lowerRole === 'hr') {
+              // Hide main content
+              document.getElementById('mainContent').classList.add('hidden');
+              // Show HR Dashboard
+              document.getElementById('hrDashboardView').classList.remove('hidden');
+              // Hide the return button as homepage is restricted
+              const hrReturnBtn = document.getElementById('hrReturnBtn');
+              if (hrReturnBtn) hrReturnBtn.classList.add('hidden');
+              // Load HR data directly
+              loadHRDashboardData();
+              return; // Prevent loading main dashboard data
+            } else if (lowerRole === 'principal') {
               document.getElementById('navHRBtn').classList.remove('hidden');
             }
+
+            loadMyAbsences();
+            loadMySubDuties();
+            loadTodaysOpenJobs();
           })
           .withFailureHandler(err => {
             console.error(err);
             document.getElementById('userName').innerText = "Authentication Error";
           })
           .getUserData();
-
-        loadMyAbsences();
-        loadMySubDuties();
-        loadTodaysOpenJobs();
       }
 
       function loadStaffList() {
@@ -2214,6 +2225,8 @@
       };
 
       function toggleHRDashboard() {
+        if (currentUser && currentUser.role && currentUser.role.toLowerCase() === 'hr') return;
+
         const mainContent = document.getElementById('mainContent');
         const adminView = document.getElementById('adminDashboardView');
         const hrView = document.getElementById('hrDashboardView');
