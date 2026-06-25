@@ -123,6 +123,25 @@ function doGet(e) {
 }
 
 /**
+ * Asserts that a user has one of the allowed roles.
+ * @param {Object} user - The user object returned by getUserData().
+ * @param {string|string[]} allowedRoles - A single role or an array of allowed roles.
+ * @param {string} [customErrorMessage="Unauthorized"] - Optional custom error message.
+ * @throws {Error} If the user's role is not in the allowed list.
+ */
+function assertRole(user, allowedRoles, customErrorMessage) {
+  if (!user || !user.role) {
+    throw new Error(customErrorMessage || "Unauthorized");
+  }
+  var role = user.role.toLowerCase();
+  var allowed = Array.isArray(allowedRoles) ? allowedRoles : [allowedRoles];
+  var isAuthorized = allowed.some(function(r) { return r.toLowerCase() === role; });
+  if (!isAuthorized) {
+    throw new Error(customErrorMessage || "Unauthorized");
+  }
+}
+
+/**
  * Grabs the user's name and role on startup.
  */
 function getUserData(ss) {
@@ -255,7 +274,7 @@ function getUserRoles() {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var user = getUserData(ss);
-    if (user.role.toLowerCase() !== "admin") throw new Error("Unauthorized");
+    assertRole(user, "admin");
 
     var roleSheet = ss.getSheetByName("User Roles");
     if (!roleSheet) return [];
@@ -283,7 +302,7 @@ function addUserRole(email, role) {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var user = getUserData(ss);
-    if (user.role.toLowerCase() !== "admin") throw new Error("Unauthorized");
+    assertRole(user, "admin");
 
     var roleSheet = ss.getSheetByName("User Roles");
     if (!roleSheet) throw new Error("User Roles sheet not found.");
@@ -302,7 +321,7 @@ function editUserRole(oldEmail, newEmail, role) {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var user = getUserData(ss);
-    if (user.role.toLowerCase() !== "admin") throw new Error("Unauthorized");
+    assertRole(user, "admin");
 
     var roleSheet = ss.getSheetByName("User Roles");
     if (!roleSheet) throw new Error("User Roles sheet not found.");
@@ -329,7 +348,7 @@ function deleteUserRole(email) {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var user = getUserData(ss);
-    if (user.role.toLowerCase() !== "admin") throw new Error("Unauthorized");
+    assertRole(user, "admin");
 
     var roleSheet = ss.getSheetByName("User Roles");
     if (!roleSheet) throw new Error("User Roles sheet not found.");
@@ -356,7 +375,7 @@ function getSettingsForFrontend() {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var user = getUserData(ss);
-    if (user.role.toLowerCase() !== "admin") throw new Error("Unauthorized");
+    assertRole(user, "admin");
     return getSettings();
   } catch (err) {
     throw new Error("Failed to fetch settings: " + err.message);
@@ -370,7 +389,7 @@ function updateSettings(newSettings) {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var user = getUserData(ss);
-    if (user.role.toLowerCase() !== "admin") throw new Error("Unauthorized");
+    assertRole(user, "admin");
 
     var settingsSheet = ss.getSheetByName("Settings");
     if (!settingsSheet) throw new Error("Settings sheet not found.");
@@ -1513,10 +1532,7 @@ function getAdminDashboardData() {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var user = getUserData(ss);
-    var lowerRole = user.role.toLowerCase();
-    if (lowerRole !== "admin" && lowerRole !== "sub coordinator") {
-      throw new Error("Unauthorized access. Admin or Sub Coordinator role required.");
-    }
+    assertRole(user, ["admin", "sub coordinator"], "Unauthorized access. Admin or Sub Coordinator role required.");
 
     var mainSheet = ss.getSheetByName("Absence Requests");
     var rosterSheet = ss.getSheetByName("Staff Roster");
@@ -1622,11 +1638,7 @@ function getHRDashboardData() {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var user = getUserData(ss);
-    var lowerRole = user.role.toLowerCase();
-
-    if (lowerRole !== "hr" && lowerRole !== "principal") {
-      throw new Error("Unauthorized access. HR or Principal role required.");
-    }
+    assertRole(user, ["hr", "principal"], "Unauthorized access. HR or Principal role required.");
 
     var mainSheet = ss.getSheetByName("Absence Requests");
     var rosterSheet = ss.getSheetByName("Staff Roster");
