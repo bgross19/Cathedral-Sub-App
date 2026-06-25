@@ -22,6 +22,65 @@ function setupDatabase() {
   if (splitSheet) {
     // ss.deleteSheet(splitSheet); // Uncomment to delete automatically, or delete manually.
   }
+
+  // Setup Settings Sheet
+  var settingsSheet = ss.getSheetByName("Settings");
+  if (!settingsSheet) {
+    settingsSheet = ss.insertSheet("Settings");
+    var settingsHeaders = ["Setting Name", "Setting Value"];
+    var defaultSettings = [
+      ["Email Mode", "Live"],
+      ["Redirect Email", "Bgross@gocathedral.com"],
+      ["App URL", "https://script.google.com/a/macros/gocathedral.com/s/AKfycbwKZrBo4R-9O97aVNCjOHk9PddWCb6XNKviDS1lj4nNc49khl3T9OL8pGUDa7E1XE0/exec"]
+    ];
+    settingsSheet.getRange(1, 1, 1, 2).setValues([settingsHeaders]);
+    settingsSheet.getRange(1, 1, 1, 2).setFontWeight("bold");
+    settingsSheet.getRange(2, 1, defaultSettings.length, 2).setValues(defaultSettings);
+  }
+}
+
+/**
+ * Retrieves settings from the Settings sheet as an object.
+ * Creates the sheet if it doesn't exist.
+ */
+function getSettings() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var settingsSheet = ss.getSheetByName("Settings");
+
+  if (!settingsSheet) {
+    setupDatabase(); // Creates the sheet with defaults
+    settingsSheet = ss.getSheetByName("Settings");
+  }
+
+  var data = settingsSheet.getDataRange().getValues();
+  var settings = {};
+
+  // Skip header row
+  for (var i = 1; i < data.length; i++) {
+    var key = String(data[i][0]).trim();
+    var value = String(data[i][1]).trim();
+    if (key) {
+      settings[key] = value;
+    }
+  }
+
+  // Ensure defaults exist if rows were deleted
+  var defaults = {
+    "Email Mode": "Live",
+    "Redirect Email": "Bgross@gocathedral.com",
+    "App URL": "https://script.google.com/a/macros/gocathedral.com/s/AKfycbwKZrBo4R-9O97aVNCjOHk9PddWCb6XNKviDS1lj4nNc49khl3T9OL8pGUDa7E1XE0/exec"
+  };
+
+  var settingsUpdated = false;
+  for (var k in defaults) {
+    if (!(k in settings)) {
+      settings[k] = defaults[k];
+      settingsSheet.appendRow([k, defaults[k]]);
+      settingsUpdated = true;
+    }
+  }
+
+  return settings;
 }
 
 /**
@@ -68,7 +127,44 @@ function getUserData(ss) {
     }
   }
   
-  return { name: String(name), role: String(role), email: String(email) };
+  var settings = getSettings();
+  var appUrl = settings["App URL"] || "https://script.google.com/a/macros/gocathedral.com/s/AKfycbwKZrBo4R-9O97aVNCjOHk9PddWCb6XNKviDS1lj4nNc49khl3T9OL8pGUDa7E1XE0/exec";
+
+  return { name: String(name), role: String(role), email: String(email), appUrl: String(appUrl) };
+}
+
+/**
+ * Helper to send emails based on the current Email Mode setting.
+ * Handles "Live", "Redirect", and "Off" modes.
+ */
+function sendEmailHelper(to, subject, body, options) {
+  var settings = getSettings();
+  var mode = settings["Email Mode"] || "Live";
+  var redirectEmail = settings["Redirect Email"] || "";
+
+  if (mode === "Off") {
+    console.log("Email sending is turned Off. Suppressed email to: " + to);
+    return;
+  }
+
+  if (mode === "Redirect" && redirectEmail) {
+    console.log("Email mode is Redirect. Redirecting email originally intended for: " + to + " to: " + redirectEmail);
+    // Suppress CCs and BCCs so only the redirect email gets the message
+    if (options) {
+      if (options.cc) {
+        body += "\n\n[Original CC: " + options.cc + "]";
+        if (options.htmlBody) options.htmlBody += "<p><em>[Original CC: " + options.cc + "]</em></p>";
+        delete options.cc;
+      }
+      if (options.bcc) {
+        delete options.bcc;
+      }
+    }
+    to = redirectEmail;
+    subject = "[REDIRECTED] " + subject;
+  }
+
+  GmailApp.sendEmail(to, subject, body, options);
 }
 
 /**
@@ -108,6 +204,154 @@ function buildScheduleLookup(scheduleData) {
     }
   }
   return scheduleLookup;
+}
+
+/**
+ * Fetches all user roles.
+ */
+function getUserRoles() {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var user = getUserData(ss);
+    if (user.role.toLowerCase() !== "admin") throw new Error("Unauthorized");
+
+    var roleSheet = ss.getSheetByName("User Roles");
+    if (!roleSheet) return [];
+
+    var data = roleSheet.getDataRange().getValues();
+    var roles = [];
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][0]).trim()) {
+        roles.push({
+          email: String(data[i][0]).trim(),
+          role: String(data[i][1]).trim()
+        });
+      }
+    }
+    return roles;
+  } catch (err) {
+    throw new Error("Failed to fetch roles: " + err.message);
+  }
+}
+
+/**
+ * Adds a new user role.
+ */
+function addUserRole(email, role) {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var user = getUserData(ss);
+    if (user.role.toLowerCase() !== "admin") throw new Error("Unauthorized");
+
+    var roleSheet = ss.getSheetByName("User Roles");
+    if (!roleSheet) throw new Error("User Roles sheet not found.");
+
+    roleSheet.appendRow([email.toLowerCase().trim(), role.trim()]);
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Edits an existing user role.
+ */
+function editUserRole(oldEmail, newEmail, role) {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var user = getUserData(ss);
+    if (user.role.toLowerCase() !== "admin") throw new Error("Unauthorized");
+
+    var roleSheet = ss.getSheetByName("User Roles");
+    if (!roleSheet) throw new Error("User Roles sheet not found.");
+
+    var data = roleSheet.getDataRange().getValues();
+    var targetEmail = oldEmail.toLowerCase().trim();
+
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][0]).toLowerCase().trim() === targetEmail) {
+        roleSheet.getRange(i + 1, 1, 1, 2).setValues([[newEmail.toLowerCase().trim(), role.trim()]]);
+        return { success: true };
+      }
+    }
+    throw new Error("User not found.");
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Deletes a user role.
+ */
+function deleteUserRole(email) {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var user = getUserData(ss);
+    if (user.role.toLowerCase() !== "admin") throw new Error("Unauthorized");
+
+    var roleSheet = ss.getSheetByName("User Roles");
+    if (!roleSheet) throw new Error("User Roles sheet not found.");
+
+    var data = roleSheet.getDataRange().getValues();
+    var targetEmail = email.toLowerCase().trim();
+
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][0]).toLowerCase().trim() === targetEmail) {
+        roleSheet.deleteRow(i + 1);
+        return { success: true };
+      }
+    }
+    throw new Error("User not found.");
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Fetches settings for the frontend.
+ */
+function getSettingsForFrontend() {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var user = getUserData(ss);
+    if (user.role.toLowerCase() !== "admin") throw new Error("Unauthorized");
+    return getSettings();
+  } catch (err) {
+    throw new Error("Failed to fetch settings: " + err.message);
+  }
+}
+
+/**
+ * Updates settings in the Settings sheet.
+ */
+function updateSettings(newSettings) {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var user = getUserData(ss);
+    if (user.role.toLowerCase() !== "admin") throw new Error("Unauthorized");
+
+    var settingsSheet = ss.getSheetByName("Settings");
+    if (!settingsSheet) throw new Error("Settings sheet not found.");
+
+    var data = settingsSheet.getDataRange().getValues();
+    var settingsMap = {};
+
+    // Map existing rows
+    for (var i = 1; i < data.length; i++) {
+      settingsMap[String(data[i][0]).trim()] = i + 1;
+    }
+
+    for (var key in newSettings) {
+      if (settingsMap[key]) {
+        settingsSheet.getRange(settingsMap[key], 2).setValue(newSettings[key]);
+      } else {
+        settingsSheet.appendRow([key, newSettings[key]]);
+      }
+    }
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
 }
 
 /**
@@ -599,7 +843,8 @@ function submitAbsence(formData) {
       var coordinatorEmail = getCoordinatorEmail(ss);
       if (coordinatorEmail) {
         var subject = "URGENT COVERAGE NEEDED: " + teacherName;
-        var appUrl = "https://script.google.com/a/macros/gocathedral.com/s/AKfycbwKZrBo4R-9O97aVNCjOHk9PddWCb6XNKviDS1lj4nNc49khl3T9OL8pGUDa7E1XE0/exec";
+        var settings = getSettings();
+        var appUrl = settings["App URL"] || "https://script.google.com/a/macros/gocathedral.com/s/AKfycbwKZrBo4R-9O97aVNCjOHk9PddWCb6XNKviDS1lj4nNc49khl3T9OL8pGUDa7E1XE0/exec";
 
         var body = "An urgent absence request has been submitted requiring immediate attention.\n\n" +
                    "Teacher: " + teacherName + "\n" +
@@ -619,7 +864,7 @@ function submitAbsence(formData) {
                        "<p><strong>Instructions:</strong> " + (instructions ? instructions : "None") + "</p>" +
                        "<p>Please log into the <a href='" + appUrl + "'>Cathedral Sub App</a> to assign a sub.</p>";
 
-        GmailApp.sendEmail(coordinatorEmail, subject, body, { htmlBody: htmlBody });
+        sendEmailHelper(coordinatorEmail, subject, body, { htmlBody: htmlBody });
       }
     }
     
@@ -660,7 +905,8 @@ function cancelMySubDuty(absenceId, period) {
           // Send email to sub coordinator, CCing the sub
           if (coordinatorEmail && details) {
             var subject = "SUB CANCELLATION: " + userName + " cancelled coverage";
-            var appUrl = "https://script.google.com/a/macros/gocathedral.com/s/AKfycbwKZrBo4R-9O97aVNCjOHk9PddWCb6XNKviDS1lj4nNc49khl3T9OL8pGUDa7E1XE0/exec";
+            var settings = getSettings();
+            var appUrl = settings["App URL"] || "https://script.google.com/a/macros/gocathedral.com/s/AKfycbwKZrBo4R-9O97aVNCjOHk9PddWCb6XNKviDS1lj4nNc49khl3T9OL8pGUDa7E1XE0/exec";
 
             var body = userName + " has cancelled their assigned coverage.\n\n" +
                        "Date: " + details.date + "\n" +
@@ -680,7 +926,7 @@ function cancelMySubDuty(absenceId, period) {
                            "</ul>" +
                            "<p>This period is now UNFILLED. Please log into the <a href='" + appUrl + "'>Cathedral Sub App</a> to reassign a sub.</p>";
 
-            GmailApp.sendEmail(coordinatorEmail, subject, body, { cc: userEmail, htmlBody: htmlBody });
+            sendEmailHelper(coordinatorEmail, subject, body, { cc: userEmail, htmlBody: htmlBody });
           }
 
           return { success: true };
@@ -1006,7 +1252,8 @@ function sendSubNotification(subEmail, type, details) {
   var body = "";
   var htmlBody = "";
 
-  var appUrl = "https://script.google.com/a/macros/gocathedral.com/s/AKfycbwKZrBo4R-9O97aVNCjOHk9PddWCb6XNKviDS1lj4nNc49khl3T9OL8pGUDa7E1XE0/exec";
+  var settings = getSettings();
+  var appUrl = settings["App URL"] || "https://script.google.com/a/macros/gocathedral.com/s/AKfycbwKZrBo4R-9O97aVNCjOHk9PddWCb6XNKviDS1lj4nNc49khl3T9OL8pGUDa7E1XE0/exec";
 
   var detailsText = "Date: " + details.date + "\n";
   if (details.period) detailsText += "Period: " + details.period + "\n";
@@ -1041,7 +1288,7 @@ function sendSubNotification(subEmail, type, details) {
   }
 
   try {
-    GmailApp.sendEmail(subEmail, subject, body, { htmlBody: htmlBody });
+    sendEmailHelper(subEmail, subject, body, { htmlBody: htmlBody });
   } catch (e) {
     console.error("Failed to send email to " + subEmail + ": " + e.message);
   }

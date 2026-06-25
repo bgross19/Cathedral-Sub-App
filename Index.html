@@ -38,6 +38,9 @@
                <button id="navAtAGlanceBtn" onclick="toggleAtAGlanceDashboard()" class="hidden ml-4 bg-white/20 hover:bg-white/30 text-white text-sm font-semibold py-1.5 px-4 rounded-full transition-colors flex items-center gap-2">
                    <span>📅</span> Today at a Glance
                </button>
+               <button id="navSettingsBtn" onclick="toggleSettingsDashboard()" class="hidden ml-4 bg-white/20 hover:bg-white/30 text-white text-sm font-semibold py-1.5 px-4 rounded-full transition-colors flex items-center gap-2">
+                   <span>⚙️</span> Settings
+               </button>
            </div>
            <div id="userInfo" class="text-sm opacity-90 text-right">
                <div id="userName" class="font-bold">Loading...</div>
@@ -243,10 +246,318 @@
         </table>
         <div id="atAGlanceFooter" class="mt-4 text-sm hidden">
            <br>
-           Please refer to the <a href="https://script.google.com/a/macros/gocathedral.com/s/AKfycbwKZrBo4R-9O97aVNCjOHk9PddWCb6XNKviDS1lj4nNc49khl3T9OL8pGUDa7E1XE0/exec" style="color: #00843D; text-decoration: underline;">Cathedral Sub App</a> for more information.
+           Please refer to the <a id="atAGlanceFooterUrl" href="#" style="color: #00843D; text-decoration: underline;">Cathedral Sub App</a> for more information.
         </div>
       </div>
     </main>
+
+    <!-- Settings Dashboard View -->
+    <main id="settingsDashboardView" class="max-w-6xl mx-auto p-4 mt-4 hidden">
+      <div class="flex justify-between items-center mb-6">
+        <h2 class="text-2xl font-bold text-[#002147] flex items-center gap-2">
+          <span>⚙️</span> Settings & Role Management
+        </h2>
+        <button onclick="toggleSettingsDashboard()" class="text-[#002147] hover:bg-gray-200 font-semibold py-2 px-4 rounded-lg transition-colors border border-[#002147]">
+           &larr; Return to Homepage
+        </button>
+      </div>
+
+      <!-- General Settings -->
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
+        <h3 class="text-xl font-bold text-[#002147] mb-4 border-b pb-2">General Settings</h3>
+        <div id="generalSettingsContainer" class="space-y-4">
+           <!-- Dynamic content injected here -->
+           <p class="text-gray-400 italic">Loading settings...</p>
+        </div>
+      </div>
+
+      <!-- Role Management -->
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div class="flex justify-between items-center mb-4 border-b pb-2">
+           <h3 class="text-xl font-bold text-[#002147]">User Roles</h3>
+           <button onclick="openAddRoleModal()" class="bg-[#00843D] hover:bg-green-700 text-white font-bold py-1.5 px-4 rounded-lg transition-colors text-sm flex items-center gap-2">
+               <span>➕</span> Add User Role
+           </button>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse min-w-max">
+            <thead>
+              <tr class="bg-gray-50 border-b border-gray-200 text-sm text-gray-700 uppercase">
+                <th class="p-3">User Email</th>
+                <th class="p-3">Assigned Role</th>
+                <th class="p-3 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="roleManagementTableBody" class="divide-y divide-gray-100">
+               <tr><td colspan="3" class="p-8 text-center text-gray-400 italic">Loading roles...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+
+    <!-- Settings Form & Logic -->
+    <script>
+      function loadSettingsData() {
+        google.script.run
+          .withSuccessHandler(settings => {
+            const container = document.getElementById('generalSettingsContainer');
+            let html = `
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-sm font-bold mb-1">Email Mode</label>
+                  <select id="settingsEmailMode" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none">
+                    <option value="Live" ${settings["Email Mode"] === "Live" ? "selected" : ""}>Live (Normal Operation)</option>
+                    <option value="Redirect" ${settings["Email Mode"] === "Redirect" ? "selected" : ""}>Redirect (Beta Testing)</option>
+                    <option value="Off" ${settings["Email Mode"] === "Off" ? "selected" : ""}>Off (No Emails)</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-sm font-bold mb-1">Redirect Email Address</label>
+                  <input type="email" id="settingsRedirectEmail" value="${escapeHtml(settings["Redirect Email"] || "")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none">
+                </div>
+              </div>
+              <div class="mt-4">
+                <label class="block text-sm font-bold mb-1">App URL</label>
+                <input type="text" id="settingsAppUrl" value="${escapeHtml(settings["App URL"] || "")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none">
+              </div>
+              <div class="mt-4 flex justify-end">
+                <button id="saveSettingsBtn" onclick="saveSettings()" class="bg-[#002147] hover:bg-blue-900 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-md">
+                  Save General Settings
+                </button>
+              </div>
+            `;
+            container.innerHTML = html;
+          })
+          .withFailureHandler(err => {
+            document.getElementById('generalSettingsContainer').innerHTML = `<p class="text-red-600 font-bold">Failed to load settings: ${err.message}</p>`;
+          })
+          .getSettingsForFrontend();
+      }
+
+      function saveSettings() {
+        const btn = document.getElementById('saveSettingsBtn');
+        const originalText = btn.innerText;
+        btn.disabled = true;
+        btn.innerText = "Saving...";
+
+        const newSettings = {
+          "Email Mode": document.getElementById('settingsEmailMode').value,
+          "Redirect Email": document.getElementById('settingsRedirectEmail').value,
+          "App URL": document.getElementById('settingsAppUrl').value
+        };
+
+        google.script.run
+          .withSuccessHandler(result => {
+            if (result && result.success) {
+              alert("Settings saved successfully!");
+            } else {
+              alert("Failed to save settings: " + (result ? result.error : "Unknown error"));
+            }
+            btn.disabled = false;
+            btn.innerText = originalText;
+          })
+          .withFailureHandler(err => {
+            alert("Connection Error: " + err.message);
+            btn.disabled = false;
+            btn.innerText = originalText;
+          })
+          .updateSettings(newSettings);
+      }
+
+      let currentRoles = [];
+
+      function loadRolesData() {
+        google.script.run
+          .withSuccessHandler(roles => {
+            currentRoles = roles;
+            renderRolesTable();
+          })
+          .withFailureHandler(err => {
+            document.getElementById('roleManagementTableBody').innerHTML = `<tr><td colspan="3" class="p-8 text-center text-red-600 font-bold">Failed to load roles: ${err.message}</td></tr>`;
+          })
+          .getUserRoles();
+      }
+
+      function renderRolesTable() {
+        const tbody = document.getElementById('roleManagementTableBody');
+        if (currentRoles.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="3" class="p-8 text-center text-gray-400 italic">No user roles found.</td></tr>';
+          return;
+        }
+
+        let html = '';
+        currentRoles.forEach((r, idx) => {
+          html += `
+            <tr class="hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0">
+              <td class="p-3 text-sm text-gray-800 font-medium" id="role-email-text-${idx}">${escapeHtml(r.email)}</td>
+              <td class="p-3 text-sm text-gray-600" id="role-role-text-${idx}">${escapeHtml(r.role)}</td>
+              <td class="p-3 text-right space-x-2">
+                <button onclick="editRole(${idx})" id="role-edit-btn-${idx}" class="text-blue-600 hover:text-blue-800 font-semibold text-sm">Edit</button>
+                <button onclick="deleteRole('${escapeJs(r.email)}')" class="text-red-600 hover:text-red-800 font-semibold text-sm">Delete</button>
+              </td>
+            </tr>
+          `;
+        });
+        tbody.innerHTML = html;
+      }
+
+      function editRole(idx) {
+        const r = currentRoles[idx];
+        const emailTd = document.getElementById(`role-email-text-${idx}`);
+        const roleTd = document.getElementById(`role-role-text-${idx}`);
+        const editBtn = document.getElementById(`role-edit-btn-${idx}`);
+
+        const options = ["Admin", "Sub Coordinator", "HR", "Principal"];
+        let selectHtml = `<select id="edit-role-select-${idx}" class="p-1 border rounded focus:ring-2 focus:ring-[#00843D] outline-none">`;
+        options.forEach(opt => {
+          selectHtml += `<option value="${opt}" ${r.role.toLowerCase() === opt.toLowerCase() ? 'selected' : ''}>${opt}</option>`;
+        });
+        selectHtml += `</select>`;
+
+        emailTd.innerHTML = `<input type="email" id="edit-role-email-${idx}" value="${escapeHtml(r.email)}" class="p-1 border rounded w-full focus:ring-2 focus:ring-[#00843D] outline-none">`;
+        roleTd.innerHTML = selectHtml;
+
+        editBtn.innerText = "Save";
+        editBtn.onclick = function() { saveRoleEdit(idx, r.email); };
+      }
+
+      function saveRoleEdit(idx, oldEmail) {
+        const newEmail = document.getElementById(`edit-role-email-${idx}`).value;
+        const newRole = document.getElementById(`edit-role-select-${idx}`).value;
+
+        if (!newEmail || !newRole) {
+          alert("Email and Role cannot be empty.");
+          return;
+        }
+
+        google.script.run
+          .withSuccessHandler(result => {
+            if (result && result.success) {
+              loadRolesData(); // Reload table
+            } else {
+              alert("Failed to update role: " + (result ? result.error : "Unknown error"));
+              loadRolesData(); // Revert on failure
+            }
+          })
+          .withFailureHandler(err => {
+            alert("Connection Error: " + err.message);
+            loadRolesData();
+          })
+          .editUserRole(oldEmail, newEmail, newRole);
+      }
+
+      function deleteRole(email) {
+        if (!confirm(`Are you sure you want to remove the role for ${email}?`)) return;
+
+        google.script.run
+          .withSuccessHandler(result => {
+            if (result && result.success) {
+              loadRolesData();
+            } else {
+              alert("Failed to delete role: " + (result ? result.error : "Unknown error"));
+            }
+          })
+          .withFailureHandler(err => {
+            alert("Connection Error: " + err.message);
+          })
+          .deleteUserRole(email);
+      }
+
+      function openAddRoleModal() {
+        document.getElementById('addRoleEmail').value = '';
+        document.getElementById('addRoleSelect').value = 'Admin';
+
+        const modal = document.getElementById('addRoleModal');
+        const overlay = document.getElementById('genericModalOverlay');
+        const body = document.querySelector('body');
+
+        modal.classList.remove('opacity-0');
+        modal.classList.remove('pointer-events-none');
+        overlay.classList.remove('opacity-0');
+        overlay.classList.remove('pointer-events-none');
+        body.classList.add('modal-active');
+      }
+
+      function closeAddRoleModal() {
+        const modal = document.getElementById('addRoleModal');
+        const overlay = document.getElementById('genericModalOverlay');
+        const body = document.querySelector('body');
+
+        modal.classList.add('opacity-0');
+        modal.classList.add('pointer-events-none');
+        overlay.classList.add('opacity-0');
+        overlay.classList.add('pointer-events-none');
+        body.classList.remove('modal-active');
+      }
+
+      function submitAddRole() {
+        const email = document.getElementById('addRoleEmail').value;
+        const role = document.getElementById('addRoleSelect').value;
+
+        if (!email || !role) {
+          alert("Please fill in both email and role.");
+          return;
+        }
+
+        const btn = document.getElementById('addRoleSubmitBtn');
+        const originalText = btn.innerText;
+        btn.disabled = true;
+        btn.innerText = "Adding...";
+
+        google.script.run
+          .withSuccessHandler(result => {
+            if (result && result.success) {
+              closeAddRoleModal();
+              loadRolesData();
+            } else {
+              alert("Failed to add role: " + (result ? result.error : "Unknown error"));
+            }
+            btn.disabled = false;
+            btn.innerText = originalText;
+          })
+          .withFailureHandler(err => {
+            alert("Connection Error: " + err.message);
+            btn.disabled = false;
+            btn.innerText = originalText;
+          })
+          .addUserRole(email, role);
+      }
+    </script>
+
+    <!-- Add Role Modal -->
+    <div id="addRoleModal" class="modal opacity-0 pointer-events-none fixed w-full h-full top-0 left-0 flex items-center justify-center z-[110]">
+      <div class="modal-container bg-white w-11/12 md:max-w-md mx-auto rounded-2xl shadow-2xl z-[110] overflow-y-auto max-h-[90vh]">
+        <div class="p-6">
+          <div class="flex justify-between items-center pb-3 border-b">
+            <p class="text-xl font-bold text-[#002147]">Add User Role</p>
+            <div onclick="closeAddRoleModal()" class="cursor-pointer z-50 p-2 hover:bg-gray-100 rounded-full">
+              <svg class="fill-current text-black" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 18 18"><path d="M14.53 4.53l-1.06-1.06L9 7.94 4.53 3.47 3.47 4.53 7.94 9l-4.47 4.47 1.06 1.06L9 10.06l4.47 4.47 1.06-1.06L10.06 9z"></path></svg>
+            </div>
+          </div>
+          <div class="mt-4 space-y-4">
+             <div>
+               <label class="block text-sm font-bold mb-1">User Email Address</label>
+               <input type="email" id="addRoleEmail" placeholder="e.g. teacher@gocathedral.com" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none">
+             </div>
+             <div>
+               <label class="block text-sm font-bold mb-1">Role</label>
+               <select id="addRoleSelect" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none">
+                 <option value="Admin">Admin</option>
+                 <option value="Sub Coordinator">Sub Coordinator</option>
+                 <option value="HR">HR</option>
+                 <option value="Principal">Principal</option>
+               </select>
+             </div>
+             <div class="mt-4 flex justify-end">
+                <button id="addRoleSubmitBtn" onclick="submitAddRole()" class="bg-[#00843D] hover:bg-green-700 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-md">
+                  Add Role
+                </button>
+             </div>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <!-- Generic Modal overlay -->
     <div id="genericModalOverlay" class="modal opacity-0 pointer-events-none fixed w-full h-full top-0 left-0 flex items-center justify-center z-[100]">
@@ -446,6 +757,11 @@
             document.getElementById('userName').innerText = data.name;
             document.getElementById('welcomeName').innerText = (data.name.split(',')[1] || data.name).trim();
             
+            if (data.appUrl) {
+                const footerLink = document.getElementById('atAGlanceFooterUrl');
+                if (footerLink) footerLink.href = data.appUrl;
+            }
+
             // Checks for 'Admin' OR 'Sub coordinator' regardless of uppercase/lowercase in your sheet!
             let lowerRole = data.role.toLowerCase();
             if (lowerRole === 'admin' || lowerRole === 'sub coordinator') {
@@ -453,6 +769,9 @@
               document.getElementById('navAdminBtn').classList.remove('hidden');
               loadStaffList();
               loadQuickCover(); 
+            }
+            if (lowerRole === 'admin') {
+              document.getElementById('navSettingsBtn').classList.remove('hidden');
             }
             if (lowerRole === 'sub coordinator') {
               document.getElementById('navAtAGlanceBtn').classList.remove('hidden');
@@ -701,16 +1020,41 @@
           .getQuickCoverData();
       }
 
+      function toggleSettingsDashboard() {
+        const mainContent = document.getElementById('mainContent');
+        const adminView = document.getElementById('adminDashboardView');
+        const hrView = document.getElementById('hrDashboardView');
+        const atAGlanceView = document.getElementById('atAGlanceDashboardView');
+        const settingsView = document.getElementById('settingsDashboardView');
+
+        if (settingsView.classList.contains('hidden')) {
+          mainContent.classList.add('hidden');
+          if (adminView) adminView.classList.add('hidden');
+          if (hrView) hrView.classList.add('hidden');
+          if (atAGlanceView) atAGlanceView.classList.add('hidden');
+          settingsView.classList.remove('hidden');
+
+          // load Settings Data
+          loadSettingsData();
+          loadRolesData();
+        } else {
+          settingsView.classList.add('hidden');
+          mainContent.classList.remove('hidden');
+        }
+      }
+
       function toggleAdminDashboard() {
         const mainContent = document.getElementById('mainContent');
         const adminView = document.getElementById('adminDashboardView');
         const hrView = document.getElementById('hrDashboardView');
         const atAGlanceView = document.getElementById('atAGlanceDashboardView');
+        const settingsView = document.getElementById('settingsDashboardView');
 
         if (adminView.classList.contains('hidden')) {
           mainContent.classList.add('hidden');
           if (hrView) hrView.classList.add('hidden');
           if (atAGlanceView) atAGlanceView.classList.add('hidden');
+          if (settingsView) settingsView.classList.add('hidden');
           adminView.classList.remove('hidden');
           if (adminDataRaw.length === 0) {
             loadAdminDashboardData();
@@ -726,11 +1070,13 @@
         const adminView = document.getElementById('adminDashboardView');
         const hrView = document.getElementById('hrDashboardView');
         const atAGlanceView = document.getElementById('atAGlanceDashboardView');
+        const settingsView = document.getElementById('settingsDashboardView');
 
         if (atAGlanceView.classList.contains('hidden')) {
           mainContent.classList.add('hidden');
           if (adminView) adminView.classList.add('hidden');
           if (hrView) hrView.classList.add('hidden');
+          if (settingsView) settingsView.classList.add('hidden');
           atAGlanceView.classList.remove('hidden');
 
           if (adminDataRaw.length === 0) {
@@ -1520,11 +1866,13 @@
         const adminView = document.getElementById('adminDashboardView');
         const hrView = document.getElementById('hrDashboardView');
         const atAGlanceView = document.getElementById('atAGlanceDashboardView');
+        const settingsView = document.getElementById('settingsDashboardView');
 
         if (hrView.classList.contains('hidden')) {
           mainContent.classList.add('hidden');
           if (adminView) adminView.classList.add('hidden');
           if (atAGlanceView) atAGlanceView.classList.add('hidden');
+          if (settingsView) settingsView.classList.add('hidden');
           hrView.classList.remove('hidden');
 
           if (hrDataRaw.length === 0) {
