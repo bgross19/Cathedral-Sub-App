@@ -846,7 +846,8 @@
       function initApp() {
         initToggles();
         google.script.run
-          .withSuccessHandler(data => {
+          .withSuccessHandler(payload => {
+            const data = payload.userData;
             currentUser = data;
             document.getElementById('userName').innerText = data.name;
             document.getElementById('welcomeName').innerText = (data.name.split(',')[1] || data.name).trim();
@@ -873,14 +874,26 @@
                document.getElementById('absReason').innerHTML = `<option value="Personal" data-hr-required="false">Personal</option>`;
             }
 
-            // Checks for 'Admin' OR 'Sub coordinator' regardless of uppercase/lowercase in your sheet!
+            // Render common parts
+            renderMyAbsences(payload.myAbsences);
+            renderMySubDuties(payload.mySubDuties);
+            renderTodaysOpenJobs(payload.todaysOpenJobs);
+
             let lowerRole = data.role.toLowerCase();
+            if (lowerRole === 'admin' || lowerRole === 'sub coordinator' || lowerRole === 'hr' || lowerRole === 'principal') {
+               if (payload.staffList) renderStaffList(payload.staffList);
+            }
+
             if (lowerRole === 'admin' || lowerRole === 'sub coordinator') {
               document.getElementById('adminSection').classList.remove('hidden');
               document.getElementById('navAdminBtn').classList.remove('hidden');
-              loadAdminDataRawSilent(); // Keep the raw data updated for our dropdown logic
-              loadStaffList();
-              loadQuickCover(); 
+
+              if (payload.adminData) {
+                  renderAdminDataRawSilent(payload.adminData);
+              }
+              if (payload.quickCover) {
+                  renderQuickCover(payload.quickCover);
+              }
             }
             if (lowerRole === 'admin') {
               document.getElementById('navSettingsBtn').classList.remove('hidden');
@@ -890,8 +903,9 @@
             }
             if (lowerRole === 'hr' || lowerRole === 'principal') {
               document.getElementById('navHRBtn').classList.remove('hidden');
-              if (staffList.length === 0) {
-                 loadStaffList();
+              if (payload.hrData) {
+                  hrDataRaw = payload.hrData.requests || [];
+                  hrPayPeriods = payload.hrData.payPeriods || [];
               }
             }
             if (lowerRole === 'hr') {
@@ -904,21 +918,26 @@
           .withFailureHandler(err => {
             console.error(err);
             document.getElementById('userName').innerText = "Authentication Error";
-          })
-          .getUserData();
 
-        loadMyAbsences();
-        loadMySubDuties();
-        loadTodaysOpenJobs();
+            // Also notify parts that failed to load
+            document.getElementById('myAbsences').innerHTML = `<div class="text-red-600 font-bold">Failed to load absences: ${err.message}</div>`;
+            document.getElementById('mySubDuties').innerHTML = `<div class="p-8 text-center text-red-600 font-bold">Failed to load sub-duties: ${err.message}</div>`;
+            document.getElementById('todaysOpenJobs').innerHTML = `<div class="text-red-600 font-bold">Failed to load open jobs: ${err.message}</div>`;
+          })
+          .getInitialPayload();
+      }
+
+      function renderStaffList(list) {
+            staffList = list;
+            // Rerender Quick Cover in case it loaded before the staff list
+            if (typeof currentUnfilledData !== 'undefined' && currentUnfilledData && currentUnfilledData.length > 0) {
+               renderQuickCover(currentUnfilledData);
+            }
       }
 
       function loadStaffList() {
         google.script.run
-          .withSuccessHandler(list => {
-            staffList = list;
-            // Rerender Quick Cover in case it loaded before the staff list
-            loadQuickCover();
-          })
+          .withSuccessHandler(renderStaffList)
           .getStaffList();
       }
 
@@ -997,9 +1016,7 @@
 
       let todaysOpenJobsData = [];
 
-      function loadTodaysOpenJobs() {
-        google.script.run
-          .withSuccessHandler(unfilled => {
+      function renderTodaysOpenJobs(unfilled) {
             const container = document.getElementById('todaysOpenJobs');
 
             if (unfilled.length === 0) {
@@ -1040,7 +1057,11 @@
 
             container.innerHTML = html;
             container.classList.remove('text-gray-400');
-          })
+          }
+
+      function loadTodaysOpenJobs() {
+        google.script.run
+          .withSuccessHandler(renderTodaysOpenJobs)
           .withFailureHandler(err => {
             document.getElementById('todaysOpenJobs').innerHTML = `<div class="text-red-600 font-bold">Failed to load open jobs: ${err.message}</div>`;
           })
@@ -1116,9 +1137,7 @@
           datalist.innerHTML = optionsHtml;
       }
 
-      function loadQuickCover() {
-        google.script.run
-          .withSuccessHandler(unfilled => {
+      function renderQuickCover(unfilled) {
             const container = document.getElementById('quickCoverContainer');
             
             if (unfilled.length === 0) {
@@ -1166,7 +1185,11 @@
             html += '</div>';
             
             container.innerHTML = html;
-          })
+          }
+
+      function loadQuickCover() {
+        google.script.run
+          .withSuccessHandler(renderQuickCover)
           .withFailureHandler(err => {
             document.getElementById('quickCoverContainer').innerHTML = `<div class="p-8 text-center text-red-600 font-bold">Failed to load data: ${err.message}</div>`;
           })
@@ -1347,22 +1370,17 @@
         tbody.innerHTML = html;
       }
 
+      function renderAdminDataRawSilent(data) {
+             adminDataRaw = data || [];
+      }
+
       function loadAdminDataRawSilent() {
         google.script.run
-          .withSuccessHandler(data => {
-             adminDataRaw = data || [];
-          })
+          .withSuccessHandler(renderAdminDataRawSilent)
           .getAdminDashboardData();
       }
 
-      function loadAdminDashboardData(renderAtAGlance = false) {
-        document.getElementById('adminDashboardTableBody').innerHTML = '<tr><td colspan="7" class="p-8 text-center text-gray-400 italic">Loading dashboard data...</td></tr>';
-        if (renderAtAGlance) {
-            document.getElementById('atAGlanceTableBody').innerHTML = '<tr><td class="p-8 text-center text-gray-400 italic">Loading Today at a Glance...</td></tr>';
-        }
-
-        google.script.run
-          .withSuccessHandler(data => {
+      function renderAdminDashboardData(data, renderAtAGlance = false) {
             adminDataRaw = data;
             const today = new Date();
             const offset = today.getTimezoneOffset() * 60000;
@@ -1378,7 +1396,16 @@
                 document.getElementById('filterStartDate').value = localISOTime;
                 applyAdminFilters();
             }
-          })
+          }
+
+      function loadAdminDashboardData(renderAtAGlance = false) {
+        document.getElementById('adminDashboardTableBody').innerHTML = '<tr><td colspan="7" class="p-8 text-center text-gray-400 italic">Loading dashboard data...</td></tr>';
+        if (renderAtAGlance) {
+            document.getElementById('atAGlanceTableBody').innerHTML = '<tr><td class="p-8 text-center text-gray-400 italic">Loading Today at a Glance...</td></tr>';
+        }
+
+        google.script.run
+          .withSuccessHandler(data => renderAdminDashboardData(data, renderAtAGlance))
           .withFailureHandler(err => {
             document.getElementById('adminDashboardTableBody').innerHTML = `<tr><td colspan="7" class="p-8 text-center text-red-600 font-bold">Failed to load: ${err.message}</td></tr>`;
             if (renderAtAGlance) {
@@ -1811,9 +1838,7 @@
           .assignSubToPeriod(absenceId, period, subName);
       }
 
-      function loadMySubDuties() {
-        google.script.run
-          .withSuccessHandler(duties => {
+      function renderMySubDuties(duties) {
             mySubDutiesData = duties;
             const container = document.getElementById('mySubDuties');
 
@@ -1852,7 +1877,11 @@
 
             container.innerHTML = html;
             container.classList.remove('text-gray-400');
-          })
+          }
+
+      function loadMySubDuties() {
+        google.script.run
+          .withSuccessHandler(renderMySubDuties)
           .withFailureHandler(err => {
             document.getElementById('mySubDuties').innerHTML = `<div class="p-8 text-center text-red-600 font-bold">Failed to load sub-duties: ${err.message}</div>`;
           })
@@ -1923,9 +1952,7 @@
           .cancelMySubDuty(id, period);
       }
 
-      function loadMyAbsences() {
-        google.script.run
-          .withSuccessHandler(absences => {
+      function renderMyAbsences(absences) {
             myAbsencesData = absences;
             const container = document.getElementById('myAbsences');
             if (absences.length === 0) {
@@ -1963,7 +1990,11 @@
             
             container.innerHTML = html;
             container.classList.remove('text-gray-400');
-          })
+          }
+
+      function loadMyAbsences() {
+        google.script.run
+          .withSuccessHandler(renderMyAbsences)
           .withFailureHandler(err => {
             document.getElementById('myAbsences').innerHTML = `<div class="text-red-600 font-bold">Failed to load absences: ${err.message}</div>`;
           })
@@ -2278,11 +2309,7 @@
         applyHRFilters();
       }
 
-      function loadHRDashboardData() {
-        document.getElementById('hrDashboardTableBody').innerHTML = '<tr><td colspan="2" class="p-8 text-center text-gray-400 italic">Loading HR dashboard data...</td></tr>';
-
-        google.script.run
-          .withSuccessHandler(data => {
+      function renderHRDashboardData(data) {
             hrDataRaw = data.requests || [];
             hrPayPeriods = data.payPeriods || [];
 
@@ -2351,7 +2378,13 @@
             }
 
             applyHRFilters();
-          })
+          }
+
+      function loadHRDashboardData() {
+        document.getElementById('hrDashboardTableBody').innerHTML = '<tr><td colspan="2" class="p-8 text-center text-gray-400 italic">Loading HR dashboard data...</td></tr>';
+
+        google.script.run
+          .withSuccessHandler(renderHRDashboardData)
           .withFailureHandler(err => {
             document.getElementById('hrDashboardTableBody').innerHTML = `<tr><td colspan="2" class="p-8 text-center text-red-600 font-bold">Failed to load: ${err.message}</td></tr>`;
           })

@@ -1756,3 +1756,427 @@ function getHRDashboardData() {
     throw new Error("Failed to load HR dashboard data.");
   }
 }
+/**
+ * Fetches all necessary data for the initial application load in a single call.
+ */
+function getInitialPayload() {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var email = Session.getActiveUser().getEmail();
+    var targetEmail = String(email).toLowerCase();
+
+    // 1. Fetch all required sheets
+    var rosterSheet = ss.getSheetByName("Staff Roster");
+    var rosterData = rosterSheet ? rosterSheet.getDataRange().getValues() : [];
+
+    var roleSheet = ss.getSheetByName("User Roles");
+    var roleData = roleSheet ? roleSheet.getDataRange().getValues() : [];
+
+    var settings = getSettings(ss); // Already passes ss to avoid fetching again
+
+    var mainSheet = ss.getSheetByName("Absence Requests");
+    var absenceData = mainSheet ? mainSheet.getDataRange().getValues() : [];
+
+    var masterScheduleSheet = ss.getSheetByName("Master Schedule");
+    var scheduleData = masterScheduleSheet ? masterScheduleSheet.getDataRange().getValues() : [];
+
+    // Look for Payperiods sheet case-insensitively
+    var allSheets = ss.getSheets();
+    var payPeriodsSheet = null;
+    for (var s = 0; s < allSheets.length; s++) {
+      if (allSheets[s].getName().toLowerCase() === "payperiods") {
+        payPeriodsSheet = allSheets[s];
+        break;
+      }
+    }
+    var payPeriodsData = payPeriodsSheet ? payPeriodsSheet.getDataRange().getValues() : [];
+
+
+    // --- Build lookups ---
+    var scheduleLookup = buildScheduleLookup(scheduleData);
+    var nameLookup = buildNameLookup(rosterData);
+
+
+    // --- 2. Extract User Data ---
+    var name = "Teacher";
+    for (var i = 1; i < rosterData.length; i++) {
+      if (String(rosterData[i][1]).toLowerCase() === targetEmail) {
+        name = rosterData[i][0];
+        break;
+      }
+    }
+    var userName = String(name).trim().toLowerCase();
+
+    var role = "User";
+    for (var j = 1; j < roleData.length; j++) {
+      if (String(roleData[j][0]).toLowerCase() === targetEmail) {
+        role = roleData[j][1];
+        break;
+      }
+    }
+    var lowerRole = String(role).toLowerCase();
+
+    var appUrl = settings["App URL"] || "https://script.google.com/a/macros/gocathedral.com/s/AKfycbwKZrBo4R-9O97aVNCjOHk9PddWCb6XNKviDS1lj4nNc49khl3T9OL8pGUDa7E1XE0/exec";
+    var urgencyCutoffTime = settings["Urgency Cutoff Time"] || "15";
+    var defaultAbsenceReasons = JSON.stringify([
+        {reason: "Personal", hrRequired: false},
+        {reason: "Professional Development", hrRequired: false},
+        {reason: "Retreat", hrRequired: false},
+        {reason: "Athletics", hrRequired: false},
+        {reason: "Jury Duty", hrRequired: true},
+        {reason: "Bereavement", hrRequired: true}
+    ]);
+    var absenceReasons = settings["Absence Reasons"] || defaultAbsenceReasons;
+
+    var userData = {
+      name: String(name),
+      role: String(role),
+      email: String(email),
+      appUrl: String(appUrl),
+      urgencyCutoffTime: String(urgencyCutoffTime),
+      absenceReasons: String(absenceReasons)
+    };
+
+
+    // --- 3. Extract common data (My Absences, My Sub Duties, Open Jobs) ---
+    var myAbsences = [];
+    var mySubDuties = [];
+    var todaysOpenJobs = [];
+
+    var today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    var targetEndWeek = new Date(today);
+    targetEndWeek.setDate(today.getDate() + 6); // Up to next week
+    targetEndWeek.setHours(23, 59, 59, 999);
+
+    var targetEndToday = new Date(today);
+    targetEndToday.setHours(23, 59, 59, 999);
+
+    for (var i = 1; i < absenceData.length; i++) {
+      var row = absenceData[i];
+      var status = String(row[17] || 'Active');
+      if (status === 'Canceled') continue;
+
+      var rowTeacherEmail = String(row[2]).toLowerCase();
+      var dateVal = row[3];
+      if (!dateVal) continue;
+
+      var rowDate = new Date(dateVal);
+      var isDateValid = !isNaN(rowDate.getTime());
+
+      var formattedDate = "Unknown Date";
+      var yyyymmdd = "";
+      if (isDateValid) {
+         formattedDate = Utilities.formatDate(rowDate, Session.getScriptTimeZone(), "MMM d, yyyy");
+         yyyymmdd = Utilities.formatDate(rowDate, Session.getScriptTimeZone(), "yyyy-MM-dd");
+      } else {
+         try {
+            formattedDate = new Date(dateVal).toLocaleDateString();
+            yyyymmdd = Utilities.formatDate(new Date(dateVal), Session.getScriptTimeZone(), "yyyy-MM-dd");
+         } catch(e) {
+            yyyymmdd = String(dateVal); // fallback
+         }
+      }
+
+      // My Absences
+      if (rowTeacherEmail === targetEmail) {
+        var urgencyStr = String(row[7] || '');
+        myAbsences.push({
+          id: String(row[0]),
+          date: String(formattedDate),
+          rawDateString: String(dateVal),
+          formDateString: String(yyyymmdd),
+          periods: String(row[4]),
+          reason: String(row[5]),
+          urgency: urgencyStr.includes('Urgent') ? 'Urgent' : 'Standard',
+          duration: String(row[6]),
+          instructions: String(row[8])
+        });
+      }
+
+      // My Sub Duties & Open Jobs
+      if (isDateValid && rowDate >= today && rowDate <= targetEndWeek) {
+        var teacherName = nameLookup[rowTeacherEmail] || rowTeacherEmail;
+        if (teacherName.includes(",")) {
+          var parts = teacherName.split(",");
+          teacherName = parts[1].trim() + " " + parts[0].trim();
+        }
+
+        var periodsRequested = String(row[4]).split(",").map(function(p) { return p.trim(); });
+        var rowId = String(row[0]);
+        var rawDate = Number(rowDate.getTime());
+        var reason = String(row[5]);
+        var duration = String(row[6]);
+        var instructions = String(row[8]);
+
+        for (var p = 1; p <= 8; p++) {
+          if (periodsRequested.indexOf(String(p)) !== -1) {
+            var subColumnIndex = 8 + p;
+            var assignedSub = String(row[subColumnIndex] || "").trim().toLowerCase();
+
+            var joinKey = rowTeacherEmail + "-" + p;
+            var scheduleInfo = scheduleLookup[joinKey];
+            var roomStr = scheduleInfo && scheduleInfo.room ? String(scheduleInfo.room) : "No Class Assigned";
+            var courseStr = scheduleInfo && scheduleInfo.course ? String(scheduleInfo.course) : "No Class Assigned";
+
+            var jobObj = {
+                id: rowId,
+                teacherName: String(teacherName),
+                teacherEmail: String(rowTeacherEmail),
+                date: formattedDate,
+                formDateString: yyyymmdd,
+                period: String(p),
+                rawDate: rawDate,
+                room: roomStr,
+                course: courseStr,
+                reason: reason,
+                duration: duration,
+                instructions: instructions
+            };
+
+            // My Sub Duties
+            if (assignedSub === userName) {
+              mySubDuties.push(jobObj);
+            }
+
+            // Open Jobs (Today only)
+            if (assignedSub === "" && rowDate <= targetEndToday) {
+              todaysOpenJobs.push(jobObj);
+            }
+          }
+        }
+      }
+    }
+
+    myAbsences.reverse();
+
+    var sortJobs = function(a, b) {
+      if (a.rawDate === b.rawDate) {
+        return parseInt(a.period) - parseInt(b.period);
+      }
+      return a.rawDate - b.rawDate;
+    };
+    mySubDuties.sort(sortJobs);
+    todaysOpenJobs.sort(sortJobs);
+
+
+    var payload = {
+      userData: userData,
+      myAbsences: myAbsences,
+      mySubDuties: mySubDuties,
+      todaysOpenJobs: todaysOpenJobs
+    };
+
+
+    // --- 4. Extract Admin / Sub Coordinator data if applicable ---
+    if (lowerRole === "admin" || lowerRole === "sub coordinator" || lowerRole === "hr" || lowerRole === "principal") {
+      // Staff List
+      var staffList = [];
+      for (var i = 1; i < rosterData.length; i++) {
+        var staffName = String(rosterData[i][0]).trim();
+        var duty = String(rosterData[i][2] || "").trim();
+        if (staffName) {
+          var display = staffName;
+          if (duty) display = staffName + " - " + duty;
+          staffList.push({ name: staffName, display: display, duty: duty });
+        }
+      }
+      staffList.sort(function(a, b) {
+        var nA = a.name.toLowerCase();
+        var nB = b.name.toLowerCase();
+        if (nA < nB) return -1;
+        if (nA > nB) return 1;
+        return 0;
+      });
+      payload.staffList = staffList;
+    }
+
+    if (lowerRole === "admin" || lowerRole === "sub coordinator") {
+      // Quick Cover Data
+      var quickCover = [];
+      var targetEndQC = new Date(today);
+      var dayOfWeek = today.getDay();
+      var daysToAdd = 1;
+      if (dayOfWeek === 5) daysToAdd = 3;
+      else if (dayOfWeek === 6) daysToAdd = 2;
+      targetEndQC.setDate(today.getDate() + daysToAdd);
+      targetEndQC.setHours(23, 59, 59, 999);
+
+      for (var i = 1; i < absenceData.length; i++) {
+        var row = absenceData[i];
+        var status = String(row[17] || 'Active');
+        if (status === 'Canceled') continue;
+
+        var dateVal = row[3];
+        if (!dateVal) continue;
+        var rowDate = new Date(dateVal);
+        if (isNaN(rowDate.getTime())) continue;
+
+        if (rowDate >= today && rowDate <= targetEndQC) {
+          var rowTeacherEmail = String(row[2]).toLowerCase();
+          var teacherName = nameLookup[rowTeacherEmail] || rowTeacherEmail;
+          if (teacherName.includes(",")) {
+            var parts = teacherName.split(",");
+            teacherName = parts[1].trim() + " " + parts[0].trim();
+          }
+
+          var periodsRequested = String(row[4]).split(",").map(function(p) { return p.trim(); });
+          var rowId = String(row[0]);
+          var formattedDate = String(Utilities.formatDate(rowDate, Session.getScriptTimeZone(), "MMM d, yyyy"));
+          var formDateString = String(Utilities.formatDate(rowDate, Session.getScriptTimeZone(), "yyyy-MM-dd"));
+          var rawDate = Number(rowDate.getTime());
+          var reason = String(row[5]);
+          var duration = String(row[6]);
+          var instructions = String(row[8]);
+
+          for (var p = 1; p <= 8; p++) {
+            if (periodsRequested.indexOf(String(p)) !== -1) {
+              var assignedSub = row[8 + p];
+              if (!assignedSub || String(assignedSub).trim() === "") {
+                var joinKey = rowTeacherEmail + "-" + p;
+                var scheduleInfo = scheduleLookup[joinKey];
+                quickCover.push({
+                  id: rowId,
+                  teacherName: String(teacherName),
+                  teacherEmail: String(rowTeacherEmail),
+                  date: formattedDate,
+                  formDateString: formDateString,
+                  period: String(p),
+                  rawDate: rawDate,
+                  room: scheduleInfo && scheduleInfo.room ? String(scheduleInfo.room) : "No Class Assigned",
+                  course: scheduleInfo && scheduleInfo.course ? String(scheduleInfo.course) : "No Class Assigned",
+                  reason: reason,
+                  duration: duration,
+                  instructions: instructions
+                });
+              }
+            }
+          }
+        }
+      }
+      quickCover.sort(sortJobs);
+      payload.quickCover = quickCover;
+
+      // Admin Dashboard Data
+      var adminData = [];
+      for (var i = 1; i < absenceData.length; i++) {
+        var row = absenceData[i];
+        if (String(row[17] || "").trim() === "Canceled") continue;
+
+        var rowTeacherEmail = String(row[2]).toLowerCase().trim();
+        var teacherName = nameLookup[rowTeacherEmail] || rowTeacherEmail;
+        var dateStr = row[3];
+        var dateObj = new Date(dateStr);
+        var dateFormatted = !isNaN(dateObj.getTime()) ? Utilities.formatDate(dateObj, Session.getScriptTimeZone(), "yyyy-MM-dd") : dateStr;
+        var periodsStr = String(row[4]);
+        var periods = periodsStr.split(',').map(function(p) { return p.trim(); });
+
+        for (var j = 0; j < periods.length; j++) {
+          var p = parseInt(periods[j]);
+          if (!isNaN(p)) {
+            var scheduleKey = rowTeacherEmail + "-" + p;
+            adminData.push({
+              id: String(row[0] || ""),
+              originalDate: String(dateStr || ""),
+              date: String(dateFormatted || ""),
+              formDateString: String(dateFormatted || ""),
+              period: p,
+              periodsString: String(periodsStr || ""),
+              urgency: String(row[7] || ""),
+              teacherName: String(teacherName || ""),
+              teacherEmail: String(rowTeacherEmail || ""),
+              course: scheduleLookup[scheduleKey] ? String(scheduleLookup[scheduleKey].course) : "",
+              room: scheduleLookup[scheduleKey] ? String(scheduleLookup[scheduleKey].room) : "",
+              assignedSub: String(row[8 + p] || "").trim(),
+              reason: String(row[5] || "").trim(),
+              duration: String(row[6] || "").trim(),
+              instructions: String(row[8] || "").trim()
+            });
+          }
+        }
+      }
+      adminData.sort(function(a, b) {
+        if (a.date < b.date) return -1;
+        if (a.date > b.date) return 1;
+        return a.period - b.period;
+      });
+      payload.adminData = adminData;
+    }
+
+
+    // --- 5. Extract HR data if applicable ---
+    if (lowerRole === "hr" || lowerRole === "principal") {
+      var hrData = [];
+      var payPeriods = [];
+
+      for (var p = 0; p < payPeriodsData.length; p++) {
+        var periodNum = String(payPeriodsData[p][0]).trim();
+        var startDateRaw = payPeriodsData[p][1];
+        var endDateRaw = payPeriodsData[p][2];
+
+        var isHeader = false;
+        if (typeof startDateRaw === 'string' && startDateRaw.toLowerCase().includes('start')) isHeader = true;
+        if (typeof endDateRaw === 'string' && endDateRaw.toLowerCase().includes('end')) isHeader = true;
+        if (isHeader) continue;
+
+        if (periodNum && startDateRaw && endDateRaw) {
+          var startFormatted = startDateRaw instanceof Date ? Utilities.formatDate(startDateRaw, Session.getScriptTimeZone(), "yyyy-MM-dd") :
+            (function(){ try { return Utilities.formatDate(new Date(startDateRaw), Session.getScriptTimeZone(), "yyyy-MM-dd"); } catch(e) { return String(startDateRaw); } })();
+          var endFormatted = endDateRaw instanceof Date ? Utilities.formatDate(endDateRaw, Session.getScriptTimeZone(), "yyyy-MM-dd") :
+            (function(){ try { return Utilities.formatDate(new Date(endDateRaw), Session.getScriptTimeZone(), "yyyy-MM-dd"); } catch(e) { return String(endDateRaw); } })();
+
+          payPeriods.push({
+            periodNumber: periodNum,
+            startDate: startFormatted,
+            endDate: endFormatted
+          });
+        }
+      }
+
+      for (var i = 1; i < absenceData.length; i++) {
+        var row = absenceData[i];
+        if (String(row[17] || "").trim() === "Canceled") continue;
+
+        var rowTeacherEmail = String(row[2]).toLowerCase().trim();
+        var teacherName = nameLookup[rowTeacherEmail] || rowTeacherEmail;
+        var dateStr = row[3];
+        var dateObj = new Date(dateStr);
+        var dateFormatted = !isNaN(dateObj.getTime()) ? Utilities.formatDate(dateObj, Session.getScriptTimeZone(), "yyyy-MM-dd") : dateStr;
+
+        var periodsStr = String(row[4]);
+        var periods = periodsStr.split(',').map(function(p) { return p.trim(); });
+        var assignedSubs = [];
+
+        for (var j = 0; j < periods.length; j++) {
+          var p = parseInt(periods[j]);
+          if (!isNaN(p)) {
+            var assignedSub = row[8 + p];
+            if (assignedSub && String(assignedSub).trim() !== "") {
+              assignedSubs.push({ name: String(assignedSub).trim(), period: String(p) });
+            }
+          }
+        }
+
+        hrData.push({
+          id: String(row[0] || ""),
+          date: String(dateFormatted || ""),
+          teacherName: String(teacherName || ""),
+          reason: String(row[5]).trim(),
+          duration: String(row[6]).trim(),
+          assignedSubs: assignedSubs
+        });
+      }
+
+      payload.hrData = {
+        requests: hrData,
+        payPeriods: payPeriods
+      };
+    }
+
+    return payload;
+
+  } catch (err) {
+    throw new Error("Failed to get initial payload: " + err.message);
+  }
+}
