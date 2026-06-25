@@ -791,15 +791,33 @@ function getStaffList() {
     if (!sheet) return [];
 
     var data = sheet.getDataRange().getValues();
-    var staffNames = [];
+    var staffList = [];
 
     for (var i = 1; i < data.length; i++) {
       var name = String(data[i][0]).trim();
+      var duty = String(data[i][2] || "").trim(); // 3rd column
+
       if (name) {
-        staffNames.push(name);
+        var display = name;
+        if (duty) {
+          display = name + " - " + duty;
+        }
+
+        staffList.push({
+          name: name,
+          display: display
+        });
       }
     }
-    return staffNames.sort();
+
+    // Sort alphabetically by name
+    return staffList.sort(function(a, b) {
+      var nameA = a.name.toLowerCase();
+      var nameB = b.name.toLowerCase();
+      if (nameA < nameB) return -1;
+      if (nameA > nameB) return 1;
+      return 0;
+    });
   } catch (err) {
     return [];
   }

@@ -1098,9 +1098,9 @@
 
           // Build HTML for subs who are NOT busy
           let optionsHtml = '';
-          staffList.forEach(name => {
-              if (!busySubs.has(name.trim().toLowerCase())) {
-                  optionsHtml += `<option value="${escapeHtml(name)}"></option>`;
+          staffList.forEach(staff => {
+              if (!busySubs.has(staff.name.trim().toLowerCase())) {
+                  optionsHtml += `<option value="${escapeHtml(staff.display)}"></option>`;
               }
           });
 
@@ -1643,9 +1643,14 @@
 
       function handleAdminAssign(absenceId, period, selectElementId) {
         const selectEl = document.getElementById(selectElementId);
-        const subName = selectEl.value; // It can be empty to unassign!
+        let subName = selectEl.value; // It can be empty to unassign!
 
-        if (subName && !staffList.includes(subName)) {
+        // Strip out duty suffix if present: "Name - Duty" -> "Name"
+        if (subName) {
+           subName = subName.replace(/\s+-\s+.*$/, '');
+        }
+
+        if (subName && !staffList.some(s => s.name === subName)) {
           alert("Please enter a valid staff name from the list, or leave it blank to clear.");
           return;
         }
@@ -1755,14 +1760,17 @@
 
       function handleAssign(absenceId, period, selectElementId, isFromModal = false) {
         const selectEl = document.getElementById(selectElementId);
-        const subName = selectEl.value;
+        let subName = selectEl.value;
 
         if (!subName) {
           alert("Please enter a substitute to assign.");
           return;
         }
 
-        if (!staffList.includes(subName)) {
+        // Strip out duty suffix if present: "Name - Duty" -> "Name"
+        subName = subName.replace(/\s+-\s+.*$/, '');
+
+        if (!staffList.some(s => s.name === subName)) {
           alert("Please enter a valid staff name from the list.");
           return;
         }
