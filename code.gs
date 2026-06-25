@@ -3,7 +3,7 @@
  * Run this function once from the Apps Script editor.
  */
 function setupDatabase() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getSS();
   var sheet = ss.getSheetByName("Absence Requests");
   if (!sheet) {
     sheet = ss.insertSheet("Absence Requests");
@@ -69,7 +69,7 @@ function getSettings(ss) {
   };
 
   try {
-    var sheetSS = ss || SpreadsheetApp.getActiveSpreadsheet();
+    var sheetSS = ss || getSS();
     var settingsSheet = sheetSS.getSheetByName("Settings");
 
     var settings = {};
@@ -129,6 +129,13 @@ function doGet(e) {
  * @param {string} [customErrorMessage="Unauthorized"] - Optional custom error message.
  * @throws {Error} If the user's role is not in the allowed list.
  */
+/**
+ * Returns the active spreadsheet.
+ */
+function getSS() {
+  return SpreadsheetApp.getActiveSpreadsheet();
+}
+
 function assertRole(user, allowedRoles, customErrorMessage) {
   if (!user || !user.role) {
     throw new Error(customErrorMessage || "Unauthorized");
@@ -146,7 +153,7 @@ function assertRole(user, allowedRoles, customErrorMessage) {
  */
 function getUserData(ss) {
   var email = Session.getActiveUser().getEmail();
-  var ss = ss || SpreadsheetApp.getActiveSpreadsheet();
+  var ss = ss || getSS();
   
   var rosterSheet = ss.getSheetByName("Staff Roster");
   var rosterData = rosterSheet ? rosterSheet.getDataRange().getValues() : [];
@@ -272,7 +279,7 @@ function buildScheduleLookup(scheduleData) {
  */
 function getUserRoles() {
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getSS();
     var user = getUserData(ss);
     assertRole(user, "admin");
 
@@ -300,7 +307,7 @@ function getUserRoles() {
  */
 function addUserRole(email, role) {
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getSS();
     var user = getUserData(ss);
     assertRole(user, "admin");
 
@@ -319,7 +326,7 @@ function addUserRole(email, role) {
  */
 function editUserRole(oldEmail, newEmail, role) {
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getSS();
     var user = getUserData(ss);
     assertRole(user, "admin");
 
@@ -346,7 +353,7 @@ function editUserRole(oldEmail, newEmail, role) {
  */
 function deleteUserRole(email) {
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getSS();
     var user = getUserData(ss);
     assertRole(user, "admin");
 
@@ -373,7 +380,7 @@ function deleteUserRole(email) {
  */
 function getSettingsForFrontend() {
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getSS();
     var user = getUserData(ss);
     assertRole(user, "admin");
     return getSettings();
@@ -387,7 +394,7 @@ function getSettingsForFrontend() {
  */
 function updateSettings(newSettings) {
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getSS();
     var user = getUserData(ss);
     assertRole(user, "admin");
 
@@ -421,7 +428,7 @@ function updateSettings(newSettings) {
 function getMyAbsences() {
   try {
     var email = Session.getActiveUser().getEmail();
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getSS();
     var sheet = ss.getSheetByName("Absence Requests");
     
     if (!sheet) return []; 
@@ -485,7 +492,7 @@ function getMyAbsences() {
 function getMySubDuties() {
   try {
     var userEmail = Session.getActiveUser().getEmail().toLowerCase();
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getSS();
     var userData = getUserData(ss);
     var userName = String(userData.name).trim().toLowerCase();
 
@@ -590,7 +597,7 @@ function getMySubDuties() {
  */
 function getTodaysOpenJobsData() {
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getSS();
     var mainSheet = ss.getSheetByName("Absence Requests");
     var rosterSheet = ss.getSheetByName("Staff Roster");
     var masterScheduleSheet = ss.getSheetByName("Master Schedule");
@@ -690,7 +697,7 @@ function getTodaysOpenJobsData() {
  */
 function getQuickCoverData() {
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getSS();
     var mainSheet = ss.getSheetByName("Absence Requests");
     var rosterSheet = ss.getSheetByName("Staff Roster");
     var masterScheduleSheet = ss.getSheetByName("Master Schedule");
@@ -805,7 +812,7 @@ function getQuickCoverData() {
  */
 function getStaffList() {
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getSS();
     var sheet = ss.getSheetByName("Staff Roster");
     if (!sheet) return [];
 
@@ -844,7 +851,7 @@ function getStaffList() {
 }
 
 function getCoordinatorEmail(ss) {
-  var ss = ss || SpreadsheetApp.getActiveSpreadsheet();
+  var ss = ss || getSS();
   var roleSheet = ss.getSheetByName("User Roles");
   if (!roleSheet) return null;
   
@@ -857,7 +864,7 @@ function getCoordinatorEmail(ss) {
 
 function submitAbsence(formData) {
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getSS();
     var mainSheet = ss.getSheetByName("Absence Requests"); 
     
     var urgencyFormatted = formData.urgency === 'Urgent' ? 'Urgent (Less than 24 hr notice)' : 'Standard (Advanced Notice)';
@@ -968,7 +975,7 @@ function submitAbsence(formData) {
  */
 function cancelMySubDuty(absenceId, period) {
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getSS();
     var sheet = ss.getSheetByName("Absence Requests");
     if (!sheet) throw new Error("Absence Requests sheet not found.");
 
@@ -1076,7 +1083,7 @@ function getAbsenceDetailsLocal(row, period, scheduleLookup, nameLookup) {
 
 function cancelAbsence(absenceId) {
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getSS();
     var sheet = ss.getSheetByName("Absence Requests");
     if (!sheet) throw new Error("Absence Requests sheet not found.");
 
@@ -1158,7 +1165,7 @@ function cancelAbsence(absenceId) {
  */
 function updateAbsence(absenceId, formData) {
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getSS();
     var sheet = ss.getSheetByName("Absence Requests");
     if (!sheet) throw new Error("Absence Requests sheet not found.");
 
@@ -1302,7 +1309,7 @@ function updateAbsence(absenceId, formData) {
  * Helper to get a sub's email from the Staff Roster.
  */
 function getSubEmail(subName) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getSS();
   var sheet = ss.getSheetByName("Staff Roster");
   if (!sheet) return null;
   var data = sheet.getDataRange().getValues();
@@ -1318,7 +1325,7 @@ function getSubEmail(subName) {
  * Helper to get teacher name from email.
  */
 function getTeacherNameFromEmail(email) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getSS();
   var sheet = ss.getSheetByName("Staff Roster");
   if (!sheet) return email;
   var data = sheet.getDataRange().getValues();
@@ -1335,7 +1342,7 @@ function getTeacherNameFromEmail(email) {
  * Helper to get full absence details.
  */
 function getAbsenceDetails(absenceId, period) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getSS();
   var sheet = ss.getSheetByName("Absence Requests");
   var masterScheduleSheet = ss.getSheetByName("Master Schedule");
 
@@ -1456,7 +1463,7 @@ function sendSubNotification(subEmail, type, details) {
  */
 function assignSubToPeriod(absenceId, period, subName) {
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getSS();
     var sheet = ss.getSheetByName("Absence Requests");
     if (!sheet) throw new Error("Absence Requests sheet not found.");
 
@@ -1530,7 +1537,7 @@ function assignSubToPeriod(absenceId, period, subName) {
  */
 function getAdminDashboardData() {
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getSS();
     var user = getUserData(ss);
     assertRole(user, ["admin", "sub coordinator"], "Unauthorized access. Admin or Sub Coordinator role required.");
 
@@ -1636,7 +1643,7 @@ function getAdminDashboardData() {
  */
 function getHRDashboardData() {
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getSS();
     var user = getUserData(ss);
     assertRole(user, ["hr", "principal"], "Unauthorized access. HR or Principal role required.");
 
@@ -1773,7 +1780,7 @@ function getHRDashboardData() {
  */
 function getInitialPayload() {
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getSS();
     var email = Session.getActiveUser().getEmail();
     var targetEmail = String(email).toLowerCase();
 
