@@ -298,10 +298,19 @@
 
     <!-- Settings Form & Logic -->
     <script>
+      let currentAbsenceReasons = [];
+
       function loadSettingsData() {
         google.script.run
           .withSuccessHandler(settings => {
             const container = document.getElementById('generalSettingsContainer');
+
+            try {
+               currentAbsenceReasons = JSON.parse(settings["Absence Reasons"] || "[]");
+            } catch(e) {
+               currentAbsenceReasons = [];
+            }
+
             let html = `
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -317,22 +326,89 @@
                   <input type="email" id="settingsRedirectEmail" value="${escapeHtml(settings["Redirect Email"] || "")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none">
                 </div>
               </div>
-              <div class="mt-4">
-                <label class="block text-sm font-bold mb-1">App URL</label>
-                <input type="text" id="settingsAppUrl" value="${escapeHtml(settings["App URL"] || "")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none">
+              <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-sm font-bold mb-1">App URL</label>
+                  <input type="text" id="settingsAppUrl" value="${escapeHtml(settings["App URL"] || "")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none">
+                </div>
+                <div>
+                  <label class="block text-sm font-bold mb-1">Urgency Cutoff Time (24h format)</label>
+                  <input type="number" id="settingsUrgencyCutoff" min="0" max="23" value="${escapeHtml(settings["Urgency Cutoff Time"] || "15")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none" title="Hour of the day after which next-day absences become urgent. (e.g. 15 = 3 PM)">
+                </div>
               </div>
-              <div class="mt-4 flex justify-end">
+
+              <div class="mt-6 border-t pt-4">
+                 <div class="flex justify-between items-center mb-2">
+                    <label class="block text-sm font-bold">Absence Reasons</label>
+                    <button onclick="addAbsenceReasonRow()" class="bg-gray-200 hover:bg-gray-300 text-gray-800 text-xs font-bold py-1 px-3 rounded transition-colors">Add Reason</button>
+                 </div>
+                 <div id="absenceReasonsContainer" class="space-y-2 max-h-60 overflow-y-auto pr-2">
+                 </div>
+              </div>
+
+              <div class="mt-6 flex justify-end">
                 <button id="saveSettingsBtn" onclick="saveSettings()" class="bg-[#002147] hover:bg-blue-900 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-md">
                   Save General Settings
                 </button>
               </div>
             `;
             container.innerHTML = html;
+            renderAbsenceReasons();
           })
           .withFailureHandler(err => {
             document.getElementById('generalSettingsContainer').innerHTML = `<p class="text-red-600 font-bold">Failed to load settings: ${err.message}</p>`;
           })
           .getSettingsForFrontend();
+      }
+
+      function renderAbsenceReasons() {
+          const container = document.getElementById('absenceReasonsContainer');
+          if (!container) return;
+
+          let html = '';
+          if (currentAbsenceReasons.length === 0) {
+              html = '<p class="text-gray-400 italic text-sm">No reasons configured.</p>';
+          } else {
+              currentAbsenceReasons.forEach((r, idx) => {
+                  html += `
+                    <div class="flex items-center gap-2 bg-gray-50 p-2 border rounded">
+                        <input type="text" id="reason-text-${idx}" value="${escapeHtml(r.reason)}" placeholder="Reason name" class="flex-1 p-1 border rounded text-sm outline-none focus:ring-1 focus:ring-[#00843D]">
+                        <label class="flex items-center gap-1 text-sm cursor-pointer ml-2">
+                            <input type="checkbox" id="reason-hr-${idx}" ${r.hrRequired ? 'checked' : ''} class="h-4 w-4">
+                            HR Req.
+                        </label>
+                        <button onclick="removeAbsenceReasonRow(${idx})" class="text-red-500 hover:text-red-700 font-bold px-2 ml-2" title="Remove">&times;</button>
+                    </div>
+                  `;
+              });
+          }
+          container.innerHTML = html;
+      }
+
+      function addAbsenceReasonRow() {
+          saveCurrentAbsenceReasonsState();
+          currentAbsenceReasons.push({reason: "New Reason", hrRequired: false});
+          renderAbsenceReasons();
+      }
+
+      function removeAbsenceReasonRow(idx) {
+          saveCurrentAbsenceReasonsState();
+          currentAbsenceReasons.splice(idx, 1);
+          renderAbsenceReasons();
+      }
+
+      function saveCurrentAbsenceReasonsState() {
+          const container = document.getElementById('absenceReasonsContainer');
+          if (!container) return;
+
+          for (let i = 0; i < currentAbsenceReasons.length; i++) {
+              const textEl = document.getElementById(`reason-text-${i}`);
+              const hrEl = document.getElementById(`reason-hr-${i}`);
+              if (textEl && hrEl) {
+                  currentAbsenceReasons[i].reason = textEl.value;
+                  currentAbsenceReasons[i].hrRequired = hrEl.checked;
+              }
+          }
       }
 
       function saveSettings() {
@@ -341,10 +417,14 @@
         btn.disabled = true;
         btn.innerText = "Saving...";
 
+        saveCurrentAbsenceReasonsState();
+
         const newSettings = {
           "Email Mode": document.getElementById('settingsEmailMode').value,
           "Redirect Email": document.getElementById('settingsRedirectEmail').value,
-          "App URL": document.getElementById('settingsAppUrl').value
+          "App URL": document.getElementById('settingsAppUrl').value,
+          "Urgency Cutoff Time": document.getElementById('settingsUrgencyCutoff').value,
+          "Absence Reasons": JSON.stringify(currentAbsenceReasons)
         };
 
         google.script.run
@@ -624,12 +704,7 @@
             <div>
               <label class="block text-sm font-bold mb-1">Reason for Absence</label>
               <select id="absReason" onchange="checkSpecialReason()" class="w-full p-3 border rounded-xl outline-none bg-white">
-                <option value="Personal">Personal</option>
-                <option value="Professional Development">PD</option>
-                <option value="Retreat">Retreat</option>
-                <option value="Athletics">Athletics</option>
-                <option value="Jury Duty">Jury Duty</option>
-                <option value="Bereavement">Bereavement</option>
+                <!-- Dynamically populated -->
               </select>
             </div>
 
@@ -762,6 +837,23 @@
                 if (footerLink) footerLink.href = data.appUrl;
             }
 
+            try {
+               let reasons = JSON.parse(data.absenceReasons || "[]");
+               let html = "";
+               reasons.forEach(r => {
+                 // Store hrRequired property dynamically to be accessed later
+                 html += `<option value="${escapeHtml(r.reason)}" data-hr-required="${r.hrRequired}">${escapeHtml(r.reason)}</option>`;
+               });
+               if (html === "") {
+                 html = `<option value="Personal" data-hr-required="false">Personal</option>`; // Fallback
+               }
+               document.getElementById('absReason').innerHTML = html;
+               checkSpecialReason(); // Call initially to set HR checkbox state
+            } catch(e) {
+               console.error("Failed to parse absence reasons", e);
+               document.getElementById('absReason').innerHTML = `<option value="Personal" data-hr-required="false">Personal</option>`;
+            }
+
             // Checks for 'Admin' OR 'Sub coordinator' regardless of uppercase/lowercase in your sheet!
             let lowerRole = data.role.toLowerCase();
             if (lowerRole === 'admin' || lowerRole === 'sub coordinator') {
@@ -846,9 +938,15 @@
       }
 
       function checkSpecialReason() {
-        const reason = document.getElementById('absReason').value;
+        const select = document.getElementById('absReason');
         const hrSection = document.getElementById('hrSection');
-        if (reason === 'Jury Duty' || reason === 'Bereavement') {
+
+        let hrRequired = false;
+        if (select.options.length > 0 && select.selectedIndex > -1) {
+            hrRequired = select.options[select.selectedIndex].getAttribute('data-hr-required') === 'true';
+        }
+
+        if (hrRequired) {
           hrSection.classList.remove('hidden');
         } else {
           hrSection.classList.add('hidden');
@@ -1815,11 +1913,17 @@
           return;
         }
 
-        const reason = document.getElementById('absReason').value;
+        const reasonSelect = document.getElementById('absReason');
+        const reason = reasonSelect.value;
         const hrChecked = document.getElementById('hrConfirm').checked;
         const agreed = document.getElementById('agreement').checked;
 
-        if ((reason === 'Jury Duty' || reason === 'Bereavement') && !hrChecked) {
+        let hrRequired = false;
+        if (reasonSelect.options.length > 0 && reasonSelect.selectedIndex > -1) {
+            hrRequired = reasonSelect.options[reasonSelect.selectedIndex].getAttribute('data-hr-required') === 'true';
+        }
+
+        if (hrRequired && !hrChecked) {
           alert("Please confirm HR documentation has been provided.");
           return;
         }

@@ -31,7 +31,16 @@ function setupDatabase() {
     var defaultSettings = [
       ["Email Mode", "Live"],
       ["Redirect Email", "Bgross@gocathedral.com"],
-      ["App URL", "https://script.google.com/a/macros/gocathedral.com/s/AKfycbwKZrBo4R-9O97aVNCjOHk9PddWCb6XNKviDS1lj4nNc49khl3T9OL8pGUDa7E1XE0/exec"]
+      ["App URL", "https://script.google.com/a/macros/gocathedral.com/s/AKfycbwKZrBo4R-9O97aVNCjOHk9PddWCb6XNKviDS1lj4nNc49khl3T9OL8pGUDa7E1XE0/exec"],
+      ["Urgency Cutoff Time", "15"],
+      ["Absence Reasons", JSON.stringify([
+        {reason: "Personal", hrRequired: false},
+        {reason: "Professional Development", hrRequired: false},
+        {reason: "Retreat", hrRequired: false},
+        {reason: "Athletics", hrRequired: false},
+        {reason: "Jury Duty", hrRequired: true},
+        {reason: "Bereavement", hrRequired: true}
+      ])]
     ];
     settingsSheet.getRange(1, 1, 1, 2).setValues([settingsHeaders]);
     settingsSheet.getRange(1, 1, 1, 2).setFontWeight("bold");
@@ -47,7 +56,16 @@ function getSettings(ss) {
   var defaults = {
     "Email Mode": "Live",
     "Redirect Email": "Bgross@gocathedral.com",
-    "App URL": "https://script.google.com/a/macros/gocathedral.com/s/AKfycbwKZrBo4R-9O97aVNCjOHk9PddWCb6XNKviDS1lj4nNc49khl3T9OL8pGUDa7E1XE0/exec"
+    "App URL": "https://script.google.com/a/macros/gocathedral.com/s/AKfycbwKZrBo4R-9O97aVNCjOHk9PddWCb6XNKviDS1lj4nNc49khl3T9OL8pGUDa7E1XE0/exec",
+    "Urgency Cutoff Time": "15",
+    "Absence Reasons": JSON.stringify([
+      {reason: "Personal", hrRequired: false},
+      {reason: "Professional Development", hrRequired: false},
+      {reason: "Retreat", hrRequired: false},
+      {reason: "Athletics", hrRequired: false},
+      {reason: "Jury Duty", hrRequired: true},
+      {reason: "Bereavement", hrRequired: true}
+    ])
   };
 
   try {
@@ -136,8 +154,25 @@ function getUserData(ss) {
   
   var settings = getSettings(ss);
   var appUrl = settings["App URL"] || "https://script.google.com/a/macros/gocathedral.com/s/AKfycbwKZrBo4R-9O97aVNCjOHk9PddWCb6XNKviDS1lj4nNc49khl3T9OL8pGUDa7E1XE0/exec";
+  var urgencyCutoffTime = settings["Urgency Cutoff Time"] || "15";
+  var defaultAbsenceReasons = JSON.stringify([
+      {reason: "Personal", hrRequired: false},
+      {reason: "Professional Development", hrRequired: false},
+      {reason: "Retreat", hrRequired: false},
+      {reason: "Athletics", hrRequired: false},
+      {reason: "Jury Duty", hrRequired: true},
+      {reason: "Bereavement", hrRequired: true}
+  ]);
+  var absenceReasons = settings["Absence Reasons"] || defaultAbsenceReasons;
 
-  return { name: String(name), role: String(role), email: String(email), appUrl: String(appUrl) };
+  return {
+    name: String(name),
+    role: String(role),
+    email: String(email),
+    appUrl: String(appUrl),
+    urgencyCutoffTime: String(urgencyCutoffTime),
+    absenceReasons: String(absenceReasons)
+  };
 }
 
 /**
@@ -828,22 +863,25 @@ function submitAbsence(formData) {
       var currentLocalDate = new Date(parseInt(nowParts[0], 10), parseInt(nowParts[1], 10) - 1, parseInt(nowParts[2], 10), 12, 0, 0);
       var currentHour = parseInt(nowTzHourStr, 10);
 
+      var settings = getSettings(ss);
+      var cutoffHour = parseInt(settings["Urgency Cutoff Time"] || "15", 10);
+
       var diffTime = absenceDate.getTime() - currentLocalDate.getTime();
       var diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
 
       if (diffDays <= 0) {
         isUrgentByTime = true; // Same day or past
       } else if (diffDays === 1) {
-        if (currentHour >= 15 || nowTzDayStr === "Sun") {
-          isUrgentByTime = true; // Next day after 3pm, or Sun for Mon
+        if (currentHour >= cutoffHour || nowTzDayStr === "Sun") {
+          isUrgentByTime = true; // Next day after cutoff hour, or Sun for Mon
         }
       } else if (diffDays === 2) {
         if (nowTzDayStr === "Sat") {
           isUrgentByTime = true; // Sat for Mon
         }
       } else if (diffDays === 3) {
-        if (nowTzDayStr === "Fri" && currentHour >= 15) {
-          isUrgentByTime = true; // Fri after 3pm for Mon
+        if (nowTzDayStr === "Fri" && currentHour >= cutoffHour) {
+          isUrgentByTime = true; // Fri after cutoff hour for Mon
         }
       }
     } catch (e) {
