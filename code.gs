@@ -491,6 +491,7 @@ function getMyAbsences() {
             try {
                 yyyymmdd = Utilities.formatDate(new Date(dateVal), Session.getScriptTimeZone(), "yyyy-MM-dd");
             } catch(e) {
+                console.error("Error formatting date: " + e.message);
                 yyyymmdd = String(dateVal); // fallback
             }
         }
@@ -1096,6 +1097,7 @@ function getAbsenceDetailsLocal(row, period, scheduleLookup, nameLookup) {
     try {
       formattedDate = Utilities.formatDate(new Date(dateVal), Session.getScriptTimeZone(), "MMM d, yyyy");
     } catch(e) {
+      console.error("Error formatting date: " + e.message);
       // ignore
     }
   }
@@ -1175,7 +1177,7 @@ function cancelAbsence(absenceId) {
            } else {
                try {
                    formattedDateForEmail = Utilities.formatDate(new Date(rawDate), Session.getScriptTimeZone(), "MMM d, yyyy");
-               } catch(e) {}
+               } catch(e) { console.error("Error formatting date: " + e.message); }
            }
 
            var teacherSubject = "Absence Request Canceled by Administrator";
@@ -1236,6 +1238,7 @@ function updateAbsence(absenceId, formData) {
           try {
              oldDateFormatted = Utilities.formatDate(new Date(oldDateRaw), Session.getScriptTimeZone(), "yyyy-MM-dd");
           } catch(e) {
+             console.error("Error formatting date: " + e.message);
              oldDateFormatted = String(oldDateRaw);
           }
         }
@@ -1314,7 +1317,7 @@ function updateAbsence(absenceId, formData) {
            } else {
                try {
                    formattedDateForEmail = Utilities.formatDate(new Date(rawDate), Session.getScriptTimeZone(), "MMM d, yyyy");
-               } catch(e) {}
+               } catch(e) { console.error("Error formatting date: " + e.message); }
            }
 
            var teacherSubject = "Absence Request Updated by Administrator";
@@ -1730,6 +1733,7 @@ function getHRDashboardData() {
           try {
              startFormatted = Utilities.formatDate(new Date(startDateRaw), Session.getScriptTimeZone(), "yyyy-MM-dd");
           } catch(e) {
+             console.error("Error formatting date: " + e.message);
              startFormatted = String(startDateRaw);
           }
         }
@@ -1741,6 +1745,7 @@ function getHRDashboardData() {
           try {
              endFormatted = Utilities.formatDate(new Date(endDateRaw), Session.getScriptTimeZone(), "yyyy-MM-dd");
           } catch(e) {
+             console.error("Error formatting date: " + e.message);
              endFormatted = String(endDateRaw);
           }
         }
@@ -1933,6 +1938,7 @@ function getInitialPayload() {
             formattedDate = new Date(dateVal).toLocaleDateString();
             yyyymmdd = Utilities.formatDate(new Date(dateVal), Session.getScriptTimeZone(), "yyyy-MM-dd");
          } catch(e) {
+            console.error("Error formatting date: " + e.message);
             yyyymmdd = String(dateVal); // fallback
          }
       }
@@ -2180,9 +2186,9 @@ function getInitialPayload() {
 
         if (periodNum && startDateRaw && endDateRaw) {
           var startFormatted = startDateRaw instanceof Date ? Utilities.formatDate(startDateRaw, Session.getScriptTimeZone(), "yyyy-MM-dd") :
-            (function(){ try { return Utilities.formatDate(new Date(startDateRaw), Session.getScriptTimeZone(), "yyyy-MM-dd"); } catch(e) { return String(startDateRaw); } })();
+            (function(){ try { return Utilities.formatDate(new Date(startDateRaw), Session.getScriptTimeZone(), "yyyy-MM-dd"); } catch(e) { console.error("Error formatting date: " + e.message); return String(startDateRaw); } })();
           var endFormatted = endDateRaw instanceof Date ? Utilities.formatDate(endDateRaw, Session.getScriptTimeZone(), "yyyy-MM-dd") :
-            (function(){ try { return Utilities.formatDate(new Date(endDateRaw), Session.getScriptTimeZone(), "yyyy-MM-dd"); } catch(e) { return String(endDateRaw); } })();
+            (function(){ try { return Utilities.formatDate(new Date(endDateRaw), Session.getScriptTimeZone(), "yyyy-MM-dd"); } catch(e) { console.error("Error formatting date: " + e.message); return String(endDateRaw); } })();
 
           payPeriods.push({
             periodNumber: periodNum,
