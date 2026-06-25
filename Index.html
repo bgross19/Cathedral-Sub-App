@@ -890,6 +890,15 @@
             }
             if (lowerRole === 'hr' || lowerRole === 'principal') {
               document.getElementById('navHRBtn').classList.remove('hidden');
+              if (staffList.length === 0) {
+                 loadStaffList();
+              }
+            }
+            if (lowerRole === 'hr') {
+              toggleHRDashboard();
+              // Hide the return to homepage button inside the HR dashboard
+              const returnBtn = document.querySelector('#hrDashboardView button[onclick="toggleHRDashboard()"]');
+              if (returnBtn) returnBtn.classList.add('hidden');
             }
           })
           .withFailureHandler(err => {
@@ -2445,10 +2454,30 @@
                 aggregated[teacher].total += hours;
             });
         } else {
+            // Precompute duty lookup map
+            let dutyLookup = {};
+            if (staffList && staffList.length > 0) {
+                staffList.forEach(s => {
+                    dutyLookup[s.name.trim()] = s.duty ? String(s.duty).trim() : null;
+                });
+            }
+
             filteredData.forEach(req => {
-                req.assignedSubs.forEach(sub => {
-                    if (!aggregated[sub]) aggregated[sub] = { count: 0 };
-                    aggregated[sub].count += 1; // 1 period
+                req.assignedSubs.forEach(subObj => {
+                    let subName = subObj.name;
+                    let coveredPeriod = subObj.period;
+
+                    if (!aggregated[subName]) {
+                        aggregated[subName] = { duties: 0, extras: 0, total: 0 };
+                    }
+
+                    let teacherDuty = dutyLookup[subName];
+                    if (teacherDuty && teacherDuty === coveredPeriod) {
+                        aggregated[subName].duties += 1;
+                    } else {
+                        aggregated[subName].extras += 1;
+                    }
+                    aggregated[subName].total += 1;
                 });
             });
         }
@@ -2461,8 +2490,8 @@
                     resultList.push({ name: name, ...aggregated[name] });
                 }
             } else {
-                if (aggregated[name].count > 0) {
-                    resultList.push({ name: name, count: aggregated[name].count });
+                if (aggregated[name].total > 0) {
+                    resultList.push({ name: name, duties: aggregated[name].duties, extras: aggregated[name].extras, total: aggregated[name].total });
                 }
             }
         }
@@ -2490,6 +2519,9 @@
              if (idx !== -1) {
                  label = expectedLabels[idx];
              }
+             if (label === "Professional Development") {
+                 label = "PD";
+             }
              headerHtml += `<th class="p-3">${label}</th>`;
           });
 
@@ -2499,12 +2531,14 @@
           thead.innerHTML = `
             <tr class="bg-gray-50 border-b border-gray-200 text-sm text-gray-700 uppercase">
               <th class="p-3">Teacher Name</th>
-              <th class="p-3 text-right">Periods</th>
+              <th class="p-3 text-right">Duties</th>
+              <th class="p-3 text-right">Extras</th>
+              <th class="p-3 text-right">Totals</th>
             </tr>
           `;
         }
 
-        const colCount = hrCurrentView === 'absences' ? (2 + (dynamicReasons ? dynamicReasons.length : 0)) : 2;
+        const colCount = hrCurrentView === 'absences' ? (2 + (dynamicReasons ? dynamicReasons.length : 0)) : 4;
 
         if (dataList.length === 0) {
           tbody.innerHTML = `<tr><td colspan="${colCount}" class="p-8 text-center text-gray-400 italic">No data found for the selected dates.</td></tr>`;
@@ -2531,7 +2565,9 @@
             html += `
               <tr class="hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0">
                 <td class="p-3 text-sm text-gray-800 font-medium">${escapeHtml(item.name)}</td>
-                <td class="p-3 text-sm text-gray-600 font-bold text-right">${escapeHtml(item.count)}</td>
+                <td class="p-3 text-sm text-gray-600 font-bold text-right">${escapeHtml(item.duties)}</td>
+                <td class="p-3 text-sm text-gray-600 font-bold text-right">${escapeHtml(item.extras)}</td>
+                <td class="p-3 text-sm text-gray-600 font-bold text-right">${escapeHtml(item.total)}</td>
               </tr>
             `;
           }

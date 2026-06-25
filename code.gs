@@ -805,7 +805,8 @@ function getStaffList() {
 
         staffList.push({
           name: name,
-          display: display
+          display: display,
+          duty: duty
         });
       }
     }
@@ -1727,7 +1728,10 @@ function getHRDashboardData() {
             var subColumnIndex = 8 + p; // 9 for P1, 10 for P2, etc.
             var assignedSub = data[i][subColumnIndex] || "";
             if (assignedSub && String(assignedSub).trim() !== "") {
-              assignedSubs.push(String(assignedSub).trim());
+              assignedSubs.push({
+                  name: String(assignedSub).trim(),
+                  period: String(p)
+              });
             }
         }
       }
