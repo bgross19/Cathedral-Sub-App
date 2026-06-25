@@ -41,46 +41,53 @@ function setupDatabase() {
 
 /**
  * Retrieves settings from the Settings sheet as an object.
- * Creates the sheet if it doesn't exist.
+ * Uses defaults in memory if the sheet does not exist or user lacks permission.
  */
-function getSettings() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var settingsSheet = ss.getSheetByName("Settings");
-
-  if (!settingsSheet) {
-    setupDatabase(); // Creates the sheet with defaults
-    settingsSheet = ss.getSheetByName("Settings");
-  }
-
-  var data = settingsSheet.getDataRange().getValues();
-  var settings = {};
-
-  // Skip header row
-  for (var i = 1; i < data.length; i++) {
-    var key = String(data[i][0]).trim();
-    var value = String(data[i][1]).trim();
-    if (key) {
-      settings[key] = value;
-    }
-  }
-
-  // Ensure defaults exist if rows were deleted
+function getSettings(ss) {
   var defaults = {
     "Email Mode": "Live",
     "Redirect Email": "Bgross@gocathedral.com",
     "App URL": "https://script.google.com/a/macros/gocathedral.com/s/AKfycbwKZrBo4R-9O97aVNCjOHk9PddWCb6XNKviDS1lj4nNc49khl3T9OL8pGUDa7E1XE0/exec"
   };
 
-  var settingsUpdated = false;
-  for (var k in defaults) {
-    if (!(k in settings)) {
-      settings[k] = defaults[k];
-      settingsSheet.appendRow([k, defaults[k]]);
-      settingsUpdated = true;
-    }
-  }
+  try {
+    var sheetSS = ss || SpreadsheetApp.getActiveSpreadsheet();
+    var settingsSheet = sheetSS.getSheetByName("Settings");
 
-  return settings;
+    var settings = {};
+
+    if (settingsSheet) {
+      var data = settingsSheet.getDataRange().getValues();
+      // Skip header row
+      for (var i = 1; i < data.length; i++) {
+        var key = String(data[i][0]).trim();
+        var value = String(data[i][1]).trim();
+        if (key) {
+          settings[key] = value;
+        }
+      }
+    }
+
+    // Merge with defaults if not present
+    var settingsUpdated = false;
+    for (var k in defaults) {
+      if (!(k in settings)) {
+        settings[k] = defaults[k];
+        if (settingsSheet) {
+          try {
+            settingsSheet.appendRow([k, defaults[k]]);
+          } catch (appendErr) {
+            console.warn("Could not append default setting: " + appendErr.message);
+          }
+        }
+      }
+    }
+
+    return settings;
+  } catch (e) {
+    console.warn("Could not read settings from spreadsheet, using defaults: " + e.message);
+    return defaults;
+  }
 }
 
 /**
@@ -127,7 +134,7 @@ function getUserData(ss) {
     }
   }
   
-  var settings = getSettings();
+  var settings = getSettings(ss);
   var appUrl = settings["App URL"] || "https://script.google.com/a/macros/gocathedral.com/s/AKfycbwKZrBo4R-9O97aVNCjOHk9PddWCb6XNKviDS1lj4nNc49khl3T9OL8pGUDa7E1XE0/exec";
 
   return { name: String(name), role: String(role), email: String(email), appUrl: String(appUrl) };
