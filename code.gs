@@ -1367,12 +1367,17 @@ function getSubEmail(subName) {
 /**
  * Helper to get teacher name from email.
  */
-function getTeacherNameFromEmail(email) {
+function getTeacherNameFromEmail(email, nameLookup) {
+  var targetEmail = email.trim().toLowerCase();
+  if (nameLookup !== undefined) {
+    return nameLookup[targetEmail] || email;
+  }
+
+  // Fallback to slow lookup if nameLookup is not provided
   var ss = getSS();
   var sheet = ss.getSheetByName("Staff Roster");
   if (!sheet) return email;
   var data = sheet.getDataRange().getValues();
-  var targetEmail = email.trim().toLowerCase();
   for (var i = 1; i < data.length; i++) {
     if (String(data[i][1]).trim().toLowerCase() === targetEmail) {
       return String(data[i][0]).trim();
@@ -1388,9 +1393,16 @@ function getAbsenceDetails(absenceId, period) {
   var ss = getSS();
   var sheet = ss.getSheetByName("Absence Requests");
   var masterScheduleSheet = ss.getSheetByName("Master Schedule");
+  var rosterSheet = ss.getSheetByName("Staff Roster");
 
   if (!sheet) return null;
   var data = sheet.getDataRange().getValues();
+
+  var nameLookup = {};
+  if (rosterSheet) {
+    var rosterData = rosterSheet.getDataRange().getValues();
+    nameLookup = buildNameLookup(rosterData);
+  }
 
   var scheduleLookup = {};
   if (masterScheduleSheet) {
@@ -1414,7 +1426,7 @@ function getAbsenceDetails(absenceId, period) {
   for (var i = 1; i < data.length; i++) {
     if (String(data[i][0]) === String(absenceId)) {
       var teacherEmail = String(data[i][2]);
-      var teacherName = getTeacherNameFromEmail(teacherEmail);
+      var teacherName = getTeacherNameFromEmail(teacherEmail, nameLookup);
       var dateVal = data[i][3];
       var formattedDate = dateVal;
       if (dateVal instanceof Date) {
