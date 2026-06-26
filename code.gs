@@ -33,6 +33,7 @@ function setupDatabase() {
       ["Redirect Email", "Bgross@gocathedral.com"],
       ["App URL", "https://script.google.com/a/macros/gocathedral.com/s/AKfycbwKZrBo4R-9O97aVNCjOHk9PddWCb6XNKviDS1lj4nNc49khl3T9OL8pGUDa7E1XE0/exec"],
       ["Urgency Cutoff Time", "15"],
+      ["Term ID", "3503"],
       ["Absence Reasons", JSON.stringify([
         {reason: "Personal", hrRequired: false},
         {reason: "Professional Development", hrRequired: false},
@@ -58,6 +59,7 @@ function getSettings(ss) {
     "Redirect Email": "Bgross@gocathedral.com",
     "App URL": "https://script.google.com/a/macros/gocathedral.com/s/AKfycbwKZrBo4R-9O97aVNCjOHk9PddWCb6XNKviDS1lj4nNc49khl3T9OL8pGUDa7E1XE0/exec",
     "Urgency Cutoff Time": "15",
+    "Term ID": "3503",
     "Absence Reasons": JSON.stringify([
       {reason: "Personal", hrRequired: false},
       {reason: "Professional Development", hrRequired: false},
