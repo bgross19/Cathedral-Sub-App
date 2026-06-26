@@ -125,7 +125,9 @@ function testPowerSchoolMasterScheduleFetch() {
   let responseText;
   let statusCode;
   try {
-    const response = UrlFetchApp.fetch(POWERSCHOOL_URL + endpoint, options);
+    let url = POWERSCHOOL_URL.replace(/\/$/, '') + endpoint;
+    Logger.log('Fetching URL: ' + url);
+    const response = UrlFetchApp.fetch(url, options);
     statusCode = response.getResponseCode();
     responseText = response.getContentText();
   } catch (error) {
