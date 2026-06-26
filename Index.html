@@ -7,6 +7,9 @@
     <script>
       // === Settings Dashboard Tab Switching ===
       function switchSettingsTab(tabId) {
+        if (tabId === 'staffRosterTab' && typeof loadStaffRosterSettings === 'function') {
+           loadStaffRosterSettings();
+        }
         // Hide all tabs
         const tabs = document.querySelectorAll('.settings-tab-content');
         tabs.forEach(tab => {
@@ -374,57 +377,7 @@
         </div>
       </div>
 
-      <!-- Staff Roster Tab -->
-      <div id="staffRosterTab" class="settings-tab-content bg-white rounded-xl shadow-sm border border-gray-200 p-6 hidden">
-        <div class="flex justify-between items-center mb-4 border-b pb-2">
-           <h3 class="text-xl font-bold text-[#002147]">Staff Roster</h3>
-           <div class="flex gap-2">
-               <button onclick="copyStaffRosterData()" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-1.5 px-4 rounded-lg transition-colors text-sm flex items-center gap-2">
-                   <span>📋</span> Copy Data
-               </button>
-               <button onclick="openAddStaffModal()" class="bg-[#00843D] hover:bg-green-700 text-white font-bold py-1.5 px-4 rounded-lg transition-colors text-sm flex items-center gap-2">
-                   <span>➕</span> Add Staff
-               </button>
-           </div>
-        </div>
-
-        <div class="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
-           <h4 class="text-md font-bold text-[#002147] mb-2">CSV Upload (Bulk Update/Create)</h4>
-           <div class="flex flex-col gap-3">
-               <div>
-                 <label class="block text-sm text-gray-600 mb-1">Select a .csv file...</label>
-                 <input type="file" id="staffCsvFileInput" accept=".csv" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-[#002147] file:text-white hover:file:bg-blue-900"/>
-               </div>
-               <div class="text-center text-gray-500 font-semibold text-sm">OR</div>
-               <div>
-                 <label class="block text-sm text-gray-600 mb-1">...Paste CSV data directly</label>
-                 <textarea id="staffCsvTextarea" rows="4" placeholder="LASTFIRST,EMAIL_ADDR,Duty&#10;Smith John,jsmith@gocathedral.com,1" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none text-sm font-mono"></textarea>
-               </div>
-               <div class="flex justify-end">
-                  <button onclick="processStaffCsvUpload()" class="bg-[#002147] hover:bg-blue-900 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-md text-sm">
-                    Process CSV
-                  </button>
-               </div>
-           </div>
-        </div>
-
-        <div class="overflow-x-auto">
-          <table class="w-full text-left border-collapse min-w-max">
-            <thead>
-              <tr class="bg-gray-50 border-b border-gray-200 text-sm text-gray-700 uppercase">
-                <th class="p-3">Name</th>
-                <th class="p-3">Email</th>
-                <th class="p-3">Duty</th>
-                <th class="p-3 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody id="staffRosterTableBody" class="divide-y divide-gray-100">
-               <tr><td colspan="4" class="p-8 text-center text-gray-400 italic">Loading staff roster...</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </main>
+          </main>
 
 
     <!-- Admin Dashboard View -->
@@ -646,10 +599,64 @@
           </table>
         </div>
       </div>
+
+
+    <!-- Staff Roster Tab -->
+      <div id="staffRosterTab" class="settings-tab-content bg-white rounded-xl shadow-sm border border-gray-200 p-6 hidden">
+        <div class="flex justify-between items-center mb-4 border-b pb-2">
+           <h3 class="text-xl font-bold text-[#002147]">Staff Roster</h3>
+           <div class="flex gap-2">
+               <button onclick="copyStaffRosterData()" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-1.5 px-4 rounded-lg transition-colors text-sm flex items-center gap-2">
+                   <span>📋</span> Copy Data
+               </button>
+               <button onclick="openAddStaffModal()" class="bg-[#00843D] hover:bg-green-700 text-white font-bold py-1.5 px-4 rounded-lg transition-colors text-sm flex items-center gap-2">
+                   <span>➕</span> Add Staff
+               </button>
+           </div>
+        </div>
+
+        <div class="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+           <h4 class="text-md font-bold text-[#002147] mb-2">CSV Upload (Bulk Update/Create)</h4>
+           <div class="flex flex-col gap-3">
+               <div>
+                 <label class="block text-sm text-gray-600 mb-1">Select a .csv file...</label>
+                 <input type="file" id="staffCsvFileInput" accept=".csv" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-[#002147] file:text-white hover:file:bg-blue-900"/>
+               </div>
+               <div class="text-center text-gray-500 font-semibold text-sm">OR</div>
+               <div>
+                 <label class="block text-sm text-gray-600 mb-1">...Paste CSV data directly</label>
+                 <textarea id="staffCsvTextarea" rows="4" placeholder="LASTFIRST,EMAIL_ADDR,Duty&#10;Smith John,jsmith@gocathedral.com,1" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none text-sm font-mono"></textarea>
+               </div>
+               <div class="flex justify-end">
+                  <button onclick="processStaffCsvUpload()" class="bg-[#002147] hover:bg-blue-900 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-md text-sm">
+                    Process CSV
+                  </button>
+               </div>
+           </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse min-w-max">
+            <thead>
+              <tr class="bg-gray-50 border-b border-gray-200 text-sm text-gray-700 uppercase">
+                <th class="p-3">Name</th>
+                <th class="p-3">Email</th>
+                <th class="p-3">Duty</th>
+                <th class="p-3 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="staffRosterTableBody" class="divide-y divide-gray-100">
+               <tr><td colspan="4" class="p-8 text-center text-gray-400 italic">Loading staff roster...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
     </main>
 
     <!-- Settings Form & Logic -->
-    <script>
+
+
+<script>
       let currentAbsenceReasons = [];
 
       function loadSettingsData() {
