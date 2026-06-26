@@ -974,6 +974,13 @@ function sendUrgentCoverageEmail(ss, teacherName, formData, instructions) {
 }
 
 function submitAbsence(formData) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+  } catch (e) {
+    return { success: false, error: "The server is currently busy. Please try again in a few moments." };
+  }
+
   try {
     var ss = getSS();
     var mainSheet = ss.getSheetByName("Absence Requests"); 
@@ -986,9 +993,6 @@ function submitAbsence(formData) {
     var email = Session.getActiveUser().getEmail();
     var uniqueId = Utilities.getUuid();
 
-    // "ID", "Timestamp", "Email", "Date", "Periods", "Reason", "Duration",
-    // "Urgency", "Instructions", "Period 1 Sub", "Period 2 Sub", "Period 3 Sub",
-    // "Period 4 Sub", "Period 5 Sub", "Period 6 Sub", "Period 7 Sub", "Period 8 Sub", "Status"
     var newRow = [
       uniqueId, timestamp, email, formData.date, "'" + formData.periods,
       formData.reason, formData.duration, urgencyFormatted, instructions,
@@ -998,7 +1002,6 @@ function submitAbsence(formData) {
 
     var teacherName = getUserData(ss).name;
 
-    // Check if manually marked urgent
     var isMarkedUrgent = urgencyFormatted === 'Urgent (Less than 24 hr notice)';
     var isUrgentByTime = calculateIsUrgentByTime(formData.date, timestamp, ss);
 
@@ -1008,9 +1011,38 @@ function submitAbsence(formData) {
       sendUrgentCoverageEmail(ss, teacherName, formData, instructions);
     }
     
+    // SEND CONFIRMATION EMAIL TO SUBMITTER
+    var settings = getSettings();
+    var appUrl = settings["App URL"] || "https://script.google.com/a/macros/gocathedral.com/s/AKfycbwKZrBo4R-9O97aVNCjOHk9PddWCb6XNKviDS1lj4nNc49khl3T9OL8pGUDa7E1XE0/exec";
+
+    var confSubject = "New Absence Request Confirmation";
+    var confBody = "Your absence request has been successfully submitted.\n\n" +
+                   "Details:\n" +
+                   "Date: " + formData.date + "\n" +
+                   "Periods: " + formData.periods + "\n" +
+                   "Reason: " + formData.reason + "\n" +
+                   "Duration: " + formData.duration + "\n" +
+                   "Instructions: " + (instructions ? instructions : "None") + "\n\n" +
+                   "Return to Cathedral Sub App: " + appUrl;
+
+    var confHtmlBody = "<p>Your absence request has been successfully submitted.</p>" +
+                       "<h3>Details:</h3>" +
+                       "<ul>" +
+                       "<li><strong>Date:</strong> " + formData.date + "</li>" +
+                       "<li><strong>Periods:</strong> " + formData.periods + "</li>" +
+                       "<li><strong>Reason:</strong> " + formData.reason + "</li>" +
+                       "<li><strong>Duration:</strong> " + formData.duration + "</li>" +
+                       "</ul>" +
+                       "<p><strong>Instructions:</strong> " + (instructions ? instructions : "None") + "</p>" +
+                       "<p><a href='" + appUrl + "'>Return to Cathedral Sub App</a></p>";
+
+    sendEmailHelper(email, confSubject, confBody, { htmlBody: confHtmlBody });
+
     return { success: true };
   } catch (err) {
     return { success: false, error: err.message };
+  } finally {
+    lock.releaseLock();
   }
 }
 
@@ -1018,6 +1050,13 @@ function submitAbsence(formData) {
  * Cancels a single assigned sub duty by the sub themselves.
  */
 function cancelMySubDuty(absenceId, period) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+  } catch (e) {
+    return { success: false, error: "The server is currently busy. Please try again in a few moments." };
+  }
+
   try {
     var ss = getSS();
     var sheet = getSheetOrThrow(ss, "Absence Requests");
@@ -1030,18 +1069,15 @@ function cancelMySubDuty(absenceId, period) {
     var targetUserName = userName.toLowerCase();
     for (var i = 1; i < data.length; i++) {
       if (String(data[i][0]) === String(absenceId)) {
-        var subColumnIndex = 10 + parseInt(period) - 1; // 1-based col: J=10 (P1), etc.
+        var subColumnIndex = 10 + parseInt(period) - 1;
         var assignedSub = String(sheet.getRange(i + 1, subColumnIndex).getValue() || "").trim();
 
         if (assignedSub.toLowerCase() === targetUserName) {
-          // Get details BEFORE clearing the sub, just in case
           var coordinatorEmail = getCoordinatorEmail(ss);
           var details = getAbsenceDetails(absenceId, period);
 
-          // Clear the sub from the sheet
           sheet.getRange(i + 1, subColumnIndex).setValue("");
 
-          // Send email to sub coordinator, CCing the sub
           if (coordinatorEmail && details) {
             var subject = "SUB CANCELLATION: " + userName + " cancelled coverage";
             var settings = getSettings();
@@ -1077,6 +1113,8 @@ function cancelMySubDuty(absenceId, period) {
     throw new Error("Absence ID not found.");
   } catch (err) {
     return { success: false, error: err.message };
+  } finally {
+    lock.releaseLock();
   }
 }
 
@@ -1126,6 +1164,13 @@ function getAbsenceDetailsLocal(row, period, scheduleLookup, nameLookup) {
 }
 
 function cancelAbsence(absenceId) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+  } catch (e) {
+    return { success: false, error: "The server is currently busy. Please try again in a few moments." };
+  }
+
   try {
     var ss = getSS();
     var sheet = getSheetOrThrow(ss, "Absence Requests");
@@ -1135,7 +1180,6 @@ function cancelAbsence(absenceId) {
     var rosterData = rosterSheet ? rosterSheet.getDataRange().getValues() : [];
     var scheduleData = masterScheduleSheet ? masterScheduleSheet.getDataRange().getValues() : [];
 
-    // We want a lookup of Sub Name -> Email
     var subEmailLookup = {};
     for (var r = 1; r < rosterData.length; r++) {
       subEmailLookup[String(rosterData[r][0]).trim()] = String(rosterData[r][1]).trim();
@@ -1155,12 +1199,10 @@ function cancelAbsence(absenceId) {
           assertRole(user, ["admin", "sub coordinator"], "Unauthorized to cancel this absence.");
         }
 
-        // Set Status to Canceled (Col 18, index 17)
         sheet.getRange(i + 1, 18).setValue("Canceled");
 
-        // Notify all currently assigned subs
         for (var p = 1; p <= 8; p++) {
-          var subIndex = 8 + p; // 9 for P1, etc.
+          var subIndex = 8 + p;
           var subName = String(data[i][subIndex] || "").trim();
           if (subName) {
             var email = subEmailLookup[subName];
@@ -1171,11 +1213,7 @@ function cancelAbsence(absenceId) {
           }
         }
 
-        // Notify teacher if deleted by someone else
         if (currentUserEmail !== teacherEmail) {
-           // We can't use getAbsenceDetailsLocal because we don't have scheduleLookup/nameLookup
-           // in this function's scope by default, and getting them adds spreadsheet calls.
-           // Since we only need the date, we can format it directly from data[i][3].
            var rawDate = data[i][3];
            var formattedDateForEmail = rawDate;
            if (rawDate instanceof Date) {
@@ -1206,6 +1244,8 @@ function cancelAbsence(absenceId) {
     throw new Error("Absence ID not found.");
   } catch (err) {
     return { success: false, error: err.message };
+  } finally {
+    lock.releaseLock();
   }
 }
 
@@ -1213,6 +1253,13 @@ function cancelAbsence(absenceId) {
  * Updates an absence request.
  */
 function updateAbsence(absenceId, formData) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+  } catch (e) {
+    return { success: false, error: "The server is currently busy. Please try again in a few moments." };
+  }
+
   try {
     var ss = getSS();
     var sheet = getSheetOrThrow(ss, "Absence Requests");
@@ -1280,17 +1327,13 @@ function updateAbsence(absenceId, formData) {
 
             if (email) {
                if (dateChanged || !isPeriodStillNeeded) {
-                 // Cancel this sub for this period
                  var cancelDetails = getAbsenceDetailsLocal(data[i], p, scheduleLookup, nameLookup);
-                 // We pass old date since they are canceled for the old date
                  if (cancelDetails) {
                     cancelDetails.date = Utilities.formatDate(new Date(oldDateRaw), Session.getScriptTimeZone(), "MMM d, yyyy");
                     sendSubNotification(email, "Canceled", cancelDetails);
                  }
-                 // Clear the sub from the sheet
                  sheet.getRange(i + 1, subIndex + 1).setValue("");
                } else {
-                 // Sub still needed, but details modified
                  var oldReason = String(data[i][5]);
                  var oldDuration = String(data[i][6]);
                  var oldUrgency = String(data[i][7]);
@@ -1310,17 +1353,12 @@ function updateAbsence(absenceId, formData) {
                  }
                }
             } else if (dateChanged || !isPeriodStillNeeded) {
-               // Clear sub from sheet even if email not found
                sheet.getRange(i + 1, subIndex + 1).setValue("");
             }
           }
         }
 
-        // Notify teacher if updated by someone else
         if (currentUserEmail !== teacherEmail) {
-           // We can't use getAbsenceDetailsLocal because we don't have scheduleLookup/nameLookup
-           // in this function's scope by default, and getting them adds spreadsheet calls.
-           // Since we only need the date, we can format it directly from data[i][3].
            var rawDate = data[i][3];
            var formattedDateForEmail = rawDate;
            if (rawDate instanceof Date) {
@@ -1356,6 +1394,8 @@ function updateAbsence(absenceId, formData) {
     throw new Error("Absence ID not found.");
   } catch (err) {
     return { success: false, error: err.message };
+  } finally {
+    lock.releaseLock();
   }
 }
 
@@ -1528,6 +1568,13 @@ function sendSubNotification(subEmail, type, details) {
  * Assigns a substitute to a specific period for an absence request.
  */
 function assignSubToPeriod(absenceId, period, subName) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+  } catch (e) {
+    return { success: false, error: "The server is currently busy. Please try again in a few moments." };
+  }
+
   try {
     var ss = getSS();
     var sheet = getSheetOrThrow(ss, "Absence Requests");
@@ -1545,6 +1592,7 @@ function assignSubToPeriod(absenceId, period, subName) {
     var scheduleLookup = buildScheduleLookup(scheduleData);
     var nameLookup = buildNameLookup(rosterData);
 
+    // Re-read data under lock
     var data = sheet.getDataRange().getValues();
 
     for (var i = 1; i < data.length; i++) {
@@ -1557,17 +1605,22 @@ function assignSubToPeriod(absenceId, period, subName) {
 
         var subColumnIndex = 10 + parseInt(period) - 1; // 1-based index for Apps Script Ranges: Col J is 10 (Period 1 Sub)
 
-        var existingSub = String(sheet.getRange(i + 1, subColumnIndex).getValue() || "").trim();
+        var existingSub = String(data[i][subColumnIndex - 1] || "").trim(); // array is 0-indexed, so subColumnIndex - 1
         var newSub = String(subName || "").trim();
 
         if (existingSub === newSub) {
            return { success: true }; // No change
         }
 
+        // Double check for race condition
+        if (existingSub !== "" && newSub !== "") {
+          throw new Error("Sorry, this job was just filled by someone else!");
+        }
+
         // Get details for email
         var details = getAbsenceDetailsLocal(data[i], period, scheduleLookup, nameLookup);
 
-        // Cancel existing sub if there is one
+        // Cancel existing sub if there is one (and we are clearing it)
         if (existingSub && details) {
            var existingEmail = subEmailLookup[existingSub];
            if (existingEmail) {
@@ -1593,6 +1646,8 @@ function assignSubToPeriod(absenceId, period, subName) {
     throw new Error("Absence Request ID not found.");
   } catch (err) {
     return { success: false, error: err.message };
+  } finally {
+    lock.releaseLock();
   }
 }
 

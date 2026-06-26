@@ -1208,9 +1208,13 @@
                  loadAdminDataRawSilent();
               }
             } else {
-              alert("Failed to assign sub: " + (result ? result.error : "Unknown error"));
+              alert(result ? result.error : "Unknown error");
               btn.disabled = false;
               btn.innerText = originalText;
+
+              if (result && result.error && (result.error.includes('filled by someone else') || result.error.includes('server is currently busy'))) {
+                  loadTodaysOpenJobs();
+              }
             }
           })
           .withFailureHandler(err => {
@@ -1821,9 +1825,14 @@
               loadQuickCover();
               loadAdminDataRawSilent();
             } else {
-              alert("Failed to assign sub: " + (result ? result.error : "Unknown error"));
+              alert(result ? result.error : "Unknown error");
               btn.disabled = false;
               btn.innerText = originalText;
+
+              if (result && result.error && (result.error.includes('filled by someone else') || result.error.includes('server is currently busy'))) {
+                  loadQuickCover();
+                  loadAdminDataRawSilent();
+              }
             }
           })
           .withFailureHandler(err => {
@@ -1934,9 +1943,13 @@
               loadQuickCover(); // Refresh the list
               loadAdminDataRawSilent();
             } else {
-              alert("Failed to assign sub: " + (result ? result.error : "Unknown error"));
+              alert(result ? result.error : "Unknown error");
               btn.disabled = false;
               btn.innerText = originalText;
+
+              if (result && result.error && (result.error.includes('filled by someone else') || result.error.includes('server is currently busy'))) {
+                  loadTodaysOpenJobs();
+              }
             }
           })
           .withFailureHandler(err => {
@@ -2238,10 +2251,14 @@
               } else {
                 alert("Failed to cancel: " + (result ? result.error : "Unknown"));
                 btn.disabled = false;
-                btn.innerText = originalText;
+              btn.innerText = originalText;
+
+              if (result && result.error && (result.error.includes('filled by someone else') || result.error.includes('server is currently busy'))) {
+                  loadTodaysOpenJobs();
               }
-           })
-           .withFailureHandler(err => {
+            }
+          })
+          .withFailureHandler(err => {
               alert("Error: " + err.message);
               btn.disabled = false;
               btn.innerText = originalText;
@@ -2338,7 +2355,7 @@
                   loadAdminDashboardData();
                 }
               } else {
-                alert("Database Error: " + (result ? result.error : "Unknown issue"));
+                alert(result ? result.error : "Database Error");
                 btn.disabled = false;
                 btn.innerHTML = 'Save Changes';
               }
@@ -2367,7 +2384,7 @@
                   loadAdminDataRawSilent();
                 }
               } else {
-                alert("Database Error: " + (result ? result.error : "Unknown issue"));
+                alert(result ? result.error : "Database Error");
                 btn.disabled = false;
                 btn.innerHTML = 'Submit Request';
               }
