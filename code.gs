@@ -372,6 +372,216 @@ function getUserRoles() {
 /**
  * Adds a new user role.
  */
+
+/**
+ * Fetches the staff roster for the Admin Settings dashboard.
+ */
+function getStaffRosterForAdmin() {
+  try {
+    var ss = getSS();
+    var user = getUserData(ss);
+    assertRole(user, "admin");
+
+    var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
+    var data = rosterSheet.getDataRange().getValues();
+    var roster = [];
+
+    // Assuming row 0 is header: Name, Email, Duty
+    for (var i = 1; i < data.length; i++) {
+      var name = String(data[i][0] || "").trim();
+      var email = String(data[i][1] || "").trim();
+      var duty = String(data[i][2] || "").trim();
+
+      if (name || email) {
+        roster.push({ name: name, email: email, duty: duty });
+      }
+    }
+
+    // Sort alphabetically by name
+    roster.sort(function(a, b) {
+        var nA = a.name.toLowerCase();
+        var nB = b.name.toLowerCase();
+        if (nA < nB) return -1;
+        if (nA > nB) return 1;
+        return 0;
+    });
+
+    return roster;
+  } catch (err) {
+    notifyAdminOfError("getStaffRosterForAdmin", err);
+    throw new Error("Failed to load staff roster: " + err.message);
+  }
+}
+
+/**
+ * Saves a staff member (creates or updates) for the Admin Settings dashboard.
+ */
+function saveStaffMemberAdmin(staffData) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+  } catch (e) {
+    notifyAdminOfError("saveStaffMemberAdmin_lock", e);
+    return { success: false, error: "The server is currently busy. Please try again." };
+  }
+
+  try {
+    var ss = getSS();
+    var user = getUserData(ss);
+    assertRole(user, "admin");
+
+    var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
+    var data = rosterSheet.getDataRange().getValues();
+
+    var originalEmail = staffData.originalEmail ? String(staffData.originalEmail).trim().toLowerCase() : "";
+    var newEmail = String(staffData.email).trim();
+    var newName = String(staffData.name).trim();
+    var newDuty = String(staffData.duty || "").trim();
+
+    if (!newEmail || !newName) {
+       return { success: false, error: "Name and Email are required." };
+    }
+
+    var rowIndexToUpdate = -1;
+
+    if (originalEmail) {
+      for (var i = 1; i < data.length; i++) {
+        if (String(data[i][1]).trim().toLowerCase() === originalEmail) {
+          rowIndexToUpdate = i + 1;
+          break;
+        }
+      }
+    }
+
+    if (rowIndexToUpdate !== -1) {
+       // Update existing
+       rosterSheet.getRange(rowIndexToUpdate, 1, 1, 3).setValues([[newName, newEmail, newDuty]]);
+    } else {
+       // Check if new email already exists to prevent duplicates
+       for (var i = 1; i < data.length; i++) {
+         if (String(data[i][1]).trim().toLowerCase() === newEmail.toLowerCase()) {
+            return { success: false, error: "A staff member with this email already exists." };
+         }
+       }
+       // Append new
+       rosterSheet.appendRow([newName, newEmail, newDuty]);
+    }
+
+    return { success: true };
+  } catch (err) {
+    notifyAdminOfError("saveStaffMemberAdmin", err);
+    return { success: false, error: err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * Deletes a staff member from the roster.
+ */
+function deleteStaffMemberAdmin(email) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+  } catch (e) {
+    notifyAdminOfError("deleteStaffMemberAdmin_lock", e);
+    return { success: false, error: "The server is currently busy. Please try again." };
+  }
+
+  try {
+    var ss = getSS();
+    var user = getUserData(ss);
+    assertRole(user, "admin");
+
+    var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
+    var data = rosterSheet.getDataRange().getValues();
+    var targetEmail = String(email).trim().toLowerCase();
+
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][1]).trim().toLowerCase() === targetEmail) {
+        rosterSheet.deleteRow(i + 1);
+        return { success: true };
+      }
+    }
+
+    return { success: false, error: "Staff member not found." };
+  } catch (err) {
+    notifyAdminOfError("deleteStaffMemberAdmin", err);
+    return { success: false, error: err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * Processes a bulk upload/update of staff roster records.
+ */
+function bulkUpsertStaffRoster(updates) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+  } catch (e) {
+    notifyAdminOfError("bulkUpsertStaffRoster_lock", e);
+    return { success: false, error: "The server is currently busy. Please try again." };
+  }
+
+  try {
+    var ss = getSS();
+    var user = getUserData(ss);
+    assertRole(user, "admin");
+
+    var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
+    var data = rosterSheet.getDataRange().getValues();
+
+    var existingEmailsMap = {};
+    // Map email to row index (1-based for getRange)
+    for (var i = 1; i < data.length; i++) {
+       var email = String(data[i][1] || "").trim().toLowerCase();
+       if (email) {
+          existingEmailsMap[email] = i + 1;
+       }
+    }
+
+    var newRows = [];
+    var processedCount = 0;
+
+    for (var j = 0; j < updates.length; j++) {
+       var update = updates[j];
+       var email = String(update.email || "").trim();
+       var name = String(update.name || "").trim();
+       var duty = String(update.duty || "").trim();
+
+       if (!email || !name) continue;
+
+       var lowerEmail = email.toLowerCase();
+       if (existingEmailsMap[lowerEmail]) {
+          // Update existing row directly
+          var rowIndex = existingEmailsMap[lowerEmail];
+          rosterSheet.getRange(rowIndex, 1, 1, 3).setValues([[name, email, duty]]);
+       } else {
+          // Track for batch append
+          newRows.push([name, email, duty]);
+          // To handle duplicates within the upload batch itself
+          existingEmailsMap[lowerEmail] = -1;
+       }
+       processedCount++;
+    }
+
+    if (newRows.length > 0) {
+       // Append new rows at the end
+       var startRow = rosterSheet.getLastRow() + 1;
+       rosterSheet.getRange(startRow, 1, newRows.length, 3).setValues(newRows);
+    }
+
+    return { success: true, updated: processedCount };
+  } catch (err) {
+    notifyAdminOfError("bulkUpsertStaffRoster", err);
+    return { success: false, error: err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 function addUserRole(email, role) {
   try {
     var ss = getSS();
