@@ -1359,21 +1359,6 @@ function updateAbsence(absenceId, formData) {
   }
 }
 
-/**
- * Helper to get a sub's email from the Staff Roster.
- */
-function getSubEmail(subName) {
-  var ss = getSS();
-  var sheet = ss.getSheetByName("Staff Roster");
-  if (!sheet) return null;
-  var data = sheet.getDataRange().getValues();
-  for (var i = 1; i < data.length; i++) {
-    if (String(data[i][0]).trim() === subName.trim()) {
-      return String(data[i][1]).trim();
-    }
-  }
-  return null;
-}
 
 /**
  * Helper to get teacher name from email.
