@@ -1145,8 +1145,16 @@ function cancelAbsence(absenceId) {
     var nameLookup = buildNameLookup(rosterData);
 
     var data = sheet.getDataRange().getValues();
+    var currentUserEmail = Session.getActiveUser().getEmail().toLowerCase();
+    var userData = getUserData(ss);
+
     for (var i = 1; i < data.length; i++) {
       if (String(data[i][0]) === String(absenceId)) {
+        var teacherEmail = String(data[i][2]).toLowerCase();
+        if (currentUserEmail !== teacherEmail) {
+          assertRole(userData, ["admin", "sub coordinator"], "Unauthorized: You do not have permission to cancel this absence.");
+        }
+
         // Set Status to Canceled (Col 18, index 17)
         sheet.getRange(i + 1, 18).setValue("Canceled");
 
@@ -1164,8 +1172,6 @@ function cancelAbsence(absenceId) {
         }
 
         // Notify teacher if deleted by someone else
-        var currentUserEmail = Session.getActiveUser().getEmail().toLowerCase();
-        var teacherEmail = String(data[i][2]).toLowerCase();
         if (currentUserEmail !== teacherEmail) {
            // We can't use getAbsenceDetailsLocal because we don't have scheduleLookup/nameLookup
            // in this function's scope by default, and getting them adds spreadsheet calls.
@@ -1225,8 +1231,15 @@ function updateAbsence(absenceId, formData) {
     var nameLookup = buildNameLookup(rosterData);
 
     var data = sheet.getDataRange().getValues();
+    var currentUserEmail = Session.getActiveUser().getEmail().toLowerCase();
+    var userData = getUserData(ss);
+
     for (var i = 1; i < data.length; i++) {
       if (String(data[i][0]) === String(absenceId)) {
+        var teacherEmail = String(data[i][2]).toLowerCase();
+        if (currentUserEmail !== teacherEmail) {
+          assertRole(userData, ["admin", "sub coordinator"], "Unauthorized: You do not have permission to update this absence.");
+        }
 
         var oldPeriods = String(data[i][4]).split(",").map(function(p){return p.trim()});
         var newPeriods = String(formData.periods).split(",").map(function(p){return p.trim()});
