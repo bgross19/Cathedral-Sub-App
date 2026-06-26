@@ -261,8 +261,8 @@ function getMasterScheduleData() {
     ];
 
     records.forEach(r => {
-      const email = String(r.email_addr || r.EMAIL_ADDR || "").trim();
-      const period = String(r.period || r.PERIOD || "").trim();
+      const email = String(r.email_addr || r.EMAIL_ADDR || "").trim().toLowerCase();
+      const period = String(r.period || r.PERIOD || "").replace(/\(A\)/gi, "").replace(/\s+/g, "");
       const joinKey = (email && period) ? (email + "-" + period) : "";
 
       scheduleData.push([
