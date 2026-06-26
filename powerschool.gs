@@ -11,9 +11,13 @@ function getPowerSchoolToken() {
   }
 
   const properties = PropertiesService.getScriptProperties();
-  const CLIENT_ID = properties.getProperty('PS_CLIENT_ID');
-  const CLIENT_SECRET = properties.getProperty('PS_CLIENT_SECRET');
-  const POWERSCHOOL_URL = properties.getProperty('PS_URL');
+  const rawClientId = properties.getProperty('PS_CLIENT_ID');
+  const rawClientSecret = properties.getProperty('PS_CLIENT_SECRET');
+  const rawUrl = properties.getProperty('PS_URL');
+
+  const CLIENT_ID = rawClientId ? rawClientId.trim() : null;
+  const CLIENT_SECRET = rawClientSecret ? rawClientSecret.trim() : null;
+  const POWERSCHOOL_URL = rawUrl ? rawUrl.trim().replace(/\/$/, '') : null;
 
   if (!CLIENT_ID || !CLIENT_SECRET || !POWERSCHOOL_URL) {
     throw new Error("Missing PowerSchool API configuration in Script Properties.");
@@ -104,7 +108,13 @@ function testPowerSchoolMasterScheduleFetch() {
   }
   
   const properties = PropertiesService.getScriptProperties();
-  const POWERSCHOOL_URL = properties.getProperty('PS_URL');
+  const rawUrl = properties.getProperty('PS_URL');
+  const POWERSCHOOL_URL = rawUrl ? rawUrl.trim().replace(/\/$/, '') : null;
+
+  if (!POWERSCHOOL_URL) {
+    Logger.log("Missing PS_URL property.");
+    return;
+  }
   
   // The placeholder PowerQuery endpoint. 
   // Update this if you name your PowerQuery differently.
@@ -127,7 +137,7 @@ function testPowerSchoolMasterScheduleFetch() {
   let responseText;
   let statusCode;
   try {
-    let url = POWERSCHOOL_URL.replace(/\/$/, '') + endpoint;
+    let url = POWERSCHOOL_URL + endpoint;
     Logger.log('Fetching URL: ' + url);
     const response = UrlFetchApp.fetch(url, options);
     statusCode = response.getResponseCode();
@@ -167,14 +177,20 @@ function testPowerSchoolMasterScheduleFetch() {
     if (records.length === 0) {
       sheet.appendRow(["NO DATA RETURNED", JSON.stringify(json), "", "", "", ""]);
     } else {
-      const rows = records.map(r => [
-        r.lastfirst || r.LASTFIRST || "",
-        r.email_addr || r.EMAIL_ADDR || "",
-        r.period || r.PERIOD || "",
-        r.room || r.ROOM || "",
-        r.course_names || r.COURSE_NAMES || "",
-        "3503" // Term is hardcoded in the SQL for now (3503), but you can map it if added to output
-      ]);
+      const rows = records.map(r => {
+        let periodRaw = String(r.period || r.PERIOD || "");
+        let periodMatch = periodRaw.match(/\d+/);
+        let periodClean = periodMatch ? periodMatch[0] : periodRaw.trim();
+
+        return [
+          r.lastfirst || r.LASTFIRST || "",
+          r.email_addr || r.EMAIL_ADDR || "",
+          periodClean,
+          r.room || r.ROOM || r.room_number || r.ROOM_NUMBER || "",
+          r.course_names || r.COURSE_NAMES || r.course_name || r.COURSE_NAME || "",
+          "3503" // Term is hardcoded in the SQL for now (3503), but you can map it if added to output
+        ];
+      });
       sheet.getRange(2, 1, rows.length, 6).setValues(rows);
     }
   } catch (parseError) {
@@ -206,7 +222,8 @@ function getMasterScheduleData() {
   }
 
   const properties = PropertiesService.getScriptProperties();
-  const POWERSCHOOL_URL = properties.getProperty('PS_URL');
+  const rawUrl = properties.getProperty('PS_URL');
+  const POWERSCHOOL_URL = rawUrl ? rawUrl.trim().replace(/\/$/, '') : null;
   if (!POWERSCHOOL_URL) {
     Logger.log("Missing PS_URL property.");
     return [];
@@ -237,7 +254,7 @@ function getMasterScheduleData() {
   let responseText;
   let statusCode;
   try {
-    let url = POWERSCHOOL_URL.replace(/\/$/, '') + endpoint;
+    let url = POWERSCHOOL_URL + endpoint;
     const response = UrlFetchApp.fetch(url, options);
     statusCode = response.getResponseCode();
     responseText = response.getContentText();
@@ -262,15 +279,19 @@ function getMasterScheduleData() {
 
     records.forEach(r => {
       const email = String(r.email_addr || r.EMAIL_ADDR || "").trim();
-      const period = String(r.period || r.PERIOD || "").trim();
-      const joinKey = (email && period) ? (email + "-" + period) : "";
+
+      let periodRaw = String(r.period || r.PERIOD || "");
+      let periodMatch = periodRaw.match(/\d+/);
+      let periodClean = periodMatch ? periodMatch[0] : periodRaw.trim();
+
+      const joinKey = (email && periodClean) ? (email + "-" + periodClean) : "";
 
       scheduleData.push([
         r.lastfirst || r.LASTFIRST || "",
         email,
-        period,
-        r.room || r.ROOM || "",
-        r.course_names || r.COURSE_NAMES || "",
+        periodClean,
+        r.room || r.ROOM || r.room_number || r.ROOM_NUMBER || "",
+        r.course_names || r.COURSE_NAMES || r.course_name || r.COURSE_NAME || "",
         termId,
         joinKey
       ]);
