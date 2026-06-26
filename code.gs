@@ -513,10 +513,10 @@ function getCoordinatorEmail(ss) {
   var ss = ss || getSS();
   var roleSheet = getSheetOrThrow(ss, "User Roles");
   if (!roleSheet) return null;
-  
+
   var data = roleSheet.getDataRange().getValues();
   for (var i = 1; i < data.length; i++) {
-    if (String(data[i][1]).toLowerCase() === "sub coordinator") return String(data[i][0]); 
+    if (String(data[i][1]).toLowerCase() === "sub coordinator") return String(data[i][0]);
   }
   return null;
 }
