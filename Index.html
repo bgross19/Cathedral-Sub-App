@@ -350,6 +350,12 @@
                   <input type="number" id="settingsUrgencyCutoff" min="0" max="23" value="${escapeHtml(settings["Urgency Cutoff Time"] || "15")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none" title="Hour of the day after which next-day absences become urgent. (e.g. 15 = 3 PM)">
                 </div>
               </div>
+              <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-sm font-bold mb-1">Term ID</label>
+                  <input type="number" id="settingsTermId" value="${escapeHtml(settings["Term ID"] || "3503")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none">
+                </div>
+              </div>
 
               <div class="mt-6 border-t pt-4">
                  <div class="flex justify-between items-center mb-2">
@@ -438,6 +444,7 @@
           "Redirect Email": document.getElementById('settingsRedirectEmail').value,
           "App URL": document.getElementById('settingsAppUrl').value,
           "Urgency Cutoff Time": document.getElementById('settingsUrgencyCutoff').value,
+          "Term ID": document.getElementById('settingsTermId').value,
           "Absence Reasons": JSON.stringify(currentAbsenceReasons)
         };
 
