@@ -106,6 +106,20 @@ function runTests() {
       }
     },
     {
+      name: "buildNameLookup - Empty array",
+      run: function() {
+        var result = buildNameLookup([]);
+        assert(Object.keys(result).length === 0, "Expected empty object");
+      }
+    },
+    {
+      name: "buildNameLookup - Only header row",
+      run: function() {
+        var result = buildNameLookup([["Name", "Email", "Duty"]]);
+        assert(Object.keys(result).length === 0, "Expected empty object");
+      }
+    },
+    {
       name: "buildScheduleLookup - Empty array",
       run: function() {
         var result = buildScheduleLookup([]);
