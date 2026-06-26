@@ -531,14 +531,12 @@ function getMySubDuties() {
 
     var mainSheet = ss.getSheetByName("Absence Requests");
     var rosterSheet = ss.getSheetByName("Staff Roster");
-    var masterScheduleSheet = ss.getSheetByName("Master Schedule");
-
     if (!mainSheet) return [];
 
     var data = mainSheet.getDataRange().getValues();
     var rosterData = rosterSheet ? rosterSheet.getDataRange().getValues() : [];
 
-    var scheduleData = masterScheduleSheet ? masterScheduleSheet.getDataRange().getValues() : [];
+    var scheduleData = getMasterScheduleData();
     var scheduleLookup = buildScheduleLookup(scheduleData);
     var nameLookup = buildNameLookup(rosterData);
 
@@ -633,14 +631,12 @@ function getTodaysOpenJobsData() {
     var ss = getSS();
     var mainSheet = ss.getSheetByName("Absence Requests");
     var rosterSheet = ss.getSheetByName("Staff Roster");
-    var masterScheduleSheet = ss.getSheetByName("Master Schedule");
-
     if (!mainSheet) return [];
 
     var data = mainSheet.getDataRange().getValues();
     var rosterData = rosterSheet ? rosterSheet.getDataRange().getValues() : [];
 
-    var scheduleData = masterScheduleSheet ? masterScheduleSheet.getDataRange().getValues() : [];
+    var scheduleData = getMasterScheduleData();
     var scheduleLookup = buildScheduleLookup(scheduleData);
     var nameLookup = buildNameLookup(rosterData);
 
@@ -733,14 +729,12 @@ function getQuickCoverData() {
     var ss = getSS();
     var mainSheet = ss.getSheetByName("Absence Requests");
     var rosterSheet = ss.getSheetByName("Staff Roster");
-    var masterScheduleSheet = ss.getSheetByName("Master Schedule");
-
     if (!mainSheet) return [];
 
     var data = mainSheet.getDataRange().getValues();
     var rosterData = rosterSheet ? rosterSheet.getDataRange().getValues() : [];
 
-    var scheduleData = masterScheduleSheet ? masterScheduleSheet.getDataRange().getValues() : [];
+    var scheduleData = getMasterScheduleData();
     var scheduleLookup = buildScheduleLookup(scheduleData);
     var nameLookup = buildNameLookup(rosterData);
 
@@ -1178,9 +1172,8 @@ function cancelAbsence(absenceId) {
     var sheet = getSheetOrThrow(ss, "Absence Requests");
 
     var rosterSheet = ss.getSheetByName("Staff Roster");
-    var masterScheduleSheet = ss.getSheetByName("Master Schedule");
     var rosterData = rosterSheet ? rosterSheet.getDataRange().getValues() : [];
-    var scheduleData = masterScheduleSheet ? masterScheduleSheet.getDataRange().getValues() : [];
+    var scheduleData = getMasterScheduleData();
 
     var subEmailLookup = {};
     for (var r = 1; r < rosterData.length; r++) {
@@ -1267,9 +1260,8 @@ function updateAbsence(absenceId, formData) {
     var sheet = getSheetOrThrow(ss, "Absence Requests");
 
     var rosterSheet = ss.getSheetByName("Staff Roster");
-    var masterScheduleSheet = ss.getSheetByName("Master Schedule");
     var rosterData = rosterSheet ? rosterSheet.getDataRange().getValues() : [];
-    var scheduleData = masterScheduleSheet ? masterScheduleSheet.getDataRange().getValues() : [];
+    var scheduleData = getMasterScheduleData();
 
     var subEmailLookup = {};
     for (var r = 1; r < rosterData.length; r++) {
@@ -1430,7 +1422,6 @@ function getTeacherNameFromEmail(email, nameLookup) {
 function getAbsenceDetails(absenceId, period) {
   var ss = getSS();
   var sheet = ss.getSheetByName("Absence Requests");
-  var masterScheduleSheet = ss.getSheetByName("Master Schedule");
   var rosterSheet = ss.getSheetByName("Staff Roster");
 
   if (!sheet) return null;
@@ -1443,8 +1434,7 @@ function getAbsenceDetails(absenceId, period) {
   }
 
   var scheduleLookup = {};
-  if (masterScheduleSheet) {
-    var scheduleData = masterScheduleSheet.getDataRange().getValues();
+  var scheduleData = getMasterScheduleData();
     if (scheduleData.length > 0) {
       var headers = scheduleData[0];
       var joinIdx = headers.indexOf("EMAIL_PERIOD_JOIN");
@@ -1459,7 +1449,6 @@ function getAbsenceDetails(absenceId, period) {
         }
       }
     }
-  }
 
   for (var i = 1; i < data.length; i++) {
     if (String(data[i][0]) === String(absenceId)) {
@@ -1567,9 +1556,8 @@ function assignSubToPeriod(absenceId, period, subName) {
     var sheet = getSheetOrThrow(ss, "Absence Requests");
 
     var rosterSheet = ss.getSheetByName("Staff Roster");
-    var masterScheduleSheet = ss.getSheetByName("Master Schedule");
     var rosterData = rosterSheet ? rosterSheet.getDataRange().getValues() : [];
-    var scheduleData = masterScheduleSheet ? masterScheduleSheet.getDataRange().getValues() : [];
+    var scheduleData = getMasterScheduleData();
 
     var subEmailLookup = {};
     for (var r = 1; r < rosterData.length; r++) {
@@ -1650,14 +1638,12 @@ function getAdminDashboardData() {
 
     var mainSheet = ss.getSheetByName("Absence Requests");
     var rosterSheet = ss.getSheetByName("Staff Roster");
-    var masterScheduleSheet = ss.getSheetByName("Master Schedule");
-
     if (!mainSheet) return [];
 
     var data = mainSheet.getDataRange().getValues();
     var rosterData = rosterSheet ? rosterSheet.getDataRange().getValues() : [];
 
-    var scheduleData = masterScheduleSheet ? masterScheduleSheet.getDataRange().getValues() : [];
+    var scheduleData = getMasterScheduleData();
     var scheduleLookup = buildScheduleLookup(scheduleData);
     var nameLookup = buildNameLookup(rosterData);
 
@@ -1905,8 +1891,7 @@ function getInitialPayload() {
     var mainSheet = ss.getSheetByName("Absence Requests");
     var absenceData = mainSheet ? mainSheet.getDataRange().getValues() : [];
 
-    var masterScheduleSheet = ss.getSheetByName("Master Schedule");
-    var scheduleData = masterScheduleSheet ? masterScheduleSheet.getDataRange().getValues() : [];
+    var scheduleData = getMasterScheduleData();
 
     // Look for Payperiods sheet case-insensitively
     var allSheets = ss.getSheets();
