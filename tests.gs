@@ -104,6 +104,80 @@ function runTests() {
         assert(call.options.cc === undefined, "Expected CC to be removed from options");
         assert(call.options.bcc === undefined, "Expected BCC to be removed from options");
       }
+    },
+    {
+      name: "buildScheduleLookup - Empty array",
+      run: function() {
+        var result = buildScheduleLookup([]);
+        assert(Object.keys(result).length === 0, "Expected empty object");
+      }
+    },
+    {
+      name: "buildScheduleLookup - Missing JOIN key",
+      run: function() {
+        var data = [
+          ["ROOM", "COURSE_NAMES"],
+          ["101", "Math"]
+        ];
+        var result = buildScheduleLookup(data);
+        assert(Object.keys(result).length === 0, "Expected empty object when JOIN key is missing");
+      }
+    },
+    {
+      name: "buildScheduleLookup - Missing Room/Course headers",
+      run: function() {
+        var data = [
+          ["EMAIL_PERIOD_JOIN"],
+          ["test@example.com_1"]
+        ];
+        var result = buildScheduleLookup(data);
+        assert(result["test@example.com_1"] !== undefined, "Expected key to exist");
+        assert(result["test@example.com_1"].room === "No Class Assigned", "Expected fallback for missing room header");
+        assert(result["test@example.com_1"].course === "No Class Assigned", "Expected fallback for missing course header");
+      }
+    },
+    {
+      name: "buildScheduleLookup - Happy path",
+      run: function() {
+        var data = [
+          ["EMAIL_PERIOD_JOIN", "ROOM", "COURSE_NAMES"],
+          ["user1@example.com_1", "101", "Math"],
+          ["user2@example.com_2", "102", "Science"]
+        ];
+        var result = buildScheduleLookup(data);
+        assert(result["user1@example.com_1"] !== undefined, "Expected key user1@example.com_1");
+        assert(result["user1@example.com_1"].room === "101", "Expected room 101");
+        assert(result["user1@example.com_1"].course === "Math", "Expected course Math");
+        assert(result["user2@example.com_2"] !== undefined, "Expected key user2@example.com_2");
+        assert(result["user2@example.com_2"].room === "102", "Expected room 102");
+        assert(result["user2@example.com_2"].course === "Science", "Expected course Science");
+      }
+    },
+    {
+      name: "buildScheduleLookup - Case/Whitespace handling",
+      run: function() {
+        var data = [
+          ["EMAIL_PERIOD_JOIN", "ROOM", "COURSE_NAMES"],
+          ["  USER@EXAMPLE.COM_1  ", "101", "Math"]
+        ];
+        var result = buildScheduleLookup(data);
+        assert(result["user@example.com_1"] !== undefined, "Expected lowercased and trimmed key");
+      }
+    },
+    {
+      name: "buildScheduleLookup - Empty/falsy room/course values",
+      run: function() {
+        var data = [
+          ["EMAIL_PERIOD_JOIN", "ROOM", "COURSE_NAMES"],
+          ["user1@example.com_1", "", false],
+          ["user2@example.com_2", null, undefined]
+        ];
+        var result = buildScheduleLookup(data);
+        assert(result["user1@example.com_1"].room === "No Class Assigned", "Expected fallback for empty string room");
+        assert(result["user1@example.com_1"].course === "No Class Assigned", "Expected fallback for false course");
+        assert(result["user2@example.com_2"].room === "No Class Assigned", "Expected fallback for null room");
+        assert(result["user2@example.com_2"].course === "No Class Assigned", "Expected fallback for undefined course");
+      }
     }
   ];
 
