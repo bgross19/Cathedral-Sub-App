@@ -42,6 +42,20 @@
                   <label class="block text-sm font-bold mb-1">Term ID</label>
                   <input type="number" id="settingsTermId" value="${escapeHtml(settings["Term ID"] || "3503")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none">
                 </div>
+                <div>
+                  <label class="block text-sm font-bold mb-1">PowerSchool API URL</label>
+                  <input type="text" id="settingsPsUrl" value="${escapeHtml(settings["PS_URL"] || "")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none">
+                </div>
+              </div>
+              <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-sm font-bold mb-1">PowerSchool Client ID</label>
+                  <input type="text" id="settingsPsClientId" value="${escapeHtml(settings["PS_CLIENT_ID"] || "")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none">
+                </div>
+                <div>
+                  <label class="block text-sm font-bold mb-1">PowerSchool Client Secret</label>
+                  <input type="text" id="settingsPsClientSecret" value="${escapeHtml(settings["PS_CLIENT_SECRET"] || "")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none">
+                </div>
               </div>
 
               <div class="mt-6 border-t pt-4">
@@ -132,6 +146,9 @@
           "App URL": document.getElementById('settingsAppUrl').value,
           "Urgency Cutoff Time": document.getElementById('settingsUrgencyCutoff').value,
           "Term ID": document.getElementById('settingsTermId').value,
+          "PS_URL": document.getElementById('settingsPsUrl').value,
+          "PS_CLIENT_ID": document.getElementById('settingsPsClientId').value,
+          "PS_CLIENT_SECRET": document.getElementById('settingsPsClientSecret').value,
           "Absence Reasons": JSON.stringify(currentAbsenceReasons)
         };
 

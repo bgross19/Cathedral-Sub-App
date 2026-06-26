@@ -10,17 +10,17 @@ function getPowerSchoolToken() {
     return cachedToken;
   }
 
-  const properties = PropertiesService.getScriptProperties();
-  const rawClientId = properties.getProperty('PS_CLIENT_ID');
-  const rawClientSecret = properties.getProperty('PS_CLIENT_SECRET');
-  const rawUrl = properties.getProperty('PS_URL');
+  const settings = typeof getSettings === "function" ? getSettings() : {};
+  const rawClientId = settings['PS_CLIENT_ID'];
+  const rawClientSecret = settings['PS_CLIENT_SECRET'];
+  const rawUrl = settings['PS_URL'];
 
   const CLIENT_ID = rawClientId ? rawClientId.trim() : null;
   const CLIENT_SECRET = rawClientSecret ? rawClientSecret.trim() : null;
   const POWERSCHOOL_URL = rawUrl ? rawUrl.trim().replace(/\/$/, '') : null;
 
   if (!CLIENT_ID || !CLIENT_SECRET || !POWERSCHOOL_URL) {
-    throw new Error("Missing PowerSchool API configuration in Script Properties.");
+    throw new Error("Missing PowerSchool API configuration in Settings.");
   }
 
   // PowerSchool OAuth requires Base64 encoding the ClientID:ClientSecret
@@ -107,8 +107,8 @@ function testPowerSchoolMasterScheduleFetch() {
     return;
   }
   
-  const properties = PropertiesService.getScriptProperties();
-  const rawUrl = properties.getProperty('PS_URL');
+  const settings = typeof getSettings === "function" ? getSettings() : {};
+  const rawUrl = settings['PS_URL'];
   const POWERSCHOOL_URL = rawUrl ? rawUrl.trim().replace(/\/$/, '') : null;
 
   if (!POWERSCHOOL_URL) {
@@ -221,8 +221,8 @@ function getMasterScheduleData() {
     return [];
   }
 
-  const properties = PropertiesService.getScriptProperties();
-  const rawUrl = properties.getProperty('PS_URL');
+  const settings = typeof getSettings === "function" ? getSettings() : {};
+  const rawUrl = settings['PS_URL'];
   const POWERSCHOOL_URL = rawUrl ? rawUrl.trim().replace(/\/$/, '') : null;
   if (!POWERSCHOOL_URL) {
     Logger.log("Missing PS_URL property.");
@@ -230,8 +230,6 @@ function getMasterScheduleData() {
   }
 
   // Need to get dynamic Term ID from Settings
-  // Ensure getSettings() is available
-  const settings = typeof getSettings === "function" ? getSettings() : {};
   const termId = settings["Term ID"] || "3503";
 
   const endpoint = "/ws/schema/query/com.cathedral.subapp.masterschedule?pagesize=0";
