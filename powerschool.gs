@@ -182,3 +182,115 @@ function testPowerSchoolMasterScheduleFetch() {
     Logger.log("Failed to parse JSON: " + parseError.toString());
   }
 }
+
+/**
+ * Fetches the Master Schedule from PowerSchool API and formats it into a 2D array.
+ * Caches the result in Script Cache to avoid excessive API calls.
+ */
+function getMasterScheduleData() {
+  const cache = CacheService.getScriptCache();
+  const cachedData = cache.get("ps_master_schedule");
+
+  if (cachedData) {
+    try {
+      return JSON.parse(cachedData);
+    } catch (e) {
+      Logger.log("Error parsing cached master schedule: " + e.toString());
+    }
+  }
+
+  const token = getPowerSchoolToken();
+  if (!token) {
+    Logger.log("Failed to get PowerSchool token in getMasterScheduleData.");
+    return [];
+  }
+
+  const properties = PropertiesService.getScriptProperties();
+  const POWERSCHOOL_URL = properties.getProperty('PS_URL');
+  if (!POWERSCHOOL_URL) {
+    Logger.log("Missing PS_URL property.");
+    return [];
+  }
+
+  // Need to get dynamic Term ID from Settings
+  // Ensure getSettings() is available
+  const settings = typeof getSettings === "function" ? getSettings() : {};
+  const termId = settings["Term ID"] || "3503";
+
+  const endpoint = "/ws/schema/query/com.cathedral.subapp.masterschedule?pagesize=0";
+
+  const payload = {
+    "target_term": String(termId)
+  };
+
+  const options = {
+    method: "POST",
+    headers: {
+      "Authorization": "Bearer " + token,
+      "Content-Type": "application/json",
+      "Accept": "application/json"
+    },
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true
+  };
+
+  let responseText;
+  let statusCode;
+  try {
+    let url = POWERSCHOOL_URL.replace(/\/$/, '') + endpoint;
+    const response = UrlFetchApp.fetch(url, options);
+    statusCode = response.getResponseCode();
+    responseText = response.getContentText();
+  } catch (error) {
+    Logger.log("API Fetch Error in getMasterScheduleData: " + error.toString());
+    return [];
+  }
+
+  if (statusCode !== 200) {
+    Logger.log("PowerSchool API returned status: " + statusCode + ", " + responseText);
+    return [];
+  }
+
+  try {
+    const json = JSON.parse(responseText);
+    const records = json.record || [];
+
+    // Headers matching expected 2D array structure
+    const scheduleData = [
+      ["LASTFIRST", "EMAIL_ADDR", "PERIOD", "ROOM", "COURSE_NAMES", "TERM", "EMAIL_PERIOD_JOIN"]
+    ];
+
+    records.forEach(r => {
+      const email = String(r.email_addr || r.EMAIL_ADDR || "").trim();
+      const period = String(r.period || r.PERIOD || "").trim();
+      const joinKey = (email && period) ? (email + "-" + period) : "";
+
+      scheduleData.push([
+        r.lastfirst || r.LASTFIRST || "",
+        email,
+        period,
+        r.room || r.ROOM || "",
+        r.course_names || r.COURSE_NAMES || "",
+        termId,
+        joinKey
+      ]);
+    });
+
+    // Cache limits to 6 hours (21600 seconds)
+    // 100kb string limit for Script Cache, if it exceeds, we may need to handle it or compress
+    const stringifiedData = JSON.stringify(scheduleData);
+    if (stringifiedData.length <= 100000) {
+      cache.put("ps_master_schedule", stringifiedData, 21600);
+    } else {
+      Logger.log("Master Schedule data exceeds cache size limit. Not caching.");
+      // In a robust implementation, you might chunk the cache.
+      // E.g., caching multiple chunks. Let's start simple.
+    }
+
+    return scheduleData;
+
+  } catch (parseError) {
+    Logger.log("Failed to parse Master Schedule JSON: " + parseError.toString());
+    return [];
+  }
+}
