@@ -1,10 +1,35 @@
+
+function notifyAdminOfError(funcName, e) {
+  console.error("Global Error in " + funcName + ": " + e.message + "\nStack: " + e.stack);
+  try {
+    var settings = getSettings();
+    var adminEmail = settings["Redirect Email"];
+    if (adminEmail && adminEmail.trim() !== "") {
+      var subject = "Critical App Error: " + funcName;
+      var body = "An error occurred in the Cathedral Sub App.\n\n" +
+                 "Function: " + funcName + "\n" +
+                 "User: " + Session.getActiveUser().getEmail() + "\n" +
+                 "Error Message: " + e.message + "\n\n" +
+                 "Stack Trace:\n" + e.stack;
+
+      MailApp.sendEmail({
+        to: adminEmail,
+        subject: subject,
+        body: body
+      });
+    }
+  } catch (mailError) {
+    console.error("Failed to send admin error email: " + mailError.message);
+  }
+}
+
 /**
  * Sets up the database headers in the Google Sheet.
  * Run this function once from the Apps Script editor.
  */
 function setupDatabase() {
   var ss = getSS();
-  var sheet = ss.getSheetByName("Absence Requests");
+  var sheet = getSheetOrThrow(ss, "Absence Requests");
   if (!sheet) {
     sheet = ss.insertSheet("Absence Requests");
   }
@@ -18,13 +43,13 @@ function setupDatabase() {
   sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
 
   // Optionally delete Split Responses sheet as it's no longer used
-  var splitSheet = ss.getSheetByName("Split Responses");
+  var splitSheet = getSheetOrThrow(ss, "Split Responses");
   if (splitSheet) {
     // ss.deleteSheet(splitSheet); // Uncomment to delete automatically, or delete manually.
   }
 
   // Setup Settings Sheet
-  var settingsSheet = ss.getSheetByName("Settings");
+  var settingsSheet = getSheetOrThrow(ss, "Settings");
   if (!settingsSheet) {
     settingsSheet = ss.insertSheet("Settings");
     var settingsHeaders = ["Setting Name", "Setting Value"];
@@ -78,7 +103,7 @@ function getSettings(ss) {
 
   try {
     var sheetSS = ss || getSS();
-    var settingsSheet = sheetSS.getSheetByName("Settings");
+    var settingsSheet = getSheetOrThrow(sheetSS, "Settings");
 
     var settings = {};
 
@@ -197,7 +222,7 @@ function getUserData(ss) {
   var email = Session.getActiveUser().getEmail();
   var ss = ss || getSS();
   
-  var rosterSheet = ss.getSheetByName("Staff Roster");
+  var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
   var rosterData = rosterSheet ? rosterSheet.getDataRange().getValues() : [];
   var name = "Teacher"; 
   var targetEmail = String(email).toLowerCase();
@@ -209,7 +234,7 @@ function getUserData(ss) {
     }
   }
   
-  var roleSheet = ss.getSheetByName("User Roles");
+  var roleSheet = getSheetOrThrow(ss, "User Roles");
   var roleData = roleSheet ? roleSheet.getDataRange().getValues() : [];
   var role = "User"; 
   
@@ -325,7 +350,7 @@ function getUserRoles() {
     var user = getUserData(ss);
     assertRole(user, "admin");
 
-    var roleSheet = ss.getSheetByName("User Roles");
+    var roleSheet = getSheetOrThrow(ss, "User Roles");
     if (!roleSheet) return [];
 
     var data = roleSheet.getDataRange().getValues();
@@ -358,6 +383,7 @@ function addUserRole(email, role) {
     roleSheet.appendRow([email.toLowerCase().trim(), role.trim()]);
     return { success: true };
   } catch (err) {
+    notifyAdminOfError("addUserRole", err);
     return { success: false, error: err.message };
   }
 }
@@ -384,6 +410,7 @@ function editUserRole(oldEmail, newEmail, role) {
     }
     throw new Error("User not found.");
   } catch (err) {
+    notifyAdminOfError("editUserRole", err);
     return { success: false, error: err.message };
   }
 }
@@ -410,6 +437,7 @@ function deleteUserRole(email) {
     }
     throw new Error("User not found.");
   } catch (err) {
+    notifyAdminOfError("deleteUserRole", err);
     return { success: false, error: err.message };
   }
 }
@@ -456,6 +484,7 @@ function updateSettings(newSettings) {
     }
     return { success: true };
   } catch (err) {
+    notifyAdminOfError("updateSettings", err);
     return { success: false, error: err.message };
   }
 }
@@ -463,429 +492,26 @@ function updateSettings(newSettings) {
 /**
  * Fetches the logged-in user's upcoming absences.
  */
-function getMyAbsences() {
-  try {
-    var email = Session.getActiveUser().getEmail();
-    var ss = getSS();
-    var sheet = ss.getSheetByName("Absence Requests");
-    
-    if (!sheet) return []; 
-    
-    var data = sheet.getDataRange().getValues();
-    var myAbsences = [];
-    var targetEmail = String(email).toLowerCase();
-    
-    for (var i = 1; i < data.length; i++) {
-      var status = String(data[i][17] || 'Active');
-      if (status === 'Canceled') continue;
-
-      if (String(data[i][2]).toLowerCase() === targetEmail) { // Email is index 2 now
-        var dateVal = data[i][3]; // Date is index 3 now
-        if (!dateVal) continue; 
-
-        var formattedDate = "Unknown Date";
-        if (dateVal instanceof Date) {
-           formattedDate = Utilities.formatDate(dateVal, Session.getScriptTimeZone(), "MMM d, yyyy");
-        } else {
-           formattedDate = new Date(dateVal).toLocaleDateString();
-        }
-
-        var urgencyStr = String(data[i][7] || ''); // Urgency is index 7 now
-
-        var yyyymmdd = "";
-        if (dateVal instanceof Date) {
-            yyyymmdd = Utilities.formatDate(dateVal, Session.getScriptTimeZone(), "yyyy-MM-dd");
-        } else {
-            try {
-                yyyymmdd = Utilities.formatDate(new Date(dateVal), Session.getScriptTimeZone(), "yyyy-MM-dd");
-            } catch(e) {
-                console.error("Error formatting date: " + e.message);
-                yyyymmdd = String(dateVal); // fallback
-            }
-        }
-
-        // Forced strings to ensure perfect serialization
-        myAbsences.push({
-          id: String(data[i][0]),
-          date: String(formattedDate),
-          rawDateString: String(dateVal), // Original raw val
-          formDateString: String(yyyymmdd), // Safe formatting for input type="date"
-          periods: String(data[i][4]), // Periods is index 4 now
-          reason: String(data[i][5]),  // Reason is index 5 now
-          urgency: urgencyStr.includes('Urgent') ? 'Urgent' : 'Standard',
-          duration: String(data[i][6]),
-          instructions: String(data[i][8])
-        });
-      }
-    }
-    
-    return myAbsences.reverse(); 
-  } catch (err) {
-    throw new Error("MyAbsences Error: " + err.message);
-  }
-}
 
 /**
  * Fetches the sub duties assigned to the logged-in user over the next calendar week.
  */
-function getMySubDuties() {
-  try {
-    var userEmail = Session.getActiveUser().getEmail().toLowerCase();
-    var ss = getSS();
-    var userData = getUserData(ss);
-    var userName = String(userData.name).trim().toLowerCase();
-
-    var mainSheet = ss.getSheetByName("Absence Requests");
-    var rosterSheet = ss.getSheetByName("Staff Roster");
-    if (!mainSheet) return [];
-
-    var data = mainSheet.getDataRange().getValues();
-    var rosterData = rosterSheet ? rosterSheet.getDataRange().getValues() : [];
-
-    var scheduleData = getMasterScheduleData();
-    var scheduleLookup = buildScheduleLookup(scheduleData);
-    var nameLookup = buildNameLookup(rosterData);
-
-    var myDuties = [];
-    var today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    var targetEnd = new Date(today);
-    targetEnd.setDate(today.getDate() + 6); // Up to next week (7 days total including today)
-    targetEnd.setHours(23, 59, 59, 999);
-
-    for (var i = 1; i < data.length; i++) {
-      var status = String(data[i][17] || 'Active');
-      if (status === 'Canceled') continue;
-
-      var dateString = data[i][3];
-      if (!dateString) continue;
-
-      var rowDate = new Date(dateString);
-      if (isNaN(rowDate.getTime())) continue;
-
-      if (rowDate >= today && rowDate <= targetEnd) {
-        var teacherEmail = String(data[i][2]).toLowerCase();
-        var teacherName = nameLookup[teacherEmail] || teacherEmail;
-
-        if (teacherName.includes(",")) {
-          var parts = teacherName.split(",");
-          teacherName = parts[1].trim() + " " + parts[0].trim();
-        }
-
-        var periodsRequested = String(data[i][4]).split(",").map(function(p) { return p.trim(); });
-        var rowId = String(data[i][0]);
-        var formattedDate = String(Utilities.formatDate(rowDate, Session.getScriptTimeZone(), "MMM d, yyyy"));
-        var formDateString = String(Utilities.formatDate(rowDate, Session.getScriptTimeZone(), "yyyy-MM-dd"));
-        var rawDate = Number(rowDate.getTime());
-
-        var reason = String(data[i][5]);
-        var duration = String(data[i][6]);
-        var instructions = String(data[i][8]);
-
-        for (var p = 1; p <= 8; p++) {
-          if (periodsRequested.indexOf(String(p)) !== -1) {
-            var subColumnIndex = 8 + p; // 9 for P1, 10 for P2, etc.
-            var assignedSub = String(data[i][subColumnIndex] || "").trim().toLowerCase();
-
-            // If the assigned sub matches the user's name
-            if (assignedSub === userName) {
-              var joinKey = teacherEmail + "-" + p;
-              var scheduleInfo = scheduleLookup[joinKey];
-              var roomStr = scheduleInfo && scheduleInfo.room ? String(scheduleInfo.room) : "No Class Assigned";
-              var courseStr = scheduleInfo && scheduleInfo.course ? String(scheduleInfo.course) : "No Class Assigned";
-
-              myDuties.push({
-                id: rowId,
-                teacherName: String(teacherName),
-                teacherEmail: String(teacherEmail),
-                date: formattedDate,
-                formDateString: formDateString,
-                period: String(p),
-                rawDate: rawDate,
-                room: roomStr,
-                course: courseStr,
-                reason: reason,
-                duration: duration,
-                instructions: instructions
-              });
-            }
-          }
-        }
-      }
-    }
-
-    myDuties.sort(function(a, b) {
-      if (a.rawDate === b.rawDate) {
-        return parseInt(a.period) - parseInt(b.period);
-      }
-      return a.rawDate - b.rawDate;
-    });
-
-    return myDuties;
-
-  } catch (err) {
-    throw new Error("MySubDuties Error: " + err.message);
-  }
-}
 
 /**
  * Fetches unfilled sub requests for today.
  */
-function getTodaysOpenJobsData() {
-  try {
-    var ss = getSS();
-    var mainSheet = ss.getSheetByName("Absence Requests");
-    var rosterSheet = ss.getSheetByName("Staff Roster");
-    if (!mainSheet) return [];
-
-    var data = mainSheet.getDataRange().getValues();
-    var rosterData = rosterSheet ? rosterSheet.getDataRange().getValues() : [];
-
-    var scheduleData = getMasterScheduleData();
-    var scheduleLookup = buildScheduleLookup(scheduleData);
-    var nameLookup = buildNameLookup(rosterData);
-
-    var unfilled = [];
-    var today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    var targetEnd = new Date(today);
-    targetEnd.setHours(23, 59, 59, 999);
-
-    for (var i = 1; i < data.length; i++) {
-      var status = String(data[i][17] || 'Active');
-      if (status === 'Canceled') continue;
-
-      var dateString = data[i][3];
-      if (!dateString) continue;
-
-      var rowDate = new Date(dateString);
-      if (isNaN(rowDate.getTime())) continue;
-
-      if (rowDate >= today && rowDate <= targetEnd) {
-        var teacherEmail = String(data[i][2]).toLowerCase();
-        var teacherName = nameLookup[teacherEmail] || teacherEmail;
-
-        if (teacherName.includes(",")) {
-          var parts = teacherName.split(",");
-          teacherName = parts[1].trim() + " " + parts[0].trim();
-        }
-
-        var periodsRequested = String(data[i][4]).split(",").map(function(p) { return p.trim(); });
-        var rowId = String(data[i][0]);
-        var formattedDate = String(Utilities.formatDate(rowDate, Session.getScriptTimeZone(), "MMM d, yyyy"));
-        var formDateString = String(Utilities.formatDate(rowDate, Session.getScriptTimeZone(), "yyyy-MM-dd"));
-        var rawDate = Number(rowDate.getTime());
-
-        var reason = String(data[i][5]);
-        var duration = String(data[i][6]);
-        var instructions = String(data[i][8]);
-
-        for (var p = 1; p <= 8; p++) {
-          if (periodsRequested.indexOf(String(p)) !== -1) {
-            var subColumnIndex = 8 + p;
-            var assignedSub = data[i][subColumnIndex];
-
-            if (!assignedSub || String(assignedSub).trim() === "") {
-              var joinKey = teacherEmail + "-" + p;
-              var scheduleInfo = scheduleLookup[joinKey];
-              var roomStr = scheduleInfo && scheduleInfo.room ? String(scheduleInfo.room) : "No Class Assigned";
-              var courseStr = scheduleInfo && scheduleInfo.course ? String(scheduleInfo.course) : "No Class Assigned";
-
-              unfilled.push({
-                id: rowId,
-                teacherName: String(teacherName),
-                teacherEmail: String(teacherEmail),
-                date: formattedDate,
-                formDateString: formDateString,
-                period: String(p),
-                rawDate: rawDate,
-                room: roomStr,
-                course: courseStr,
-                reason: reason,
-                duration: duration,
-                instructions: instructions
-              });
-            }
-          }
-        }
-      }
-    }
-
-    unfilled.sort(function(a, b) {
-      if (a.rawDate === b.rawDate) {
-        return parseInt(a.period) - parseInt(b.period);
-      }
-      return a.rawDate - b.rawDate;
-    });
-
-    return unfilled;
-
-  } catch (err) {
-    throw new Error("Backend Error: " + err.message);
-  }
-}
 
 /**
  * Fetches unfilled sub requests for the next 2 days (or through Monday if weekend) for the Admin Dashboard.
  */
-function getQuickCoverData() {
-  try {
-    var ss = getSS();
-    var mainSheet = ss.getSheetByName("Absence Requests");
-    var rosterSheet = ss.getSheetByName("Staff Roster");
-    if (!mainSheet) return [];
-
-    var data = mainSheet.getDataRange().getValues();
-    var rosterData = rosterSheet ? rosterSheet.getDataRange().getValues() : [];
-
-    var scheduleData = getMasterScheduleData();
-    var scheduleLookup = buildScheduleLookup(scheduleData);
-    var nameLookup = buildNameLookup(rosterData);
-
-    var unfilled = [];
-    var today = new Date();
-    today.setHours(0, 0, 0, 0); 
-
-    var targetEnd = new Date(today);
-    var dayOfWeek = today.getDay(); // 0 is Sunday, 5 is Friday, 6 is Saturday
-
-    var daysToAdd = 1;
-    if (dayOfWeek === 5) { // Friday
-      daysToAdd = 3; // +3 to reach Monday
-    } else if (dayOfWeek === 6) { // Saturday
-      daysToAdd = 2; // +2 to reach Monday
-    }
-
-    targetEnd.setDate(today.getDate() + daysToAdd);
-    targetEnd.setHours(23, 59, 59, 999);
-
-    // Indices in new format:
-    // 0:ID, 1:Timestamp, 2:Email, 3:Date, 4:Periods, 5:Reason, 6:Duration, 7:Urgency, 8:Instructions
-    // 9:P1 Sub, 10:P2 Sub, ..., 16:P8 Sub, 17:Status
-    for (var i = 1; i < data.length; i++) {
-      var status = String(data[i][17] || 'Active');
-      if (status === 'Canceled') continue;
-
-      var dateString = data[i][3];
-      if (!dateString) continue; 
-      
-      var rowDate = new Date(dateString);
-      if (isNaN(rowDate.getTime())) continue; 
-
-      if (rowDate >= today && rowDate <= targetEnd) {
-        var teacherEmail = String(data[i][2]).toLowerCase();
-        var teacherName = nameLookup[teacherEmail] || teacherEmail; 
-
-        if (teacherName.includes(",")) {
-          var parts = teacherName.split(",");
-          teacherName = parts[1].trim() + " " + parts[0].trim();
-        }
-
-        var periodsRequested = String(data[i][4]).split(",").map(function(p) { return p.trim(); });
-        var rowId = String(data[i][0]);
-        var formattedDate = String(Utilities.formatDate(rowDate, Session.getScriptTimeZone(), "MMM d, yyyy"));
-        var formDateString = String(Utilities.formatDate(rowDate, Session.getScriptTimeZone(), "yyyy-MM-dd"));
-        var rawDate = Number(rowDate.getTime());
-
-        var reason = String(data[i][5]);
-        var duration = String(data[i][6]);
-        var instructions = String(data[i][8]);
-
-        for (var p = 1; p <= 8; p++) {
-          if (periodsRequested.indexOf(String(p)) !== -1) {
-            var subColumnIndex = 8 + p; // 9 for P1, 10 for P2, etc.
-            var assignedSub = data[i][subColumnIndex];
-
-            if (!assignedSub || String(assignedSub).trim() === "") {
-
-              var joinKey = teacherEmail + "-" + p;
-              var scheduleInfo = scheduleLookup[joinKey];
-              var roomStr = scheduleInfo && scheduleInfo.room ? String(scheduleInfo.room) : "No Class Assigned";
-              var courseStr = scheduleInfo && scheduleInfo.course ? String(scheduleInfo.course) : "No Class Assigned";
-
-              unfilled.push({
-                id: rowId,
-                teacherName: String(teacherName),
-                teacherEmail: String(teacherEmail),
-                date: formattedDate,
-                formDateString: formDateString,
-                period: String(p),
-                rawDate: rawDate,
-                room: roomStr,
-                course: courseStr,
-                reason: reason,
-                duration: duration,
-                instructions: instructions
-              });
-            }
-          }
-        }
-      }
-    }
-
-    unfilled.sort(function(a, b) {
-      if (a.rawDate === b.rawDate) {
-        return parseInt(a.period) - parseInt(b.period);
-      }
-      return a.rawDate - b.rawDate;
-    });
-
-    return unfilled;
-    
-  } catch (err) {
-    // If we throw this, the frontend failure handler will catch it and show you the error!
-    throw new Error("Backend Error: " + err.message);
-  }
-}
 
 /**
  * Fetches the list of staff names from the Staff Roster.
  */
-function getStaffList() {
-  try {
-    var ss = getSS();
-    var sheet = ss.getSheetByName("Staff Roster");
-    if (!sheet) return [];
-
-    var data = sheet.getDataRange().getValues();
-    var staffList = [];
-
-    for (var i = 1; i < data.length; i++) {
-      var name = String(data[i][0]).trim();
-      var duty = String(data[i][2] || "").trim(); // 3rd column
-
-      if (name) {
-        var display = name;
-        if (duty) {
-          display = name + " - " + duty;
-        }
-
-        staffList.push({
-          name: name,
-          display: display,
-          duty: duty
-        });
-      }
-    }
-
-    // Sort alphabetically by name
-    return staffList.sort(function(a, b) {
-      var nameA = a.name.toLowerCase();
-      var nameB = b.name.toLowerCase();
-      if (nameA < nameB) return -1;
-      if (nameA > nameB) return 1;
-      return 0;
-    });
-  } catch (err) {
-    return [];
-  }
-}
 
 function getCoordinatorEmail(ss) {
   var ss = ss || getSS();
-  var roleSheet = ss.getSheetByName("User Roles");
+  var roleSheet = getSheetOrThrow(ss, "User Roles");
   if (!roleSheet) return null;
   
   var data = roleSheet.getDataRange().getValues();
@@ -980,12 +606,13 @@ function submitAbsence(formData) {
   try {
     lock.waitLock(10000);
   } catch (e) {
+    notifyAdminOfError("submitAbsence", e);
     return { success: false, error: "The server is currently busy. Please try again in a few moments." };
   }
 
   try {
     var ss = getSS();
-    var mainSheet = ss.getSheetByName("Absence Requests"); 
+    var mainSheet = getSheetOrThrow(ss, "Absence Requests");
     
     var urgencyFormatted = formData.urgency === 'Urgent' ? 'Urgent (Less than 24 hr notice)' : 'Standard (Advanced Notice)';
     var instructions = formData.specialInstructions;
@@ -1056,6 +683,7 @@ function cancelMySubDuty(absenceId, period) {
   try {
     lock.waitLock(10000);
   } catch (e) {
+    notifyAdminOfError("cancelMySubDuty", e);
     return { success: false, error: "The server is currently busy. Please try again in a few moments." };
   }
 
@@ -1170,6 +798,7 @@ function cancelAbsence(absenceId) {
   try {
     lock.waitLock(10000);
   } catch (e) {
+    notifyAdminOfError("cancelAbsence", e);
     return { success: false, error: "The server is currently busy. Please try again in a few moments." };
   }
 
@@ -1177,7 +806,7 @@ function cancelAbsence(absenceId) {
     var ss = getSS();
     var sheet = getSheetOrThrow(ss, "Absence Requests");
 
-    var rosterSheet = ss.getSheetByName("Staff Roster");
+    var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
     var rosterData = rosterSheet ? rosterSheet.getDataRange().getValues() : [];
     var scheduleData = getMasterScheduleData();
 
@@ -1258,6 +887,7 @@ function updateAbsence(absenceId, formData) {
   try {
     lock.waitLock(10000);
   } catch (e) {
+    notifyAdminOfError("updateAbsence", e);
     return { success: false, error: "The server is currently busy. Please try again in a few moments." };
   }
 
@@ -1265,7 +895,7 @@ function updateAbsence(absenceId, formData) {
     var ss = getSS();
     var sheet = getSheetOrThrow(ss, "Absence Requests");
 
-    var rosterSheet = ss.getSheetByName("Staff Roster");
+    var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
     var rosterData = rosterSheet ? rosterSheet.getDataRange().getValues() : [];
     var scheduleData = getMasterScheduleData();
 
@@ -1411,7 +1041,7 @@ function getTeacherNameFromEmail(email, nameLookup) {
 
   // Fallback to slow lookup if nameLookup is not provided
   var ss = getSS();
-  var sheet = ss.getSheetByName("Staff Roster");
+  var sheet = getSheetOrThrow(ss, "Staff Roster");
   if (!sheet) return email;
   var data = sheet.getDataRange().getValues();
   for (var i = 1; i < data.length; i++) {
@@ -1427,8 +1057,8 @@ function getTeacherNameFromEmail(email, nameLookup) {
  */
 function getAbsenceDetails(absenceId, period) {
   var ss = getSS();
-  var sheet = ss.getSheetByName("Absence Requests");
-  var rosterSheet = ss.getSheetByName("Staff Roster");
+  var sheet = getSheetOrThrow(ss, "Absence Requests");
+  var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
 
   if (!sheet) return null;
   var data = sheet.getDataRange().getValues();
@@ -1554,6 +1184,7 @@ function assignSubToPeriod(absenceId, period, subName) {
   try {
     lock.waitLock(10000);
   } catch (e) {
+    notifyAdminOfError("assignSubToPeriod", e);
     return { success: false, error: "The server is currently busy. Please try again in a few moments." };
   }
 
@@ -1561,7 +1192,7 @@ function assignSubToPeriod(absenceId, period, subName) {
     var ss = getSS();
     var sheet = getSheetOrThrow(ss, "Absence Requests");
 
-    var rosterSheet = ss.getSheetByName("Staff Roster");
+    var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
     var rosterData = rosterSheet ? rosterSheet.getDataRange().getValues() : [];
     var scheduleData = getMasterScheduleData();
 
@@ -1636,246 +1267,11 @@ function assignSubToPeriod(absenceId, period, subName) {
  * Fetches data for the Admin Dashboard.
  * Returns an array of objects, one per period.
  */
-function getAdminDashboardData() {
-  try {
-    var ss = getSS();
-    var user = getUserData(ss);
-    assertRole(user, ["admin", "sub coordinator"], "Unauthorized access. Admin or Sub Coordinator role required.");
-
-    var mainSheet = ss.getSheetByName("Absence Requests");
-    var rosterSheet = ss.getSheetByName("Staff Roster");
-    if (!mainSheet) return [];
-
-    var data = mainSheet.getDataRange().getValues();
-    var rosterData = rosterSheet ? rosterSheet.getDataRange().getValues() : [];
-
-    var scheduleData = getMasterScheduleData();
-    var scheduleLookup = buildScheduleLookup(scheduleData);
-    var nameLookup = buildNameLookup(rosterData);
-
-    var adminData = [];
-
-    // Skip header row
-    for (var i = 1; i < data.length; i++) {
-      var status = String(data[i][17] || "").trim(); // 17 is Status
-      if (status === "Canceled") continue;
-
-      var id = data[i][0];
-      var email = String(data[i][2]).toLowerCase().trim();
-      var dateStr = data[i][3];
-      var periodsStr = String(data[i][4]);
-      var reason = String(data[i][5] || "").trim();
-      var duration = String(data[i][6] || "").trim();
-      var instructions = String(data[i][8] || "").trim();
-
-      // Get teacher name
-      var lookupEmail = email; // email is already lowercased and trimmed above
-      var teacherName = nameLookup[lookupEmail] || email;
-
-      // Parse date to a comparable format, YYYY-MM-DD
-      var dateObj = new Date(dateStr);
-      var dateFormatted = "";
-      if (!isNaN(dateObj.getTime())) {
-          // Keep local timezone in mind, maybe just formatting using Utilities
-          dateFormatted = Utilities.formatDate(dateObj, Session.getScriptTimeZone(), "yyyy-MM-dd");
-      } else {
-          // Fallback if not a standard date
-          dateFormatted = dateStr;
-      }
-
-      var periods = periodsStr.split(',').map(function(p) { return p.trim(); });
-
-      for (var j = 0; j < periods.length; j++) {
-        var p = parseInt(periods[j]);
-        if (!isNaN(p)) {
-            var subColumnIndex = 8 + p; // 9 for P1, 10 for P2, etc.
-            var assignedSub = data[i][subColumnIndex] || "";
-
-            var scheduleKey = email + "-" + p;
-            var room = "";
-            var course = "";
-
-            if (scheduleLookup[scheduleKey]) {
-              room = scheduleLookup[scheduleKey].room;
-              course = scheduleLookup[scheduleKey].course;
-            }
-
-            adminData.push({
-              id: String(id || ""),
-              originalDate: String(dateStr || ""),
-              date: String(dateFormatted || ""),
-              formDateString: String(dateFormatted || ""), // Included for uniform date matching
-              period: p,
-              periodsString: String(periodsStr || ""), // Needed for edit modal
-              urgency: String(data[i][7] || ""), // Urgency is index 7. Needed for edit modal
-              teacherName: String(teacherName || ""),
-              teacherEmail: String(email || ""),
-              course: String(course || ""),
-              room: String(room || ""),
-              assignedSub: String(assignedSub || "").trim(),
-              reason: String(reason || ""),
-              duration: String(duration || ""),
-              instructions: String(instructions || "")
-            });
-        }
-      }
-    }
-
-    // Sort by Date, then by Period
-    adminData.sort(function(a, b) {
-      if (a.date < b.date) return -1;
-      if (a.date > b.date) return 1;
-      return a.period - b.period;
-    });
-
-    return adminData;
-
-  } catch (e) {
-    console.error("Error fetching Admin Dashboard Data: " + e.message);
-    throw new Error("Failed to load admin dashboard data.");
-  }
-}
 
 /**
  * Fetches data for the HR Dashboard.
  * Returns a list of absence request summaries (ignoring canceled requests).
  */
-function getHRDashboardData() {
-  try {
-    var ss = getSS();
-    var user = getUserData(ss);
-    assertRole(user, ["hr", "principal"], "Unauthorized access. HR or Principal role required.");
-
-    var mainSheet = ss.getSheetByName("Absence Requests");
-    var rosterSheet = ss.getSheetByName("Staff Roster");
-    
-    // Look for Payperiods sheet case-insensitively
-    var allSheets = ss.getSheets();
-    var payPeriodsSheet = null;
-    for (var s = 0; s < allSheets.length; s++) {
-      if (allSheets[s].getName().toLowerCase() === "payperiods") {
-        payPeriodsSheet = allSheets[s];
-        break;
-      }
-    }
-
-    if (!mainSheet) return { requests: [], payPeriods: [] };
-
-    var data = mainSheet.getDataRange().getValues();
-    var rosterData = rosterSheet ? rosterSheet.getDataRange().getValues() : [];
-    var payPeriodsData = payPeriodsSheet ? payPeriodsSheet.getDataRange().getValues() : [];
-
-    var nameLookup = buildNameLookup(rosterData);
-
-    var hrData = [];
-    var payPeriods = [];
-
-    // Process Payperiods - start from 0 in case there is no header
-    for (var p = 0; p < payPeriodsData.length; p++) {
-      var periodNum = String(payPeriodsData[p][0]).trim();
-      var startDateRaw = payPeriodsData[p][1];
-      var endDateRaw = payPeriodsData[p][2];
-      
-      // Attempt to validate dates to skip headers
-      var isHeader = false;
-      if (typeof startDateRaw === 'string' && startDateRaw.toLowerCase().includes('start')) isHeader = true;
-      if (typeof endDateRaw === 'string' && endDateRaw.toLowerCase().includes('end')) isHeader = true;
-      if (isHeader) continue;
-      
-      if (periodNum && startDateRaw && endDateRaw) {
-        var startFormatted = "";
-        if (startDateRaw instanceof Date) {
-          startFormatted = Utilities.formatDate(startDateRaw, Session.getScriptTimeZone(), "yyyy-MM-dd");
-        } else {
-          try {
-             startFormatted = Utilities.formatDate(new Date(startDateRaw), Session.getScriptTimeZone(), "yyyy-MM-dd");
-          } catch(e) {
-             console.error("Error formatting date: " + e.message);
-             startFormatted = String(startDateRaw);
-          }
-        }
-        
-        var endFormatted = "";
-        if (endDateRaw instanceof Date) {
-          endFormatted = Utilities.formatDate(endDateRaw, Session.getScriptTimeZone(), "yyyy-MM-dd");
-        } else {
-          try {
-             endFormatted = Utilities.formatDate(new Date(endDateRaw), Session.getScriptTimeZone(), "yyyy-MM-dd");
-          } catch(e) {
-             console.error("Error formatting date: " + e.message);
-             endFormatted = String(endDateRaw);
-          }
-        }
-
-        payPeriods.push({
-          periodNumber: periodNum,
-          startDate: startFormatted,
-          endDate: endFormatted
-        });
-      }
-    }
-
-    // Skip header row
-    for (var i = 1; i < data.length; i++) {
-      var status = String(data[i][17] || "").trim(); // 17 is Status
-      if (status === "Canceled") continue;
-
-      var id = data[i][0];
-      var email = String(data[i][2]).toLowerCase().trim();
-      var dateStr = data[i][3];
-      var periodsStr = String(data[i][4]);
-      var reason = String(data[i][5]).trim();
-      var duration = String(data[i][6]).trim(); // "Full Day" or "Half Day"
-
-      // Get teacher name
-      var teacherName = nameLookup[email] || email;
-
-      // Parse date to a comparable format, YYYY-MM-DD
-      var dateObj = new Date(dateStr);
-      var dateFormatted = "";
-      if (!isNaN(dateObj.getTime())) {
-          dateFormatted = Utilities.formatDate(dateObj, Session.getScriptTimeZone(), "yyyy-MM-dd");
-      } else {
-          dateFormatted = dateStr;
-      }
-
-      var periods = periodsStr.split(',').map(function(p) { return p.trim(); });
-      var assignedSubs = [];
-
-      for (var j = 0; j < periods.length; j++) {
-        var p = parseInt(periods[j]);
-        if (!isNaN(p)) {
-            var subColumnIndex = 8 + p; // 9 for P1, 10 for P2, etc.
-            var assignedSub = data[i][subColumnIndex] || "";
-            if (assignedSub && String(assignedSub).trim() !== "") {
-              assignedSubs.push({
-                  name: String(assignedSub).trim(),
-                  period: String(p)
-              });
-            }
-        }
-      }
-
-      hrData.push({
-        id: String(id || ""),
-        date: String(dateFormatted || ""),
-        teacherName: String(teacherName || ""),
-        reason: reason,
-        duration: duration,
-        assignedSubs: assignedSubs
-      });
-    }
-
-    return {
-      requests: hrData,
-      payPeriods: payPeriods
-    };
-
-  } catch (e) {
-    console.error("Error fetching HR Dashboard Data: " + e.message);
-    throw new Error("Failed to load HR dashboard data.");
-  }
-}
 /**
  * Fetches all necessary data for the initial application load in a single call.
  */
@@ -1886,15 +1282,15 @@ function getInitialPayload() {
     var targetEmail = String(email).toLowerCase();
 
     // 1. Fetch all required sheets
-    var rosterSheet = ss.getSheetByName("Staff Roster");
+    var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
     var rosterData = rosterSheet ? rosterSheet.getDataRange().getValues() : [];
 
-    var roleSheet = ss.getSheetByName("User Roles");
+    var roleSheet = getSheetOrThrow(ss, "User Roles");
     var roleData = roleSheet ? roleSheet.getDataRange().getValues() : [];
 
     var settings = getSettings(ss); // Already passes ss to avoid fetching again
 
-    var mainSheet = ss.getSheetByName("Absence Requests");
+    var mainSheet = getSheetOrThrow(ss, "Absence Requests");
     var absenceData = mainSheet ? mainSheet.getDataRange().getValues() : [];
 
     var scheduleData = getMasterScheduleData();
@@ -1971,6 +1367,13 @@ function getInitialPayload() {
 
     var targetEndToday = new Date(today);
     targetEndToday.setHours(23, 59, 59, 999);
+
+    var settings = getSettings();
+    var fetchWindowDays = parseInt(settings["Data Fetch Window (Days)"]);
+    if (isNaN(fetchWindowDays)) fetchWindowDays = 30; // default to 30 days
+    var cutoffDate = new Date(today);
+    cutoffDate.setDate(today.getDate() - fetchWindowDays);
+    cutoffDate.setHours(0, 0, 0, 0);
 
     for (var i = 1; i < absenceData.length; i++) {
       var row = absenceData[i];
@@ -2132,6 +1535,7 @@ function getInitialPayload() {
         if (!dateVal) continue;
         var rowDate = new Date(dateVal);
         if (isNaN(rowDate.getTime())) continue;
+        if (rowDate < cutoffDate) continue;
 
         if (rowDate >= today && rowDate <= targetEndQC) {
           var rowTeacherEmail = String(row[2]).toLowerCase();
@@ -2184,10 +1588,12 @@ function getInitialPayload() {
         var row = absenceData[i];
         if (String(row[17] || "").trim() === "Canceled") continue;
 
-        var rowTeacherEmail = String(row[2]).toLowerCase().trim();
-        var teacherName = nameLookup[rowTeacherEmail] || rowTeacherEmail;
         var dateStr = row[3];
         var dateObj = new Date(dateStr);
+        if (!isNaN(dateObj.getTime()) && dateObj < cutoffDate) continue;
+
+        var rowTeacherEmail = String(row[2]).toLowerCase().trim();
+        var teacherName = nameLookup[rowTeacherEmail] || rowTeacherEmail;
         var dateFormatted = !isNaN(dateObj.getTime()) ? Utilities.formatDate(dateObj, Session.getScriptTimeZone(), "yyyy-MM-dd") : dateStr;
         var periodsStr = String(row[4]);
         var periods = periodsStr.split(',').map(function(p) { return p.trim(); });
@@ -2258,10 +1664,12 @@ function getInitialPayload() {
         var row = absenceData[i];
         if (String(row[17] || "").trim() === "Canceled") continue;
 
-        var rowTeacherEmail = String(row[2]).toLowerCase().trim();
-        var teacherName = nameLookup[rowTeacherEmail] || rowTeacherEmail;
         var dateStr = row[3];
         var dateObj = new Date(dateStr);
+        if (!isNaN(dateObj.getTime()) && dateObj < cutoffDate) continue;
+
+        var rowTeacherEmail = String(row[2]).toLowerCase().trim();
+        var teacherName = nameLookup[rowTeacherEmail] || rowTeacherEmail;
         var dateFormatted = !isNaN(dateObj.getTime()) ? Utilities.formatDate(dateObj, Session.getScriptTimeZone(), "yyyy-MM-dd") : dateStr;
 
         var periodsStr = String(row[4]);
@@ -2297,6 +1705,93 @@ function getInitialPayload() {
     return payload;
 
   } catch (err) {
+    notifyAdminOfError("getInitialPayload", err);
     throw new Error("Failed to get initial payload: " + err.message);
+  }
+}
+
+
+
+/**
+ * Executes a function and catches any unhandled exceptions to notify the admin.
+ * @param {Function} func - The function to execute.
+ * @param {string} funcName - The name of the function for logging.
+ * @returns {any} The result of the function.
+ */
+function withGlobalExceptionHandler(funcName, func) {
+  return function() {
+    try {
+      return func.apply(this, arguments);
+    } catch (e) {
+      console.error("Global Error in " + funcName + ": " + e.message + "\nStack: " + e.stack);
+
+      try {
+        var settings = getSettings();
+        var adminEmail = settings["Redirect Email"];
+        if (adminEmail && adminEmail.trim() !== "") {
+          var subject = "Critical App Error: " + funcName;
+          var body = "An error occurred in the Cathedral Sub App.\n\n" +
+                     "Function: " + funcName + "\n" +
+                     "User: " + Session.getActiveUser().getEmail() + "\n" +
+                     "Error Message: " + e.message + "\n\n" +
+                     "Stack Trace:\n" + e.stack;
+
+          MailApp.sendEmail({
+            to: adminEmail,
+            subject: subject,
+            body: body
+          });
+        }
+      } catch (mailError) {
+        console.error("Failed to send admin error email: " + mailError.message);
+      }
+
+      throw e; // Re-throw so frontend still sees an error
+    }
+  };
+}
+
+
+
+/**
+ * Clears the Master Schedule cache from the Script Cache.
+ * Returns a success object.
+ */
+function clearMasterScheduleCache() {
+  try {
+    var ss = getSS();
+    var user = getUserData(ss);
+    assertRole(user, "admin");
+
+    var cache = CacheService.getScriptCache();
+    cache.remove("ps_master_schedule");
+
+    return { success: true };
+  } catch (err) {
+    notifyAdminOfError("clearMasterScheduleCache", err);
+    return { success: false, error: err.message };
+  }
+}
+
+
+/**
+ * Refreshes requested data components.
+ * @param {Array<string>} components - The components to fetch (e.g. ['myAbsences', 'quickCover'])
+ * @returns {Object} The requested data.
+ */
+function refreshData(components) {
+  try {
+    var payload = getInitialPayload();
+    var response = {};
+    for (var i = 0; i < components.length; i++) {
+        var comp = components[i];
+        if (payload[comp] !== undefined) {
+            response[comp] = payload[comp];
+        }
+    }
+    return response;
+  } catch (e) {
+    notifyAdminOfError("refreshData", e);
+    throw new Error("Failed to refresh data: " + e.message);
   }
 }
