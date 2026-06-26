@@ -3,7 +3,275 @@
   <head>
     <base target="_top">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.tailwindcss.com">
+      // === Settings Dashboard Tab Switching ===
+      function switchSettingsTab(tabId) {
+        // Hide all tabs
+        const tabs = document.querySelectorAll('.settings-tab-content');
+        tabs.forEach(tab => {
+          tab.classList.remove('block');
+          tab.classList.add('hidden');
+        });
+
+        // Reset all tab buttons
+        const tabBtns = ['generalSettingsTab', 'roleManagementTab', 'staffRosterTab'];
+        tabBtns.forEach(btn => {
+          const btnEl = document.getElementById('btn-' + btn);
+          if (btnEl) {
+            btnEl.classList.remove('text-[#002147]', 'font-semibold', 'border-b-2', 'border-[#002147]');
+            btnEl.classList.add('text-gray-500', 'font-medium');
+          }
+        });
+
+        // Show active tab
+        const activeTab = document.getElementById(tabId);
+        if (activeTab) {
+          activeTab.classList.remove('hidden');
+          activeTab.classList.add('block');
+        }
+
+        // Highlight active tab button
+        const activeBtn = document.getElementById('btn-' + tabId);
+        if (activeBtn) {
+          activeBtn.classList.remove('text-gray-500', 'font-medium');
+          activeBtn.classList.add('text-[#002147]', 'font-semibold', 'border-b-2', 'border-[#002147]');
+        }
+      }
+
+      // === Staff Roster Logic ===
+      let currentStaffRoster = [];
+
+      function loadStaffRosterSettings() {
+        const tbody = document.getElementById('staffRosterTableBody');
+        tbody.innerHTML = '<tr><td colspan="4" class="p-8 text-center text-gray-400 italic">Loading staff roster...</td></tr>';
+        google.script.run
+          .withSuccessHandler(roster => {
+            currentStaffRoster = roster;
+            renderStaffRosterTable();
+          })
+          .withFailureHandler(err => {
+            tbody.innerHTML = `<tr><td colspan="4" class="p-8 text-center text-red-600 font-bold">Failed to load roster: ${err.message}</td></tr>`;
+          })
+          .getStaffRosterForAdmin();
+      }
+
+      function renderStaffRosterTable() {
+        const tbody = document.getElementById('staffRosterTableBody');
+        if (currentStaffRoster.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="4" class="p-8 text-center text-gray-400 italic">No staff found.</td></tr>';
+          return;
+        }
+
+        let html = '';
+        currentStaffRoster.forEach((staff, idx) => {
+          html += `
+            <tr class="hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0">
+              <td class="p-3 text-sm text-gray-800 font-medium">${escapeHtml(staff.name)}</td>
+              <td class="p-3 text-sm text-gray-600">${escapeHtml(staff.email)}</td>
+              <td class="p-3 text-sm text-gray-600">${escapeHtml(staff.duty || '')}</td>
+              <td class="p-3 text-right space-x-2">
+                <button onclick="openEditStaffModal('${escapeJs(staff.name)}', '${escapeJs(staff.email)}', '${escapeJs(staff.duty || '')}')" class="text-blue-600 hover:text-blue-800 font-semibold text-sm">Edit</button>
+                <button onclick="deleteStaffMember('${escapeJs(staff.email)}')" class="text-red-600 hover:text-red-800 font-semibold text-sm">Delete</button>
+              </td>
+            </tr>
+          `;
+        });
+        tbody.innerHTML = html;
+      }
+
+      function copyStaffRosterData() {
+        if (!currentStaffRoster || currentStaffRoster.length === 0) {
+           alert("No data to copy.");
+           return;
+        }
+        let csvText = "LASTFIRST,EMAIL_ADDR,Duty\n";
+        currentStaffRoster.forEach(staff => {
+           csvText += `"${staff.name}","${staff.email}","${staff.duty || ''}"\n`;
+        });
+        navigator.clipboard.writeText(csvText).then(() => {
+           alert("Staff roster copied to clipboard as CSV!");
+        }).catch(err => {
+           alert("Failed to copy data: " + err);
+        });
+      }
+
+      function saveStaffMember() {
+        const originalEmail = document.getElementById('staffOriginalEmail').value;
+        const name = document.getElementById('staffNameInput').value;
+        const email = document.getElementById('staffEmailInput').value;
+        const duty = document.getElementById('staffDutyInput').value;
+
+        if (!name || !email) {
+          alert("Name and Email are required.");
+          return;
+        }
+
+        const btn = document.getElementById('saveStaffBtn');
+        const originalText = btn.innerText;
+        btn.disabled = true;
+        btn.innerText = "Saving...";
+
+        const staffData = {
+           originalEmail: originalEmail,
+           name: name,
+           email: email,
+           duty: duty
+        };
+
+        google.script.run
+          .withSuccessHandler(result => {
+             btn.disabled = false;
+             btn.innerText = originalText;
+             if (result && result.success) {
+                attemptCloseAllModals();
+                loadStaffRosterSettings();
+             } else {
+                alert("Failed to save staff member: " + (result ? result.error : "Unknown error"));
+             }
+          })
+          .withFailureHandler(err => {
+             btn.disabled = false;
+             btn.innerText = originalText;
+             alert("Connection Error: " + err.message);
+          })
+          .saveStaffMemberAdmin(staffData);
+      }
+
+      function deleteStaffMember(email) {
+        if (!confirm(`Are you sure you want to delete ${email} from the staff roster?`)) return;
+
+        google.script.run
+          .withSuccessHandler(result => {
+             if (result && result.success) {
+                loadStaffRosterSettings();
+             } else {
+                alert("Failed to delete staff member: " + (result ? result.error : "Unknown error"));
+             }
+          })
+          .withFailureHandler(err => {
+             alert("Connection Error: " + err.message);
+          })
+          .deleteStaffMemberAdmin(email);
+      }
+
+      function processStaffCsvUpload() {
+         const fileInput = document.getElementById('staffCsvFileInput');
+         const textarea = document.getElementById('staffCsvTextarea');
+
+         if (fileInput.files.length > 0) {
+            const file = fileInput.files[0];
+            const reader = new FileReader();
+            reader.onload = function(e) {
+               parseAndSubmitStaffCsv(e.target.result);
+               fileInput.value = ""; // clear input
+            };
+            reader.readAsText(file);
+         } else if (textarea.value.trim() !== "") {
+            parseAndSubmitStaffCsv(textarea.value);
+            textarea.value = ""; // clear textarea
+         } else {
+            alert("Please select a CSV file or paste CSV data.");
+         }
+      }
+
+      function parseAndSubmitStaffCsv(csvText) {
+         // Basic CSV parsing
+         const lines = csvText.split(/\r?\n/).filter(line => line.trim() !== '');
+         if (lines.length < 2) {
+            alert("CSV must contain headers and at least one data row.");
+            return;
+         }
+
+         const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, '').toUpperCase());
+         const nameIdx = headers.indexOf('LASTFIRST');
+         const emailIdx = headers.indexOf('EMAIL_ADDR');
+         const dutyIdx = headers.indexOf('DUTY');
+
+         if (nameIdx === -1 || emailIdx === -1) {
+            alert("CSV must contain 'LASTFIRST' and 'EMAIL_ADDR' columns.");
+            return;
+         }
+
+         const updates = [];
+         for (let i = 1; i < lines.length; i++) {
+            // handle commas inside quotes using regex
+            const row = lines[i].match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g) || lines[i].split(',');
+            if (row.length <= Math.max(nameIdx, emailIdx)) continue;
+
+            const name = row[nameIdx] ? row[nameIdx].trim().replace(/^"|"$/g, '') : "";
+            const email = row[emailIdx] ? row[emailIdx].trim().replace(/^"|"$/g, '') : "";
+            let duty = "";
+            if (dutyIdx !== -1 && row[dutyIdx]) {
+                duty = row[dutyIdx].trim().replace(/^"|"$/g, '');
+            }
+
+            if (name && email) {
+                updates.push({name: name, email: email, duty: duty});
+            }
+         }
+
+         if (updates.length === 0) {
+            alert("No valid rows found to process.");
+            return;
+         }
+
+         if (!confirm(`Are you sure you want to process ${updates.length} staff records? Existing records with the same email will be updated.`)) {
+             return;
+         }
+
+         google.script.run
+            .withSuccessHandler(result => {
+               if (result && result.success) {
+                  alert(`Successfully processed ${result.updated} records.`);
+                  loadStaffRosterSettings();
+               } else {
+                  alert("Failed to process CSV: " + (result ? result.error : "Unknown error"));
+               }
+            })
+            .withFailureHandler(err => {
+               alert("Connection Error: " + err.message);
+            })
+            .bulkUpsertStaffRoster(updates);
+      }
+
+      // === Staff Roster Modals ===
+      function openAddStaffModal() {
+        document.getElementById('staffModalTitle').innerText = "Add Staff Member";
+        document.getElementById('staffOriginalEmail').value = "";
+        document.getElementById('staffNameInput').value = "";
+        document.getElementById('staffEmailInput').value = "";
+        document.getElementById('staffDutyInput').value = "";
+
+        const modal = document.querySelector('#staffModal');
+        const overlay = document.querySelector('#genericModalOverlay');
+        const body = document.querySelector('body');
+
+        modal.classList.remove('opacity-0', 'pointer-events-none');
+        overlay.classList.remove('opacity-0', 'pointer-events-none');
+        body.classList.add('modal-active');
+
+        setTimeout(captureModalState, 50);
+      }
+
+      function openEditStaffModal(name, email, duty) {
+        document.getElementById('staffModalTitle').innerText = "Edit Staff Member";
+        document.getElementById('staffOriginalEmail').value = email;
+        document.getElementById('staffNameInput').value = name;
+        document.getElementById('staffEmailInput').value = email;
+        document.getElementById('staffDutyInput').value = duty || "";
+
+        const modal = document.querySelector('#staffModal');
+        const overlay = document.querySelector('#genericModalOverlay');
+        const body = document.querySelector('body');
+
+        modal.classList.remove('opacity-0', 'pointer-events-none');
+        overlay.classList.remove('opacity-0', 'pointer-events-none');
+        body.classList.add('modal-active');
+
+        setTimeout(captureModalState, 50);
+      }
+
+    </script>
     <style>
       .modal { transition: opacity 0.25s ease; }
       body.modal-active { overflow: hidden; }
@@ -104,7 +372,59 @@
           </div>
         </div>
       </div>
+
+      <!-- Staff Roster Tab -->
+      <div id="staffRosterTab" class="settings-tab-content bg-white rounded-xl shadow-sm border border-gray-200 p-6 hidden">
+        <div class="flex justify-between items-center mb-4 border-b pb-2">
+           <h3 class="text-xl font-bold text-[#002147]">Staff Roster</h3>
+           <div class="flex gap-2">
+               <button onclick="copyStaffRosterData()" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-1.5 px-4 rounded-lg transition-colors text-sm flex items-center gap-2">
+                   <span>📋</span> Copy Data
+               </button>
+               <button onclick="openAddStaffModal()" class="bg-[#00843D] hover:bg-green-700 text-white font-bold py-1.5 px-4 rounded-lg transition-colors text-sm flex items-center gap-2">
+                   <span>➕</span> Add Staff
+               </button>
+           </div>
+        </div>
+
+        <div class="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+           <h4 class="text-md font-bold text-[#002147] mb-2">CSV Upload (Bulk Update/Create)</h4>
+           <div class="flex flex-col gap-3">
+               <div>
+                 <label class="block text-sm text-gray-600 mb-1">Select a .csv file...</label>
+                 <input type="file" id="staffCsvFileInput" accept=".csv" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-[#002147] file:text-white hover:file:bg-blue-900"/>
+               </div>
+               <div class="text-center text-gray-500 font-semibold text-sm">OR</div>
+               <div>
+                 <label class="block text-sm text-gray-600 mb-1">...Paste CSV data directly</label>
+                 <textarea id="staffCsvTextarea" rows="4" placeholder="LASTFIRST,EMAIL_ADDR,Duty&#10;Smith John,jsmith@gocathedral.com,1" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none text-sm font-mono"></textarea>
+               </div>
+               <div class="flex justify-end">
+                  <button onclick="processStaffCsvUpload()" class="bg-[#002147] hover:bg-blue-900 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-md text-sm">
+                    Process CSV
+                  </button>
+               </div>
+           </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse min-w-max">
+            <thead>
+              <tr class="bg-gray-50 border-b border-gray-200 text-sm text-gray-700 uppercase">
+                <th class="p-3">Name</th>
+                <th class="p-3">Email</th>
+                <th class="p-3">Duty</th>
+                <th class="p-3 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="staffRosterTableBody" class="divide-y divide-gray-100">
+               <tr><td colspan="4" class="p-8 text-center text-gray-400 italic">Loading staff roster...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
     </main>
+
 
     <!-- Admin Dashboard View -->
     <main id="adminDashboardView" class="max-w-6xl mx-auto p-4 mt-4 hidden">
@@ -276,6 +596,7 @@
         </button>
       </div>
 
+
       <!-- Settings Tabs -->
       <div class="flex border-b border-gray-200 mb-6">
         <button onclick="switchSettingsTab('generalSettingsTab')" id="btn-generalSettingsTab" class="py-2 px-4 text-[#002147] font-semibold border-b-2 border-[#002147] focus:outline-none">
@@ -289,8 +610,9 @@
         </button>
       </div>
 
-      <!-- General Settings Tab -->
+      <!-- General Settings -->
       <div id="generalSettingsTab" class="settings-tab-content bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8 block">
+
         <h3 class="text-xl font-bold text-[#002147] mb-4 border-b pb-2">General Settings</h3>
         <div id="generalSettingsContainer" class="space-y-4">
            <!-- Dynamic content injected here -->
@@ -298,8 +620,10 @@
         </div>
       </div>
 
-      <!-- Role Management Tab -->
+
+      <!-- Role Management -->
       <div id="roleManagementTab" class="settings-tab-content bg-white rounded-xl shadow-sm border border-gray-200 p-6 hidden">
+
         <div class="flex justify-between items-center mb-4 border-b pb-2">
            <h3 class="text-xl font-bold text-[#002147]">User Roles</h3>
            <button onclick="openAddRoleModal()" class="bg-[#00843D] hover:bg-green-700 text-white font-bold py-1.5 px-4 rounded-lg transition-colors text-sm flex items-center gap-2">
@@ -317,57 +641,6 @@
             </thead>
             <tbody id="roleManagementTableBody" class="divide-y divide-gray-100">
                <tr><td colspan="3" class="p-8 text-center text-gray-400 italic">Loading roles...</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- Staff Roster Tab -->
-      <div id="staffRosterTab" class="settings-tab-content bg-white rounded-xl shadow-sm border border-gray-200 p-6 hidden">
-        <div class="flex justify-between items-center mb-4 border-b pb-2">
-           <h3 class="text-xl font-bold text-[#002147]">Staff Roster</h3>
-           <div class="flex gap-2">
-               <button onclick="copyStaffRosterData()" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-1.5 px-4 rounded-lg transition-colors text-sm flex items-center gap-2">
-                   <span>📋</span> Copy Data
-               </button>
-               <button onclick="openAddStaffModal()" class="bg-[#00843D] hover:bg-green-700 text-white font-bold py-1.5 px-4 rounded-lg transition-colors text-sm flex items-center gap-2">
-                   <span>➕</span> Add Staff
-               </button>
-           </div>
-        </div>
-
-        <div class="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
-           <h4 class="text-md font-bold text-[#002147] mb-2">CSV Upload (Bulk Update/Create)</h4>
-           <div class="flex flex-col gap-3">
-               <div>
-                 <label class="block text-sm text-gray-600 mb-1">Select a .csv file...</label>
-                 <input type="file" id="staffCsvFileInput" accept=".csv" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-[#002147] file:text-white hover:file:bg-blue-900"/>
-               </div>
-               <div class="text-center text-gray-500 font-semibold text-sm">OR</div>
-               <div>
-                 <label class="block text-sm text-gray-600 mb-1">...Paste CSV data directly</label>
-                 <textarea id="staffCsvTextarea" rows="4" placeholder="LASTFIRST,EMAIL_ADDR,Duty&#10;Smith John,jsmith@gocathedral.com,1" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none text-sm font-mono"></textarea>
-               </div>
-               <div class="flex justify-end">
-                  <button onclick="processStaffCsvUpload()" class="bg-[#002147] hover:bg-blue-900 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-md text-sm">
-                    Process CSV
-                  </button>
-               </div>
-           </div>
-        </div>
-
-        <div class="overflow-x-auto">
-          <table class="w-full text-left border-collapse min-w-max">
-            <thead>
-              <tr class="bg-gray-50 border-b border-gray-200 text-sm text-gray-700 uppercase">
-                <th class="p-3">Name</th>
-                <th class="p-3">Email</th>
-                <th class="p-3">Duty</th>
-                <th class="p-3 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody id="staffRosterTableBody" class="divide-y divide-gray-100">
-               <tr><td colspan="4" class="p-8 text-center text-gray-400 italic">Loading staff roster...</td></tr>
             </tbody>
           </table>
         </div>
@@ -420,6 +693,12 @@
                   <input type="number" id="settingsTermId" value="${escapeHtml(settings["Term ID"] || "3503")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none">
                 </div>
                 <div>
+                  <label class="block text-sm font-bold mb-1">Data Fetch Window (Days)</label>
+                  <input type="number" id="settingsFetchWindow" min="1" value="${escapeHtml(settings["Data Fetch Window (Days)"] || "30")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none" title="Number of past days to load data for. Defaults to 30.">
+                </div>
+              </div>
+              <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
                   <label class="block text-sm font-bold mb-1">PowerSchool API URL</label>
                   <input type="text" id="settingsPsUrl" value="${escapeHtml(settings["PS_URL"] || "")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none">
                 </div>
@@ -444,7 +723,10 @@
                  </div>
               </div>
 
-              <div class="mt-6 flex justify-end">
+              <div class="mt-6 flex justify-between items-center">
+                <button id="clearCacheBtn" onclick="clearMasterScheduleCacheClient()" class="bg-red-100 hover:bg-red-200 text-red-700 font-bold py-2 px-4 rounded-lg transition-colors shadow-sm text-sm border border-red-200">
+                  Clear Master Schedule Cache
+                </button>
                 <button id="saveSettingsBtn" onclick="saveSettings()" class="bg-[#002147] hover:bg-blue-900 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-md">
                   Save General Settings
                 </button>
@@ -522,6 +804,7 @@
           "Redirect Email": document.getElementById('settingsRedirectEmail').value,
           "App URL": document.getElementById('settingsAppUrl').value,
           "Urgency Cutoff Time": document.getElementById('settingsUrgencyCutoff').value,
+          "Data Fetch Window (Days)": document.getElementById('settingsFetchWindow').value,
           "Term ID": document.getElementById('settingsTermId').value,
           "PS_URL": document.getElementById('settingsPsUrl').value,
           "PS_CLIENT_ID": document.getElementById('settingsPsClientId').value,
@@ -545,6 +828,32 @@
             btn.innerText = originalText;
           })
           .updateSettings(newSettings);
+      }
+
+      function clearMasterScheduleCacheClient() {
+        if (!confirm("Are you sure you want to clear the Master Schedule cache? It will be re-fetched from PowerSchool on the next load.")) return;
+
+        const btn = document.getElementById('clearCacheBtn');
+        const originalText = btn.innerText;
+        btn.disabled = true;
+        btn.innerText = "Clearing...";
+
+        google.script.run
+          .withSuccessHandler(result => {
+             if (result && result.success) {
+                 alert("Cache cleared successfully! Data will be fresh on next load.");
+             } else {
+                 alert("Failed to clear cache: " + (result ? result.error : "Unknown error"));
+             }
+             btn.disabled = false;
+             btn.innerText = originalText;
+          })
+          .withFailureHandler(err => {
+             alert("Error: " + err.message);
+             btn.disabled = false;
+             btn.innerText = originalText;
+          })
+          .clearMasterScheduleCache();
       }
 
       let currentRoles = [];
@@ -646,43 +955,6 @@
           .deleteUserRole(email);
       }
 
-      // === Staff Roster Modals ===
-      function openAddStaffModal() {
-        document.getElementById('staffModalTitle').innerText = "Add Staff Member";
-        document.getElementById('staffOriginalEmail').value = "";
-        document.getElementById('staffNameInput').value = "";
-        document.getElementById('staffEmailInput').value = "";
-        document.getElementById('staffDutyInput').value = "";
-
-        const modal = document.querySelector('#staffModal');
-        const overlay = document.querySelector('#genericModalOverlay');
-        const body = document.querySelector('body');
-
-        modal.classList.remove('opacity-0', 'pointer-events-none');
-        overlay.classList.remove('opacity-0', 'pointer-events-none');
-        body.classList.add('modal-active');
-
-        setTimeout(captureModalState, 50);
-      }
-
-      function openEditStaffModal(name, email, duty) {
-        document.getElementById('staffModalTitle').innerText = "Edit Staff Member";
-        document.getElementById('staffOriginalEmail').value = email;
-        document.getElementById('staffNameInput').value = name;
-        document.getElementById('staffEmailInput').value = email;
-        document.getElementById('staffDutyInput').value = duty || "";
-
-        const modal = document.querySelector('#staffModal');
-        const overlay = document.querySelector('#genericModalOverlay');
-        const body = document.querySelector('body');
-
-        modal.classList.remove('opacity-0', 'pointer-events-none');
-        overlay.classList.remove('opacity-0', 'pointer-events-none');
-        body.classList.add('modal-active');
-
-        setTimeout(captureModalState, 50);
-      }
-
       function openAddRoleModal() {
         document.getElementById('addRoleEmail').value = '';
         document.getElementById('addRoleSelect').value = 'Admin';
@@ -779,6 +1051,7 @@
         </div>
       </div>
     </div>
+
 
     <!-- Add/Edit Staff Modal -->
     <div id="staffModal" class="modal opacity-0 pointer-events-none fixed w-full h-full top-0 left-0 flex items-center justify-center z-[110]" onclick="if(event.target === this) attemptCloseAllModals()">
@@ -924,6 +1197,31 @@
     </div>
 
     <script>
+
+      // --- PUB-SUB EVENT EMITTER ---
+      const EventBus = {
+        listeners: {},
+        subscribe: function(event, callback) {
+          if (!this.listeners[event]) {
+            this.listeners[event] = [];
+          }
+          this.listeners[event].push(callback);
+        },
+        publish: function(event, data) {
+          if (this.listeners[event]) {
+            this.listeners[event].forEach(callback => callback(data));
+          }
+        }
+      };
+
+      // Subscribe UI components to data refresh events
+      EventBus.subscribe('refresh_myAbsences', () => loadMyAbsences());
+      EventBus.subscribe('refresh_mySubDuties', () => loadMySubDuties());
+      EventBus.subscribe('refresh_todaysOpenJobs', () => loadTodaysOpenJobs());
+      EventBus.subscribe('refresh_quickCover', () => loadQuickCover());
+      EventBus.subscribe('refresh_adminData', (data) => { loadAdminDataRawSilent(); loadAdminDashboardData(data && data.renderAtAGlance); });
+      // -------------------------------
+
       function toggleSection(wrapperId, iconId) {
         const wrapper = document.getElementById(wrapperId);
         const icon = document.getElementById(iconId);
@@ -1097,8 +1395,8 @@
 
       function loadStaffList() {
         google.script.run
-          .withSuccessHandler(renderStaffList)
-          .getStaffList();
+          .withSuccessHandler(res => { if (res.staffList) renderStaffList(res.staffList); })
+          .refreshData(['staffList']);
       }
 
 
@@ -1108,6 +1406,7 @@
       function captureModalState() {
         const isAddRoleModalOpen = !document.getElementById('addRoleModal').classList.contains('opacity-0');
         const isRequestModalOpen = !document.querySelector('#modal').classList.contains('opacity-0');
+
         const isStaffModalOpen = !document.getElementById('staffModal').classList.contains('opacity-0');
 
         if (isStaffModalOpen) {
@@ -1142,6 +1441,7 @@
       function hasUnsavedData() {
         const isAddRoleModalOpen = !document.getElementById('addRoleModal').classList.contains('opacity-0');
         const isRequestModalOpen = !document.querySelector('#modal').classList.contains('opacity-0');
+
         const isStaffModalOpen = !document.getElementById('staffModal').classList.contains('opacity-0');
 
         if (isStaffModalOpen) {
@@ -1346,11 +1646,11 @@
 
       function loadTodaysOpenJobs() {
         google.script.run
-          .withSuccessHandler(renderTodaysOpenJobs)
+          .withSuccessHandler(res => { if (res.todaysOpenJobs) renderTodaysOpenJobs(res.todaysOpenJobs); })
           .withFailureHandler(err => {
             document.getElementById('todaysOpenJobs').innerHTML = `<div class="text-red-600 font-bold">Failed to load open jobs: ${err.message}</div>`;
           })
-          .getTodaysOpenJobsData();
+          .refreshData(['todaysOpenJobs']);
       }
 
       function handleSignMeUp(absenceId, period, btnId) {
@@ -1376,12 +1676,12 @@
             if (result && result.success) {
               alert("Successfully signed up for period " + period + "!");
               // Refresh all relevant sections
-              loadTodaysOpenJobs();
-              loadMySubDuties();
+              EventBus.publish('refresh_todaysOpenJobs');
+              EventBus.publish('refresh_mySubDuties');
 
               if (!document.getElementById('adminSection').classList.contains('hidden')) {
-                 loadQuickCover();
-                 loadAdminDataRawSilent();
+                 EventBus.publish('refresh_quickCover');
+                 EventBus.publish('refresh_adminData');
               }
             } else {
               alert(result ? result.error : "Unknown error");
@@ -1478,11 +1778,11 @@
 
       function loadQuickCover() {
         google.script.run
-          .withSuccessHandler(renderQuickCover)
+          .withSuccessHandler(res => { if (res.quickCover) renderQuickCover(res.quickCover); })
           .withFailureHandler(err => {
             document.getElementById('quickCoverContainer').innerHTML = `<div class="p-8 text-center text-red-600 font-bold">Failed to load data: ${err.message}</div>`;
           })
-          .getQuickCoverData();
+          .refreshData(['quickCover']);
       }
 
       function toggleSettingsDashboard() {
@@ -1502,44 +1802,12 @@
           // load Settings Data
           loadSettingsData();
           loadRolesData();
-          loadStaffRosterSettings();
+          if (typeof loadStaffRosterSettings === 'function') {
+            loadStaffRosterSettings();
+          }
         } else {
           settingsView.classList.add('hidden');
           mainContent.classList.remove('hidden');
-        }
-      }
-
-      // === Settings Dashboard Tab Switching ===
-      function switchSettingsTab(tabId) {
-        // Hide all tabs
-        const tabs = document.querySelectorAll('.settings-tab-content');
-        tabs.forEach(tab => {
-          tab.classList.remove('block');
-          tab.classList.add('hidden');
-        });
-
-        // Reset all tab buttons
-        const tabBtns = ['generalSettingsTab', 'roleManagementTab', 'staffRosterTab'];
-        tabBtns.forEach(btn => {
-          const btnEl = document.getElementById('btn-' + btn);
-          if (btnEl) {
-            btnEl.classList.remove('text-[#002147]', 'font-semibold', 'border-b-2', 'border-[#002147]');
-            btnEl.classList.add('text-gray-500', 'font-medium');
-          }
-        });
-
-        // Show active tab
-        const activeTab = document.getElementById(tabId);
-        if (activeTab) {
-          activeTab.classList.remove('hidden');
-          activeTab.classList.add('block');
-        }
-
-        // Highlight active tab button
-        const activeBtn = document.getElementById('btn-' + tabId);
-        if (activeBtn) {
-          activeBtn.classList.remove('text-gray-500', 'font-medium');
-          activeBtn.classList.add('text-[#002147]', 'font-semibold', 'border-b-2', 'border-[#002147]');
         }
       }
 
@@ -1700,8 +1968,8 @@
 
       function loadAdminDataRawSilent() {
         google.script.run
-          .withSuccessHandler(renderAdminDataRawSilent)
-          .getAdminDashboardData();
+          .withSuccessHandler(res => { if (res.adminData) renderAdminDataRawSilent(res.adminData); })
+          .refreshData(['adminData']);
       }
 
       function renderAdminDashboardData(data, renderAtAGlance = false) {
@@ -1729,14 +1997,14 @@
         }
 
         google.script.run
-          .withSuccessHandler(data => renderAdminDashboardData(data, renderAtAGlance))
+          .withSuccessHandler(res => { if (res.adminData) renderAdminDashboardData(res.adminData, renderAtAGlance); })
           .withFailureHandler(err => {
             document.getElementById('adminDashboardTableBody').innerHTML = `<tr><td colspan="7" class="p-8 text-center text-red-600 font-bold">Failed to load: ${err.message}</td></tr>`;
             if (renderAtAGlance) {
                 document.getElementById('atAGlanceTableBody').innerHTML = `<tr><td class="p-8 text-center text-red-600 font-bold">Failed to load: ${err.message}</td></tr>`;
             }
           })
-          .getAdminDashboardData();
+          .refreshData(['adminData']);
       }
 
       function applyAdminFilters() {
@@ -2030,11 +2298,10 @@
               const isAtAGlanceVisible = atAGlanceView && !atAGlanceView.classList.contains('hidden');
 
               // Refresh admin data behind the scenes
-              loadAdminDashboardData(isAtAGlanceVisible);
+              EventBus.publish('refresh_adminData', { renderAtAGlance: isAtAGlanceVisible });
 
               // Also refresh quick cover if it's the same 2-day window
-              loadQuickCover();
-              loadAdminDataRawSilent();
+              EventBus.publish('refresh_quickCover');
             } else {
               alert(result ? result.error : "Unknown error");
               btn.disabled = false;
@@ -2151,8 +2418,8 @@
               if (isFromModal) {
                  closeDetailsModal();
               }
-              loadQuickCover(); // Refresh the list
-              loadAdminDataRawSilent();
+              EventBus.publish('refresh_quickCover'); // Refresh the list
+              EventBus.publish('refresh_adminData');
             } else {
               alert(result ? result.error : "Unknown error");
               btn.disabled = false;
@@ -2214,11 +2481,11 @@
 
       function loadMySubDuties() {
         google.script.run
-          .withSuccessHandler(renderMySubDuties)
+          .withSuccessHandler(res => { if (res.mySubDuties) renderMySubDuties(res.mySubDuties); })
           .withFailureHandler(err => {
             document.getElementById('mySubDuties').innerHTML = `<div class="p-8 text-center text-red-600 font-bold">Failed to load sub-duties: ${err.message}</div>`;
           })
-          .getMySubDuties();
+          .refreshData(['mySubDuties']);
       }
 
       function openSubDutyDetailsModal(index) {
@@ -2268,10 +2535,10 @@
           .withSuccessHandler(result => {
              if (result && result.success) {
                alert("Sub-duty cancelled successfully. The sub coordinator has been notified.");
-               loadMySubDuties();
+               EventBus.publish('refresh_mySubDuties');
                if (!document.getElementById('adminSection').classList.contains('hidden')) {
-                 loadQuickCover();
-                 loadAdminDataRawSilent();
+                 EventBus.publish('refresh_quickCover');
+                 EventBus.publish('refresh_adminData');
                }
              } else {
                alert("Failed to cancel sub-duty: " + (result ? result.error : "Unknown"));
@@ -2327,11 +2594,11 @@
 
       function loadMyAbsences() {
         google.script.run
-          .withSuccessHandler(renderMyAbsences)
+          .withSuccessHandler(res => { if (res.myAbsences) renderMyAbsences(res.myAbsences); })
           .withFailureHandler(err => {
             document.getElementById('myAbsences').innerHTML = `<div class="text-red-600 font-bold">Failed to load absences: ${err.message}</div>`;
           })
-          .getMyAbsences();
+          .refreshData(['myAbsences']);
       }
 
       function editAbsence(index) {
@@ -2454,10 +2721,8 @@
                 alert("Request cancelled successfully.");
                 toggleModal(); // close modal
                 if (!document.getElementById('adminSection').classList.contains('hidden')) {
-                  loadQuickCover();
-                  loadAdminDataRawSilent();
-                  // Admin dashboard view handles its own UI refresh when raw data is reloaded, but let's force a refresh
-                  loadAdminDashboardData();
+                  EventBus.publish('refresh_quickCover');
+                  EventBus.publish('refresh_adminData');
                 }
               } else {
                 alert("Failed to cancel: " + (result ? result.error : "Unknown"));
@@ -2487,10 +2752,10 @@
           .withSuccessHandler(result => {
              if (result && result.success) {
                alert("Request cancelled successfully.");
-               loadMyAbsences();
+               EventBus.publish('refresh_myAbsences');
                if (!document.getElementById('adminSection').classList.contains('hidden')) {
-                 loadQuickCover();
-                 loadAdminDataRawSilent();
+                 EventBus.publish('refresh_quickCover');
+                 EventBus.publish('refresh_adminData');
                }
              } else {
                alert("Failed to cancel: " + (result ? result.error : "Unknown"));
@@ -2560,10 +2825,8 @@
                 toggleModal();
                 loadMyAbsences();
                 if (!document.getElementById('adminSection').classList.contains('hidden')) {
-                  loadQuickCover();
-                  loadAdminDataRawSilent();
-                  // Admin dashboard view handles its own UI refresh when raw data is reloaded, but let's force a refresh
-                  loadAdminDashboardData();
+                  EventBus.publish('refresh_quickCover');
+                  EventBus.publish('refresh_adminData');
                 }
               } else {
                 alert(result ? result.error : "Database Error");
@@ -2588,11 +2851,11 @@
                 btn.disabled = false;
                 btn.innerHTML = 'Submit Request';
                 toggleModal();
-                loadMyAbsences();
+                EventBus.publish('refresh_myAbsences');
 
                 if (!document.getElementById('adminSection').classList.contains('hidden')) {
-                  loadQuickCover();
-                  loadAdminDataRawSilent();
+                  EventBus.publish('refresh_quickCover');
+                  EventBus.publish('refresh_adminData');
                 }
               } else {
                 alert(result ? result.error : "Database Error");
@@ -2723,11 +2986,11 @@
         document.getElementById('hrDashboardTableBody').innerHTML = '<tr><td colspan="2" class="p-8 text-center text-gray-400 italic">Loading HR dashboard data...</td></tr>';
 
         google.script.run
-          .withSuccessHandler(renderHRDashboardData)
+          .withSuccessHandler(res => { if (res.hrData) renderHRDashboardData(res.hrData); })
           .withFailureHandler(err => {
             document.getElementById('hrDashboardTableBody').innerHTML = `<tr><td colspan="2" class="p-8 text-center text-red-600 font-bold">Failed to load: ${err.message}</td></tr>`;
           })
-          .getHRDashboardData();
+          .refreshData(['hrData']);
       }
 
       function handleHRDateChange() {
