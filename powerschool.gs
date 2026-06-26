@@ -108,7 +108,9 @@ function testPowerSchoolMasterScheduleFetch() {
 
   // The placeholder PowerQuery endpoint.
   // Update this if you name your PowerQuery differently.
-  const endpoint = "/ws/schema/query/com.cathedral.subapp.masterschedule";
+  // By default, PowerSchool PowerQueries limit results to 100 records.
+  // Appending ?pagesize=0 instructs it to return all records at once.
+  const endpoint = "/ws/schema/query/com.cathedral.subapp.masterschedule?pagesize=0";
 
   const options = {
     method: "POST", // PowerQueries require POST, even for retrieving data
