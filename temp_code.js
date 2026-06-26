@@ -122,11 +122,11 @@ function getSettings(ss) {
 function doGet(e) {
   var template = HtmlService.createTemplateFromFile('Index');
   template.userEmail = Session.getActiveUser().getEmail();
-  
+
   var htmlOutput = template.evaluate();
   htmlOutput.setTitle('Cathedral Sub Coverage');
   htmlOutput.addMetaTag('viewport', 'width=device-width, initial-scale=1');
-  
+
   return htmlOutput;
 }
 
@@ -196,30 +196,30 @@ function assertRole(user, allowedRoles, customErrorMessage) {
 function getUserData(ss) {
   var email = Session.getActiveUser().getEmail();
   var ss = ss || getSS();
-  
+
   var rosterSheet = ss.getSheetByName("Staff Roster");
   var rosterData = rosterSheet ? rosterSheet.getDataRange().getValues() : [];
-  var name = "Teacher"; 
+  var name = "Teacher";
   var targetEmail = String(email).toLowerCase();
-  
+
   for (var i = 1; i < rosterData.length; i++) {
     if (String(rosterData[i][1]).toLowerCase() === targetEmail) {
-      name = rosterData[i][0]; 
+      name = rosterData[i][0];
       break;
     }
   }
-  
+
   var roleSheet = ss.getSheetByName("User Roles");
   var roleData = roleSheet ? roleSheet.getDataRange().getValues() : [];
-  var role = "User"; 
-  
+  var role = "User";
+
   for (var j = 1; j < roleData.length; j++) {
     if (String(roleData[j][0]).toLowerCase() === targetEmail) {
-      role = roleData[j][1]; 
+      role = roleData[j][1];
       break;
     }
   }
-  
+
   var settings = getSettings(ss);
   var appUrl = settings["App URL"] || "https://script.google.com/a/macros/gocathedral.com/s/AKfycbwKZrBo4R-9O97aVNCjOHk9PddWCb6XNKviDS1lj4nNc49khl3T9OL8pGUDa7E1XE0/exec";
   var urgencyCutoffTime = settings["Urgency Cutoff Time"] || "15";
@@ -644,20 +644,20 @@ function getMyAbsences() {
     var email = Session.getActiveUser().getEmail();
     var ss = getSS();
     var sheet = ss.getSheetByName("Absence Requests");
-    
-    if (!sheet) return []; 
-    
+
+    if (!sheet) return [];
+
     var data = sheet.getDataRange().getValues();
     var myAbsences = [];
     var targetEmail = String(email).toLowerCase();
-    
+
     for (var i = 1; i < data.length; i++) {
       var status = String(data[i][17] || 'Active');
       if (status === 'Canceled') continue;
 
       if (String(data[i][2]).toLowerCase() === targetEmail) { // Email is index 2 now
         var dateVal = data[i][3]; // Date is index 3 now
-        if (!dateVal) continue; 
+        if (!dateVal) continue;
 
         var formattedDate = "Unknown Date";
         if (dateVal instanceof Date) {
@@ -694,8 +694,8 @@ function getMyAbsences() {
         });
       }
     }
-    
-    return myAbsences.reverse(); 
+
+    return myAbsences.reverse();
   } catch (err) {
     throw new Error("MyAbsences Error: " + err.message);
   }
@@ -922,7 +922,7 @@ function getQuickCoverData() {
 
     var unfilled = [];
     var today = new Date();
-    today.setHours(0, 0, 0, 0); 
+    today.setHours(0, 0, 0, 0);
 
     var targetEnd = new Date(today);
     var dayOfWeek = today.getDay(); // 0 is Sunday, 5 is Friday, 6 is Saturday
@@ -945,14 +945,14 @@ function getQuickCoverData() {
       if (status === 'Canceled') continue;
 
       var dateString = data[i][3];
-      if (!dateString) continue; 
-      
+      if (!dateString) continue;
+
       var rowDate = new Date(dateString);
-      if (isNaN(rowDate.getTime())) continue; 
+      if (isNaN(rowDate.getTime())) continue;
 
       if (rowDate >= today && rowDate <= targetEnd) {
         var teacherEmail = String(data[i][2]).toLowerCase();
-        var teacherName = nameLookup[teacherEmail] || teacherEmail; 
+        var teacherName = nameLookup[teacherEmail] || teacherEmail;
 
         if (teacherName.includes(",")) {
           var parts = teacherName.split(",");
@@ -1009,7 +1009,7 @@ function getQuickCoverData() {
     });
 
     return unfilled;
-    
+
   } catch (err) {
     // If we throw this, the frontend failure handler will catch it and show you the error!
     throw new Error("Backend Error: " + err.message);
@@ -1063,10 +1063,10 @@ function getCoordinatorEmail(ss) {
   var ss = ss || getSS();
   var roleSheet = ss.getSheetByName("User Roles");
   if (!roleSheet) return null;
-  
+
   var data = roleSheet.getDataRange().getValues();
   for (var i = 1; i < data.length; i++) {
-    if (String(data[i][1]).toLowerCase() === "sub coordinator") return String(data[i][0]); 
+    if (String(data[i][1]).toLowerCase() === "sub coordinator") return String(data[i][0]);
   }
   return null;
 }
@@ -1161,8 +1161,8 @@ function submitAbsence(formData) {
 
   try {
     var ss = getSS();
-    var mainSheet = ss.getSheetByName("Absence Requests"); 
-    
+    var mainSheet = ss.getSheetByName("Absence Requests");
+
     var urgencyFormatted = formData.urgency === 'Urgent' ? 'Urgent (Less than 24 hr notice)' : 'Standard (Advanced Notice)';
     var instructions = formData.specialInstructions;
     if (formData.hrConfirmed) instructions = "[HR Docs Provided] " + instructions;
@@ -1188,7 +1188,7 @@ function submitAbsence(formData) {
     if (shouldSendUrgentEmail) {
       sendUrgentCoverageEmail(ss, teacherName, formData, instructions);
     }
-    
+
     // SEND CONFIRMATION EMAIL TO SUBMITTER
     var settings = getSettings();
     var appUrl = settings["App URL"] || "https://script.google.com/a/macros/gocathedral.com/s/AKfycbwKZrBo4R-9O97aVNCjOHk9PddWCb6XNKviDS1lj4nNc49khl3T9OL8pGUDa7E1XE0/exec";
@@ -1924,7 +1924,7 @@ function getHRDashboardData() {
 
     var mainSheet = ss.getSheetByName("Absence Requests");
     var rosterSheet = ss.getSheetByName("Staff Roster");
-    
+
     // Look for Payperiods sheet case-insensitively
     var allSheets = ss.getSheets();
     var payPeriodsSheet = null;
@@ -1951,13 +1951,13 @@ function getHRDashboardData() {
       var periodNum = String(payPeriodsData[p][0]).trim();
       var startDateRaw = payPeriodsData[p][1];
       var endDateRaw = payPeriodsData[p][2];
-      
+
       // Attempt to validate dates to skip headers
       var isHeader = false;
       if (typeof startDateRaw === 'string' && startDateRaw.toLowerCase().includes('start')) isHeader = true;
       if (typeof endDateRaw === 'string' && endDateRaw.toLowerCase().includes('end')) isHeader = true;
       if (isHeader) continue;
-      
+
       if (periodNum && startDateRaw && endDateRaw) {
         var startFormatted = "";
         if (startDateRaw instanceof Date) {
@@ -1970,7 +1970,7 @@ function getHRDashboardData() {
              startFormatted = String(startDateRaw);
           }
         }
-        
+
         var endFormatted = "";
         if (endDateRaw instanceof Date) {
           endFormatted = Utilities.formatDate(endDateRaw, Session.getScriptTimeZone(), "yyyy-MM-dd");
@@ -2476,3 +2476,10 @@ function getInitialPayload() {
     throw new Error("Failed to get initial payload: " + err.message);
   }
 }
+
+module.exports = {
+  getStaffRosterForAdmin,
+  saveStaffMemberAdmin,
+  deleteStaffMemberAdmin,
+  bulkUpsertStaffRoster
+};

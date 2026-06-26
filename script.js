@@ -269,6 +269,239 @@
           .deleteUserRole(email);
       }
 
+      // === Staff Roster Logic ===
+      let currentStaffRoster = [];
+
+      function loadStaffRosterSettings() {
+        const tbody = document.getElementById('staffRosterTableBody');
+        tbody.innerHTML = '<tr><td colspan="4" class="p-8 text-center text-gray-400 italic">Loading staff roster...</td></tr>';
+        google.script.run
+          .withSuccessHandler(roster => {
+            currentStaffRoster = roster;
+            renderStaffRosterTable();
+          })
+          .withFailureHandler(err => {
+            tbody.innerHTML = `<tr><td colspan="4" class="p-8 text-center text-red-600 font-bold">Failed to load roster: ${err.message}</td></tr>`;
+          })
+          .getStaffRosterForAdmin();
+      }
+
+      function renderStaffRosterTable() {
+        const tbody = document.getElementById('staffRosterTableBody');
+        if (currentStaffRoster.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="4" class="p-8 text-center text-gray-400 italic">No staff found.</td></tr>';
+          return;
+        }
+
+        let html = '';
+        currentStaffRoster.forEach((staff, idx) => {
+          html += `
+            <tr class="hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0">
+              <td class="p-3 text-sm text-gray-800 font-medium">${escapeHtml(staff.name)}</td>
+              <td class="p-3 text-sm text-gray-600">${escapeHtml(staff.email)}</td>
+              <td class="p-3 text-sm text-gray-600">${escapeHtml(staff.duty || '')}</td>
+              <td class="p-3 text-right space-x-2">
+                <button onclick="openEditStaffModal('${escapeJs(staff.name)}', '${escapeJs(staff.email)}', '${escapeJs(staff.duty || '')}')" class="text-blue-600 hover:text-blue-800 font-semibold text-sm">Edit</button>
+                <button onclick="deleteStaffMember('${escapeJs(staff.email)}')" class="text-red-600 hover:text-red-800 font-semibold text-sm">Delete</button>
+              </td>
+            </tr>
+          `;
+        });
+        tbody.innerHTML = html;
+      }
+
+      function copyStaffRosterData() {
+        if (!currentStaffRoster || currentStaffRoster.length === 0) {
+           alert("No data to copy.");
+           return;
+        }
+        let csvText = "LASTFIRST,EMAIL_ADDR,Duty\n";
+        currentStaffRoster.forEach(staff => {
+           csvText += `"${staff.name}","${staff.email}","${staff.duty || ''}"\n`;
+        });
+        navigator.clipboard.writeText(csvText).then(() => {
+           alert("Staff roster copied to clipboard as CSV!");
+        }).catch(err => {
+           alert("Failed to copy data: " + err);
+        });
+      }
+
+      function saveStaffMember() {
+        const originalEmail = document.getElementById('staffOriginalEmail').value;
+        const name = document.getElementById('staffNameInput').value;
+        const email = document.getElementById('staffEmailInput').value;
+        const duty = document.getElementById('staffDutyInput').value;
+
+        if (!name || !email) {
+          alert("Name and Email are required.");
+          return;
+        }
+
+        const btn = document.getElementById('saveStaffBtn');
+        const originalText = btn.innerText;
+        btn.disabled = true;
+        btn.innerText = "Saving...";
+
+        const staffData = {
+           originalEmail: originalEmail,
+           name: name,
+           email: email,
+           duty: duty
+        };
+
+        google.script.run
+          .withSuccessHandler(result => {
+             btn.disabled = false;
+             btn.innerText = originalText;
+             if (result && result.success) {
+                attemptCloseAllModals();
+                loadStaffRosterSettings();
+             } else {
+                alert("Failed to save staff member: " + (result ? result.error : "Unknown error"));
+             }
+          })
+          .withFailureHandler(err => {
+             btn.disabled = false;
+             btn.innerText = originalText;
+             alert("Connection Error: " + err.message);
+          })
+          .saveStaffMemberAdmin(staffData);
+      }
+
+      function deleteStaffMember(email) {
+        if (!confirm(`Are you sure you want to delete ${email} from the staff roster?`)) return;
+
+        google.script.run
+          .withSuccessHandler(result => {
+             if (result && result.success) {
+                loadStaffRosterSettings();
+             } else {
+                alert("Failed to delete staff member: " + (result ? result.error : "Unknown error"));
+             }
+          })
+          .withFailureHandler(err => {
+             alert("Connection Error: " + err.message);
+          })
+          .deleteStaffMemberAdmin(email);
+      }
+
+      function processStaffCsvUpload() {
+         const fileInput = document.getElementById('staffCsvFileInput');
+         const textarea = document.getElementById('staffCsvTextarea');
+
+         if (fileInput.files.length > 0) {
+            const file = fileInput.files[0];
+            const reader = new FileReader();
+            reader.onload = function(e) {
+               parseAndSubmitStaffCsv(e.target.result);
+               fileInput.value = ""; // clear input
+            };
+            reader.readAsText(file);
+         } else if (textarea.value.trim() !== "") {
+            parseAndSubmitStaffCsv(textarea.value);
+            textarea.value = ""; // clear textarea
+         } else {
+            alert("Please select a CSV file or paste CSV data.");
+         }
+      }
+
+      function parseAndSubmitStaffCsv(csvText) {
+         // Basic CSV parsing
+         const lines = csvText.split(/\r?\n/).filter(line => line.trim() !== '');
+         if (lines.length < 2) {
+            alert("CSV must contain headers and at least one data row.");
+            return;
+         }
+
+         const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, '').toUpperCase());
+         const nameIdx = headers.indexOf('LASTFIRST');
+         const emailIdx = headers.indexOf('EMAIL_ADDR');
+         const dutyIdx = headers.indexOf('DUTY');
+
+         if (nameIdx === -1 || emailIdx === -1) {
+            alert("CSV must contain 'LASTFIRST' and 'EMAIL_ADDR' columns.");
+            return;
+         }
+
+         const updates = [];
+         for (let i = 1; i < lines.length; i++) {
+            // handle commas inside quotes using regex
+            const row = lines[i].match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g) || lines[i].split(',');
+            if (row.length <= Math.max(nameIdx, emailIdx)) continue;
+
+            const name = row[nameIdx] ? row[nameIdx].trim().replace(/^"|"$/g, '') : "";
+            const email = row[emailIdx] ? row[emailIdx].trim().replace(/^"|"$/g, '') : "";
+            let duty = "";
+            if (dutyIdx !== -1 && row[dutyIdx]) {
+                duty = row[dutyIdx].trim().replace(/^"|"$/g, '');
+            }
+
+            if (name && email) {
+                updates.push({name: name, email: email, duty: duty});
+            }
+         }
+
+         if (updates.length === 0) {
+            alert("No valid rows found to process.");
+            return;
+         }
+
+         if (!confirm(`Are you sure you want to process ${updates.length} staff records? Existing records with the same email will be updated.`)) {
+             return;
+         }
+
+         google.script.run
+            .withSuccessHandler(result => {
+               if (result && result.success) {
+                  alert(`Successfully processed ${result.updated} records.`);
+                  loadStaffRosterSettings();
+               } else {
+                  alert("Failed to process CSV: " + (result ? result.error : "Unknown error"));
+               }
+            })
+            .withFailureHandler(err => {
+               alert("Connection Error: " + err.message);
+            })
+            .bulkUpsertStaffRoster(updates);
+      }
+
+      // === Staff Roster Modals ===
+      function openAddStaffModal() {
+        document.getElementById('staffModalTitle').innerText = "Add Staff Member";
+        document.getElementById('staffOriginalEmail').value = "";
+        document.getElementById('staffNameInput').value = "";
+        document.getElementById('staffEmailInput').value = "";
+        document.getElementById('staffDutyInput').value = "";
+
+        const modal = document.querySelector('#staffModal');
+        const overlay = document.querySelector('#genericModalOverlay');
+        const body = document.querySelector('body');
+
+        modal.classList.remove('opacity-0', 'pointer-events-none');
+        overlay.classList.remove('opacity-0', 'pointer-events-none');
+        body.classList.add('modal-active');
+
+        setTimeout(captureModalState, 50);
+      }
+
+      function openEditStaffModal(name, email, duty) {
+        document.getElementById('staffModalTitle').innerText = "Edit Staff Member";
+        document.getElementById('staffOriginalEmail').value = email;
+        document.getElementById('staffNameInput').value = name;
+        document.getElementById('staffEmailInput').value = email;
+        document.getElementById('staffDutyInput').value = duty || "";
+
+        const modal = document.querySelector('#staffModal');
+        const overlay = document.querySelector('#genericModalOverlay');
+        const body = document.querySelector('body');
+
+        modal.classList.remove('opacity-0', 'pointer-events-none');
+        overlay.classList.remove('opacity-0', 'pointer-events-none');
+        body.classList.add('modal-active');
+
+        setTimeout(captureModalState, 50);
+      }
+
       function openAddRoleModal() {
         document.getElementById('addRoleEmail').value = '';
         document.getElementById('addRoleSelect').value = 'Admin';
@@ -516,8 +749,15 @@
       function captureModalState() {
         const isAddRoleModalOpen = !document.getElementById('addRoleModal').classList.contains('opacity-0');
         const isRequestModalOpen = !document.querySelector('#modal').classList.contains('opacity-0');
+        const isStaffModalOpen = !document.getElementById('staffModal').classList.contains('opacity-0');
 
-        if (isAddRoleModalOpen) {
+        if (isStaffModalOpen) {
+          originalModalData = {
+            name: document.getElementById('staffNameInput').value,
+            email: document.getElementById('staffEmailInput').value,
+            duty: document.getElementById('staffDutyInput').value
+          };
+        } else if (isAddRoleModalOpen) {
           originalModalData = {
             email: document.getElementById('addRoleEmail').value,
             role: document.getElementById('addRoleSelect').value
@@ -543,6 +783,15 @@
       function hasUnsavedData() {
         const isAddRoleModalOpen = !document.getElementById('addRoleModal').classList.contains('opacity-0');
         const isRequestModalOpen = !document.querySelector('#modal').classList.contains('opacity-0');
+        const isStaffModalOpen = !document.getElementById('staffModal').classList.contains('opacity-0');
+
+        if (isStaffModalOpen) {
+          const currentName = document.getElementById('staffNameInput').value;
+          const currentEmail = document.getElementById('staffEmailInput').value;
+          const currentDuty = document.getElementById('staffDutyInput').value;
+          if (originalModalData.name === undefined && (currentName.trim() !== "" || currentEmail.trim() !== "" || currentDuty.trim() !== "")) return true;
+          if (originalModalData.name !== undefined && (currentName !== originalModalData.name || currentEmail !== originalModalData.email || currentDuty !== originalModalData.duty)) return true;
+        }
 
         if (isAddRoleModalOpen) {
           const currentEmail = document.getElementById('addRoleEmail').value;
@@ -890,9 +1139,44 @@
           // load Settings Data
           loadSettingsData();
           loadRolesData();
+          loadStaffRosterSettings();
         } else {
           settingsView.classList.add('hidden');
           mainContent.classList.remove('hidden');
+        }
+      }
+
+      // === Settings Dashboard Tab Switching ===
+      function switchSettingsTab(tabId) {
+        // Hide all tabs
+        const tabs = document.querySelectorAll('.settings-tab-content');
+        tabs.forEach(tab => {
+          tab.classList.remove('block');
+          tab.classList.add('hidden');
+        });
+
+        // Reset all tab buttons
+        const tabBtns = ['generalSettingsTab', 'roleManagementTab', 'staffRosterTab'];
+        tabBtns.forEach(btn => {
+          const btnEl = document.getElementById('btn-' + btn);
+          if (btnEl) {
+            btnEl.classList.remove('text-[#002147]', 'font-semibold', 'border-b-2', 'border-[#002147]');
+            btnEl.classList.add('text-gray-500', 'font-medium');
+          }
+        });
+
+        // Show active tab
+        const activeTab = document.getElementById(tabId);
+        if (activeTab) {
+          activeTab.classList.remove('hidden');
+          activeTab.classList.add('block');
+        }
+
+        // Highlight active tab button
+        const activeBtn = document.getElementById('btn-' + tabId);
+        if (activeBtn) {
+          activeBtn.classList.remove('text-gray-500', 'font-medium');
+          activeBtn.classList.add('text-[#002147]', 'font-semibold', 'border-b-2', 'border-[#002147]');
         }
       }
 
