@@ -554,7 +554,7 @@ function bulkUpsertStaffRoster(updates) {
        if (!email || !name) continue;
 
        var lowerEmail = email.toLowerCase();
-       if (existingEmailsMap[lowerEmail]) {
+       if (existingEmailsMap[lowerEmail] && existingEmailsMap[lowerEmail] > 0) {
           // Update existing row directly
           var rowIndex = existingEmailsMap[lowerEmail];
           rosterSheet.getRange(rowIndex, 1, 1, 3).setValues([[name, email, duty]]);
