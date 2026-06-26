@@ -80,7 +80,7 @@ function getPowerSchoolToken() {
  *         ON cc.TEACHERID = t.id
  *     JOIN sections s                     -- New JOIN for the Sections table
  *         ON cc.sectionid = s.id          -- Linking the enrollment to the specific section
- *     WHERE cc.termid = 3503
+ *     WHERE cc.termid = :target_term      -- Use a parameterized term ID
  * )
  * -- Step 2: Combine the co-seated courses from that clean list
  * SELECT 
@@ -188,7 +188,7 @@ function testPowerSchoolMasterScheduleFetch() {
           periodClean,
           r.room || r.ROOM || r.room_number || r.ROOM_NUMBER || "",
           r.course_names || r.COURSE_NAMES || r.course_name || r.COURSE_NAME || "",
-          "3503" // Term is hardcoded in the SQL for now (3503), but you can map it if added to output
+          "Target Term" // The actual term ID should be mapped if returned by the API
         ];
       });
       sheet.getRange(2, 1, rows.length, 6).setValues(rows);
@@ -199,17 +199,25 @@ function testPowerSchoolMasterScheduleFetch() {
   }
 }
 
+let global_master_schedule_cache = null;
+
 /**
  * Fetches the Master Schedule from PowerSchool API and formats it into a 2D array.
  * Caches the result in Script Cache to avoid excessive API calls.
+ * Uses a global variable to avoid repeated JSON parsing in the same execution context.
  */
 function getMasterScheduleData() {
+  if (global_master_schedule_cache) {
+    return global_master_schedule_cache;
+  }
+
   const cache = CacheService.getScriptCache();
   const cachedData = cache.get("ps_master_schedule");
 
   if (cachedData) {
     try {
-      return JSON.parse(cachedData);
+      global_master_schedule_cache = JSON.parse(cachedData);
+      return global_master_schedule_cache;
     } catch (e) {
       Logger.log("Error parsing cached master schedule: " + e.toString());
     }
@@ -306,6 +314,7 @@ function getMasterScheduleData() {
       // E.g., caching multiple chunks. Let's start simple.
     }
 
+    global_master_schedule_cache = scheduleData;
     return scheduleData;
 
   } catch (parseError) {

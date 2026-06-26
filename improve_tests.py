@@ -1,4 +1,10 @@
+import re
 
+def main():
+    with open('tests.gs', 'r') as f:
+        content = f.read()
+
+    new_test_framework = """
 /**
  * Advanced Custom Testing Framework
  */
@@ -17,7 +23,7 @@ var TestRunner = (function() {
   function describe(suiteName, fn) {
     var previousSuite = currentSuite;
     currentSuite = suiteName;
-    console.log("\n📘 Suite: " + suiteName);
+    console.log("\\n📘 Suite: " + suiteName);
     try {
       fn();
     } catch (e) {
@@ -40,7 +46,7 @@ var TestRunner = (function() {
   }
 
   function getSummary() {
-    console.log("\n----------------------------------------");
+    console.log("\\n----------------------------------------");
     console.log("Test Summary: " + testsPassed + " passed, " + testsFailed + " failed");
     if (testsFailed > 0) {
       console.log("Failed Tests:");
@@ -253,3 +259,10 @@ function runTests() {
 
   return TestRunner.getSummary();
 }
+"""
+
+    with open('tests.gs', 'w') as f:
+        f.write(new_test_framework)
+
+if __name__ == "__main__":
+    main()
