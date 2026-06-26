@@ -56,7 +56,7 @@ function getPowerSchoolToken() {
  * NOTE FOR POWERSCHOOL ADMIN:
  * Because PowerSchool's default API doesn't expose a clean, single endpoint for this,
  * you will need to create a "PowerQuery" plugin in PowerSchool with the endpoint path:
- * /ws/schema/query/com.cathedral.masterschedule
+ * /ws/schema/query/com.cathedral.subapp.masterschedule
  *
  * You can base the PowerQuery on this provided SQL:
  * WITH DistinctClasses AS (
@@ -108,7 +108,7 @@ function testPowerSchoolMasterScheduleFetch() {
 
   // The placeholder PowerQuery endpoint.
   // Update this if you name your PowerQuery differently.
-  const endpoint = "/ws/schema/query/com.cathedral.masterschedule";
+  const endpoint = "/ws/schema/query/com.cathedral.subapp.masterschedule";
 
   const options = {
     method: "POST", // PowerQueries require POST, even for retrieving data
