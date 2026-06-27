@@ -2921,7 +2921,7 @@
                     <p class="text-sm text-gray-600 font-semibold">${escapeHtml(abs.reason)}</p>
                     <p class="text-xs text-gray-500 mt-1">Periods: ${escapeHtml(abs.periods)}</p>
                   </div>
-                  <div class="flex gap-2 w-full sm:w-auto">
+                  <div class="flex gap-2 w-full sm:w-auto" onclick="event.stopPropagation()">
                     <button onclick="editAbsence(${index})" class="flex-1 sm:flex-none bg-white hover:bg-gray-100 text-gray-700 text-sm font-bold py-2 px-4 rounded-lg border border-gray-300 transition-colors shadow-sm">
                       Edit
                     </button>
@@ -3695,7 +3695,7 @@
     </script>
 
     <!-- Custom Toast Component -->
-    <div id="toast-container" class="fixed top-5 right-5 z-[200] flex flex-col gap-2"></div>
+    <div id="toast-container" class="fixed top-5 right-5 z-[200] flex flex-col gap-2 pointer-events-none"></div>
     <script>
       function showToast(message, type = 'success') {
         const container = document.getElementById('toast-container');
@@ -3716,7 +3716,7 @@
           icon = 'ℹ️';
         }
 
-        toast.className = `${bgColor} text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 transform transition-all duration-300 translate-y-[-100%] opacity-0`;
+        toast.className = `${bgColor} text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 transform transition-all duration-300 translate-y-[-100%] opacity-0 pointer-events-auto`;
 
         toast.innerHTML = `
           <span class="text-lg">${icon}</span>
