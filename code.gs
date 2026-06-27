@@ -29,23 +29,15 @@ function notifyAdminOfError(funcName, e) {
  */
 function setupDatabase() {
   var ss = getSS();
-  var sheet = getSheetOrThrow(ss, "Absence Requests");
+  var sheet = ss.getSheetByName("Absence Requests");
   if (!sheet) {
     sheet = ss.insertSheet("Absence Requests");
-  }
-
-  var headers = [
-    "ID", "Timestamp", "Email", "Date", "Periods", "Reason", "Duration",
-    "Urgency", "Instructions", "Period 1 Sub", "Period 2 Sub", "Period 3 Sub",
-    "Period 4 Sub", "Period 5 Sub", "Period 6 Sub", "Period 7 Sub", "Period 8 Sub", "Status"
-  ];
-
-  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-
-  // Optionally delete Split Responses sheet as it's no longer used
-  var splitSheet = getSheetOrThrow(ss, "Split Responses");
-  if (splitSheet) {
-    // ss.deleteSheet(splitSheet); // Uncomment to delete automatically, or delete manually.
+    var headers = [
+      "ID", "Timestamp", "Email", "Date", "Periods", "Reason", "Duration",
+      "Urgency", "Instructions", "Period 1 Sub", "Period 2 Sub", "Period 3 Sub",
+      "Period 4 Sub", "Period 5 Sub", "Period 6 Sub", "Period 7 Sub", "Period 8 Sub", "Status"
+    ];
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
   }
 
   // Setup Audit Log Sheet
@@ -59,7 +51,7 @@ function setupDatabase() {
   }
 
   // Setup Settings Sheet
-  var settingsSheet = getSheetOrThrow(ss, "Settings");
+  var settingsSheet = ss.getSheetByName("Settings");
   if (!settingsSheet) {
     settingsSheet = ss.insertSheet("Settings");
     var settingsHeaders = ["Setting Name", "Setting Value"];
@@ -2040,7 +2032,15 @@ function logAuditAction(actionType, targetId, details) {
   try {
     var ss = getSS();
     var auditSheet = ss.getSheetByName("Audit Log");
-    if (!auditSheet) return; // Fail silently if not set up
+
+    // Lazy-load Audit Log sheet creation if it doesn't exist
+    if (!auditSheet) {
+      auditSheet = ss.insertSheet("Audit Log");
+      var auditHeaders = ["Timestamp", "Actor", "Action Type", "Target ID", "Details"];
+      auditSheet.getRange(1, 1, 1, auditHeaders.length).setValues([auditHeaders]);
+      auditSheet.getRange(1, 1, 1, auditHeaders.length).setFontWeight("bold");
+      auditSheet.hideSheet();
+    }
 
     var timestamp = new Date();
     var actor = Session.getActiveUser().getEmail();
