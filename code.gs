@@ -1587,7 +1587,8 @@ function getInitialPayload() {
 
 
     // --- 3. Extract common data (My Absences, My Sub Duties, Open Jobs) ---
-    var myAbsences = [];
+    var myUpcomingAbsences = [];
+    var myPastAbsences = [];
     var mySubDuties = [];
     var todaysOpenJobs = [];
 
@@ -1638,9 +1639,10 @@ function getInitialPayload() {
       // My Absences
       if (rowTeacherEmail === targetEmail) {
         var urgencyStr = String(row[7] || '');
-        myAbsences.push({
+        var absenceObj = {
           id: String(row[0]),
           date: String(formattedDate),
+          rawDate: isDateValid ? Number(rowDate.getTime()) : 0,
           rawDateString: String(dateVal),
           formDateString: String(yyyymmdd),
           periods: String(row[4]),
@@ -1648,7 +1650,12 @@ function getInitialPayload() {
           urgency: urgencyStr.includes('Urgent') ? 'Urgent' : 'Standard',
           duration: String(row[6]),
           instructions: String(row[8])
-        });
+        };
+        if (isDateValid && rowDate < today) {
+          myPastAbsences.push(absenceObj);
+        } else {
+          myUpcomingAbsences.push(absenceObj);
+        }
       }
 
       // My Sub Duties & Open Jobs
@@ -1705,7 +1712,10 @@ function getInitialPayload() {
       }
     }
 
-    myAbsences.reverse();
+    var sortAbsencesAsc = function(a, b) { return a.rawDate - b.rawDate; };
+    var sortAbsencesDesc = function(a, b) { return b.rawDate - a.rawDate; };
+    myUpcomingAbsences.sort(sortAbsencesAsc);
+    myPastAbsences.sort(sortAbsencesDesc);
 
     var sortJobs = function(a, b) {
       if (a.rawDate === b.rawDate) {
@@ -1719,7 +1729,8 @@ function getInitialPayload() {
 
     var payload = {
       userData: userData,
-      myAbsences: myAbsences,
+      myAbsences: myUpcomingAbsences,
+      myPastAbsences: myPastAbsences,
       mySubDuties: mySubDuties,
       todaysOpenJobs: todaysOpenJobs
     };

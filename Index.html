@@ -430,6 +430,18 @@
         </div>
       </div>
 
+      <div class="mb-3 flex items-center cursor-pointer select-none" id="headerMyPastAbsences" onclick="toggleSection('myPastAbsencesWrapper', 'iconMyPastAbsences')">
+        <svg id="iconMyPastAbsences" class="fill-current text-[#002147] mr-2 transition-transform duration-300 -rotate-90" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+        <h3 class="text-lg font-bold text-[#002147]">My Past Absences</h3>
+      </div>
+      <div id="myPastAbsencesWrapper" class="grid grid-rows-[0fr] transition-all duration-300 ease-in-out mb-6">
+        <div class="overflow-hidden">
+          <div id="myPastAbsences" class="bg-white rounded-xl shadow-sm p-8 text-center text-gray-400 border border-gray-200">
+              Loading past requests...
+          </div>
+        </div>
+      </div>
+
           </main>
 
 
@@ -1433,6 +1445,7 @@
 
       // Subscribe UI components to data refresh events
       EventBus.subscribe('refresh_myAbsences', () => loadMyAbsences());
+      EventBus.subscribe('refresh_myPastAbsences', () => loadMyPastAbsences());
       EventBus.subscribe('refresh_mySubDuties', () => loadMySubDuties());
       EventBus.subscribe('refresh_todaysOpenJobs', () => loadTodaysOpenJobs());
       EventBus.subscribe('refresh_quickCover', () => loadQuickCover());
@@ -1465,7 +1478,8 @@
         const sections = [
           { wrapperId: 'myAbsencesWrapper', iconId: 'iconMyAbsences' },
           { wrapperId: 'mySubDutiesWrapper', iconId: 'iconMySubDuties' },
-          { wrapperId: 'todaysOpenJobsWrapper', iconId: 'iconTodaysOpenJobs' }
+          { wrapperId: 'todaysOpenJobsWrapper', iconId: 'iconTodaysOpenJobs' },
+          { wrapperId: 'myPastAbsencesWrapper', iconId: 'iconMyPastAbsences' }
         ];
 
         sections.forEach(sec => {
@@ -1485,6 +1499,7 @@
       let staffList = [];
       let currentUnfilledData = [];
       let myAbsencesData = [];
+      let myPastAbsencesData = [];
       let mySubDutiesData = [];
       function escapeHtml(str) {
         if (str === null || str === undefined) return '';
@@ -1551,6 +1566,7 @@
 
             // Render common parts
             renderMyAbsences(payload.myAbsences);
+            renderMyPastAbsences(payload.myPastAbsences);
             renderMySubDuties(payload.mySubDuties);
             renderTodaysOpenJobs(payload.todaysOpenJobs);
 
@@ -2929,6 +2945,52 @@
             document.getElementById('myAbsences').innerHTML = `<div class="text-red-600 font-bold">Failed to load absences: ${err.message}</div>`;
           })
           .refreshData(['myAbsences']);
+      }
+
+      function renderMyPastAbsences(absences) {
+            myPastAbsencesData = absences;
+            const container = document.getElementById('myPastAbsences');
+            if (!absences || absences.length === 0) {
+              container.innerHTML = 'No past requests found.';
+              return;
+            }
+
+            let html = '<div class="space-y-3 text-left">';
+            absences.forEach((abs, index) => {
+              let bgClass = 'bg-gray-50 border-gray-200';
+              let textClass = 'text-gray-500';
+
+              html += `
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 border rounded-xl shadow-sm ${bgClass} gap-4 opacity-75">
+                  <div>
+                    <div class="flex items-center gap-2">
+                       <p class="font-bold ${textClass} text-lg">${escapeHtml(abs.date)}</p>
+                       <span class="text-[10px] font-bold uppercase tracking-wider opacity-60 bg-white px-2 py-0.5 rounded border border-gray-300">${escapeHtml(abs.urgency)}</span>
+                    </div>
+                    <p class="text-sm text-gray-500 font-semibold">${escapeHtml(abs.reason)}</p>
+                    <p class="text-xs text-gray-400 mt-1">Periods: ${escapeHtml(abs.periods)}</p>
+                  </div>
+                  <div class="flex gap-2 w-full sm:w-auto">
+                    <!-- Usually no actions for past absences, but if desired could add view button -->
+                  </div>
+                </div>
+              `;
+            });
+            html += '</div>';
+
+            container.innerHTML = html;
+            container.classList.remove('text-gray-400');
+      }
+
+      function loadMyPastAbsences() {
+        document.getElementById('myPastAbsences').innerHTML = "Refreshing past absences...";
+        google.script.run
+          .withSuccessHandler(res => { if (res.myPastAbsences) renderMyPastAbsences(res.myPastAbsences); })
+          .withFailureHandler(err => {
+            console.error(err);
+            document.getElementById('myPastAbsences').innerHTML = `<div class="text-red-600 font-bold">Failed to load past absences: ${err.message}</div>`;
+          })
+          .refreshData(['myPastAbsences']);
       }
 
       function editAbsence(index) {
