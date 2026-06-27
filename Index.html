@@ -2156,16 +2156,24 @@
                roomHtml = `<span class="tooltip text-red-500 font-bold px-2 py-1 bg-red-50 rounded cursor-help">--<span class="tooltiptext">No room found</span></span>`;
             }
 
-            let subHtml = req.assignedSub ? `<span class="bg-green-100 text-green-800 border border-green-200 px-2 py-1 rounded font-bold">${escapeHtml(req.assignedSub)}</span>` : `<span class="text-gray-400 italic font-medium">Unassigned</span>`;
+            let assignId = `inline-assign-${req.id}-${req.period}`;
+            let subHtml = `<input type="text" id="${escapeHtml(assignId)}" list="dynamicStaffDataList"
+                               onfocus="updateDynamicStaffList('${escapeJs(req.formDateString || req.date)}', '${escapeJs(req.period)}')"
+                               data-original-value="${escapeHtml(req.assignedSub) || ''}"
+                               value="${escapeHtml(req.assignedSub) || ''}"
+                               onblur="handleInlineAdminAssign('${escapeJs(req.id)}', '${escapeJs(req.period)}', '${escapeJs(assignId)}')"
+                               onkeydown="if(event.key === 'Enter') { this.blur(); }"
+                               placeholder="Unassigned"
+                               class="w-full sm:w-32 md:w-40 p-1 border border-transparent hover:border-gray-300 rounded text-sm outline-none focus:border-[#00843D] focus:ring-1 focus:ring-[#00843D] bg-transparent focus:bg-white transition-all ${req.assignedSub ? 'text-green-700 font-bold' : 'text-gray-400 italic'}">`;
 
             html += `
-              <tr class="hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0">
-                <td class="p-3 text-sm text-gray-800 font-medium"><a href="mailto:${escapeHtml(req.teacherEmail)}" class="hover:underline text-blue-600">${escapeHtml(req.teacherName)}</a></td>
+              <tr class="hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0 cursor-pointer" onclick="openDetailsModalForAdmin(${rawIdx})">
+                <td class="p-3 text-sm text-gray-800 font-medium"><a href="mailto:${escapeHtml(req.teacherEmail)}" class="hover:underline text-blue-600" onclick="event.stopPropagation()">${escapeHtml(req.teacherName)}</a></td>
                 <td class="p-3 text-sm text-gray-600">${escapeHtml(req.date)}</td>
                 <td class="p-3 text-sm font-bold text-gray-700">Period ${escapeHtml(req.period)}</td>
                 <td class="p-3 text-sm text-gray-600">${courseHtml}</td>
                 <td class="p-3 text-sm text-gray-600">${roomHtml}</td>
-                <td class="p-3 text-sm cursor-pointer hover:bg-gray-100" onclick="openDetailsModalForAdmin(${rawIdx})">${subHtml}</td>
+                <td class="p-3 text-sm" onclick="event.stopPropagation()">${subHtml}</td>
                 <td class="p-3 text-sm text-gray-500 max-w-xs truncate" title="${escapeHtml(req.instructions) || ''}">${escapeHtml(req.instructions) || '-'}</td>
               </tr>
             `;
@@ -2325,6 +2333,65 @@
             alert("Error: " + err.message);
             btn.disabled = false;
             btn.innerText = originalText;
+          })
+          .assignSubToPeriod(absenceId, period, subName);
+      }
+
+      function handleInlineAdminAssign(absenceId, period, inputElementId) {
+        const inputEl = document.getElementById(inputElementId);
+        if (!inputEl) return;
+
+        let subName = inputEl.value;
+
+        if (subName) {
+           subName = subName.replace(/\s+-\s+.*$/, '');
+        }
+
+        const originalValue = inputEl.getAttribute('data-original-value') || "";
+        if (subName === originalValue) {
+           return;
+        }
+
+        if (subName && !staffList.some(s => s.name === subName)) {
+          alert("Please enter a valid staff name from the list, or leave it blank to clear.");
+          inputEl.value = originalValue;
+          return;
+        }
+
+        inputEl.disabled = true;
+        const previousBg = inputEl.style.backgroundColor;
+        inputEl.style.backgroundColor = '#f3f4f6';
+
+        google.script.run
+          .withSuccessHandler(result => {
+            if (result && result.success) {
+              inputEl.setAttribute('data-original-value', subName);
+              inputEl.value = subName;
+              inputEl.disabled = false;
+              inputEl.style.backgroundColor = previousBg;
+
+              const atAGlanceView = document.getElementById('atAGlanceDashboardView');
+              const isAtAGlanceVisible = atAGlanceView && !atAGlanceView.classList.contains('hidden');
+
+              EventBus.publish('refresh_adminData', { renderAtAGlance: isAtAGlanceVisible });
+              EventBus.publish('refresh_quickCover');
+            } else {
+              alert(result ? result.error : "Unknown error");
+              inputEl.value = originalValue;
+              inputEl.disabled = false;
+              inputEl.style.backgroundColor = previousBg;
+
+              if (result && result.error && (result.error.includes('filled by someone else') || result.error.includes('server is currently busy'))) {
+                  loadQuickCover();
+                  loadAdminDataRawSilent();
+              }
+            }
+          })
+          .withFailureHandler(err => {
+            alert("Error: " + err.message);
+            inputEl.value = originalValue;
+            inputEl.disabled = false;
+            inputEl.style.backgroundColor = previousBg;
           })
           .assignSubToPeriod(absenceId, period, subName);
       }
