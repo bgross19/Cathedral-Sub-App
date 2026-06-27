@@ -179,35 +179,90 @@
       }
 
       function parseAndSubmitStaffCsv(csvText) {
-         // Basic CSV parsing
          const lines = csvText.split(/\r?\n/).filter(line => line.trim() !== '');
-         if (lines.length < 2) {
-            alert("CSV must contain headers and at least one data row.");
+         if (lines.length === 0) {
+            alert("CSV is empty.");
             return;
          }
 
-         const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, '').toUpperCase());
-         const nameIdx = headers.indexOf('LASTFIRST');
-         const emailIdx = headers.indexOf('EMAIL_ADDR');
-         const dutyIdx = headers.indexOf('DUTY');
+         function parseCsvLine(text) {
+             const result = [];
+             let current = '';
+             let inQuotes = false;
+             for (let i = 0; i < text.length; i++) {
+                 const char = text[i];
+                 if (char === '"') {
+                     if (inQuotes && text[i+1] === '"') {
+                         current += '"';
+                         i++;
+                     } else {
+                         inQuotes = !inQuotes;
+                     }
+                 } else if (char === ',' && !inQuotes) {
+                     result.push(current);
+                     current = '';
+                 } else {
+                     current += char;
+                 }
+             }
+             result.push(current);
+             return result.map(s => s.trim());
+         }
 
-         if (nameIdx === -1 || emailIdx === -1) {
-            alert("CSV must contain 'LASTFIRST' and 'EMAIL_ADDR' columns.");
+         const firstLine = parseCsvLine(lines[0]);
+         const firstLineUpper = firstLine.map(s => s.toUpperCase());
+
+         const hasHeaders = firstLineUpper.includes('LASTFIRST') || firstLineUpper.includes('EMAIL_ADDR') || firstLineUpper.includes('DUTY');
+         const startIndex = hasHeaders ? 1 : 0;
+
+         if (lines.length <= startIndex) {
+            alert("CSV contains no data rows.");
             return;
          }
 
          const updates = [];
-         for (let i = 1; i < lines.length; i++) {
-            // handle commas inside quotes using regex
-            const row = lines[i].match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g) || lines[i].split(',');
-            if (row.length <= Math.max(nameIdx, emailIdx)) continue;
+         for (let i = startIndex; i < lines.length; i++) {
+            let row = parseCsvLine(lines[i]);
+            if (row.length === 0 || (row.length === 1 && row[0] === '')) continue;
 
-            const name = row[nameIdx] ? row[nameIdx].trim().replace(/^"|"$/g, '') : "";
-            const email = row[emailIdx] ? row[emailIdx].trim().replace(/^"|"$/g, '') : "";
+            let email = "";
+            let name = "";
             let duty = "";
-            if (dutyIdx !== -1 && row[dutyIdx]) {
-                duty = row[dutyIdx].trim().replace(/^"|"$/g, '');
+
+            let emailColIdx = -1;
+            for (let c = row.length - 1; c >= 0; c--) {
+                if (row[c].includes('@')) {
+                    emailColIdx = c;
+                    break;
+                }
             }
+
+            if (emailColIdx !== -1) {
+                email = row[emailColIdx];
+                name = row.slice(0, emailColIdx).join(', ');
+                if (emailColIdx + 1 < row.length) {
+                    duty = row[emailColIdx + 1];
+                }
+            } else {
+                if (row.length >= 2) {
+                    email = row[row.length - 2];
+                    duty = row[row.length - 1];
+                    name = row.slice(0, row.length - 2).join(', ');
+                } else {
+                    name = row[0];
+                }
+            }
+
+            name = name.replace(/^"|"$/g, '');
+            if (name.includes(',') && name.split(',').length === 2) {
+                const parts = name.split(',');
+                name = parts[1].trim() + ' ' + parts[0].trim();
+            } else {
+                name = name.trim();
+            }
+
+            email = email.replace(/^"|"$/g, '').trim();
+            duty = duty.replace(/^"|"$/g, '').trim();
 
             if (name && email) {
                 updates.push({name: name, email: email, duty: duty});
@@ -215,7 +270,7 @@
          }
 
          if (updates.length === 0) {
-            alert("No valid rows found to process.");
+            alert("No valid rows found to process. Make sure each row contains a name and an email address.");
             return;
          }
 
@@ -625,7 +680,7 @@
                <div class="text-center text-gray-500 font-semibold text-sm">OR</div>
                <div>
                  <label class="block text-sm text-gray-600 mb-1">...Paste CSV data directly</label>
-                 <textarea id="staffCsvTextarea" rows="4" placeholder="LASTFIRST,EMAIL_ADDR,Duty&#10;Smith John,jsmith@gocathedral.com,1" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none text-sm font-mono"></textarea>
+                 <textarea id="staffCsvTextarea" rows="4" placeholder="Ford, Lisa, lford@gocathedral.com, 1&#10;Smith John, jsmith@gocathedral.com, 2" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none text-sm font-mono"></textarea>
                </div>
                <div class="flex justify-end">
                   <button onclick="processStaffCsvUpload()" class="bg-[#002147] hover:bg-blue-900 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-md text-sm">
