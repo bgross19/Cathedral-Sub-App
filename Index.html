@@ -85,7 +85,7 @@
 
       function copyStaffRosterData() {
         if (!currentStaffRoster || currentStaffRoster.length === 0) {
-           alert("No data to copy.");
+           showToast("No data to copy.", 'info');
            return;
         }
         let csvText = "LASTFIRST,EMAIL_ADDR,Duty\n";
@@ -93,9 +93,9 @@
            csvText += `"${staff.name}","${staff.email}","${staff.duty || ''}"\n`;
         });
         navigator.clipboard.writeText(csvText).then(() => {
-           alert("Staff roster copied to clipboard as CSV!");
+           showToast("Staff roster copied to clipboard as CSV!", 'info');
         }).catch(err => {
-           alert("Failed to copy data: " + err);
+           showToast("Failed to copy data: " + err, "error");
         });
       }
 
@@ -106,7 +106,7 @@
         const duty = document.getElementById('staffDutyInput').value;
 
         if (!name || !email) {
-          alert("Name and Email are required.");
+          showToast("Name and Email are required.", 'info');
           return;
         }
 
@@ -130,32 +130,32 @@
                 attemptCloseAllModals();
                 loadStaffRosterSettings();
              } else {
-                alert("Failed to save staff member: " + (result ? result.error : "Unknown error"));
+                showToast("Failed to save staff member: " + (result ? result.error : "Unknown error"), "error");
              }
           })
           .withFailureHandler(err => {
              btn.disabled = false;
              btn.innerText = originalText;
-             alert("Connection Error: " + err.message);
+             showToast("Connection Error: " + err.message, 'error');
           })
           .saveStaffMemberAdmin(staffData);
       }
 
       function deleteStaffMember(email) {
-        if (!confirm(`Are you sure you want to delete ${email} from the staff roster?`)) return;
-
+        showConfirm(`Are you sure you want to delete ${email} from the staff roster?`, () => {
         google.script.run
           .withSuccessHandler(result => {
              if (result && result.success) {
                 loadStaffRosterSettings();
              } else {
-                alert("Failed to delete staff member: " + (result ? result.error : "Unknown error"));
+                showToast("Failed to delete staff member: " + (result ? result.error : "Unknown error"), "error");
              }
           })
           .withFailureHandler(err => {
-             alert("Connection Error: " + err.message);
+             showToast("Connection Error: " + err.message, 'error');
           })
           .deleteStaffMemberAdmin(email);
+      });
       }
 
       function processStaffCsvUpload() {
@@ -174,14 +174,14 @@
             parseAndSubmitStaffCsv(textarea.value);
             textarea.value = ""; // clear textarea
          } else {
-            alert("Please select a CSV file or paste CSV data.");
+            showToast("Please select a CSV file or paste CSV data.", 'error');
          }
       }
 
       function parseAndSubmitStaffCsv(csvText) {
          const lines = csvText.split(/\r?\n/).filter(line => line.trim() !== '');
          if (lines.length === 0) {
-            alert("CSV is empty.");
+            showToast("CSV is empty.", 'info');
             return;
          }
 
@@ -216,7 +216,7 @@
          const startIndex = hasHeaders ? 1 : 0;
 
          if (lines.length <= startIndex) {
-            alert("CSV contains no data rows.");
+            showToast("CSV contains no data rows.", 'info');
             return;
          }
 
@@ -270,27 +270,25 @@
          }
 
          if (updates.length === 0) {
-            alert("No valid rows found to process. Make sure each row contains a name and an email address.");
+            showToast("No valid rows found to process. Make sure each row contains a name and an email address.", 'info');
             return;
          }
 
-         if (!confirm(`Are you sure you want to process ${updates.length} staff records? Existing records with the same email will be updated.`)) {
-             return;
-         }
-
-         google.script.run
+         showConfirm(`Are you sure you want to process ${updates.length} staff records? Existing records with the same email will be updated.`, () => {
+             google.script.run
             .withSuccessHandler(result => {
                if (result && result.success) {
-                  alert(`Successfully processed ${result.updated} records.`);
+                  showToast(`Successfully processed ${result.updated} records.`, 'success');
                   loadStaffRosterSettings();
                } else {
-                  alert("Failed to process CSV: " + (result ? result.error : "Unknown error"));
+                  showToast("Failed to process CSV: " + (result ? result.error : "Unknown error"), "error");
                }
             })
             .withFailureHandler(err => {
-               alert("Connection Error: " + err.message);
+               showToast("Connection Error: " + err.message, 'error');
             })
             .bulkUpsertStaffRoster(updates);
+         });
       }
 
       // === Staff Roster Modals ===
@@ -467,14 +465,17 @@
             </div>
             <div class="flex items-center gap-2 w-full sm:w-auto ml-auto">
                <button onclick="resetAdminFilters()" class="text-sm text-gray-500 hover:text-gray-800 underline">Reset Filters</button>
+               <button onclick="exportToCSV('Admin_Dashboard_Export.csv', 'adminDashboardTable')" class="bg-white hover:bg-gray-100 text-[#002147] text-sm font-bold py-1.5 px-4 rounded border border-[#002147] transition-colors shadow-sm flex items-center gap-2">
+                   <span>📥</span> Export CSV
+               </button>
             </div>
         </div>
       </div>
 
       <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-x-auto">
-        <table class="w-full text-left border-collapse min-w-max">
-          <thead id="adminDashboardTableHeader">
-            <tr class="bg-gray-50 border-b border-gray-200 text-sm text-gray-700 uppercase">
+        <table id="adminDashboardTable" class="w-full text-left border-collapse sm:min-w-max">
+          <thead id="adminDashboardTableHeader" class="hidden sm:table-header-group">
+            <tr class="bg-gray-50 border-b border-gray-200 text-sm text-gray-700 uppercase hidden sm:table-row">
               <th class="p-3 cursor-pointer hover:bg-gray-100" onclick="sortAdminTable('teacherName')">Name ↕️</th>
               <th class="p-3 cursor-pointer hover:bg-gray-100" onclick="sortAdminTable('date')">Date ↕️</th>
               <th class="p-3 cursor-pointer hover:bg-gray-100" onclick="sortAdminTable('period')">Period ↕️</th>
@@ -527,6 +528,9 @@
                      <input type="date" id="hrFilterEndDate" class="border rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-[#00843D]" onchange="handleHRDateChange()">
                   </div>
                   <div class="flex items-center gap-2">
+                     <button onclick="exportToCSV('HR_Dashboard_Export.csv', 'hrDashboardTable')" class="bg-white hover:bg-gray-100 text-[#002147] text-sm font-bold py-1.5 px-4 rounded border border-[#002147] transition-colors shadow-sm flex items-center gap-2">
+                         <span>📥</span> Export CSV
+                     </button>
                      <button onclick="copyHRData()" class="bg-white hover:bg-gray-100 text-[#002147] text-sm font-bold py-1.5 px-4 rounded border border-[#002147] transition-colors shadow-sm flex items-center gap-2">
                          <span>📋</span> Copy this data
                      </button>
@@ -537,9 +541,9 @@
       </div>
 
       <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-x-auto">
-        <table class="w-full text-left border-collapse min-w-max">
-          <thead id="hrDashboardTableHeader">
-            <tr class="bg-gray-50 border-b border-gray-200 text-sm text-gray-700 uppercase">
+        <table id="hrDashboardTable" class="w-full text-left border-collapse sm:min-w-max">
+          <thead id="hrDashboardTableHeader" class="hidden sm:table-header-group">
+            <tr class="bg-gray-50 border-b border-gray-200 text-sm text-gray-700 uppercase hidden sm:table-row">
               <th class="p-3">Teacher Name</th>
               <th id="hrCountHeader" class="p-3">Count</th>
             </tr>
@@ -568,6 +572,9 @@
                <input type="date" id="atAGlanceDate" class="border rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-[#00843D]" onchange="applyAtAGlanceFilter()">
             </div>
             <div class="flex items-center gap-2 w-full sm:w-auto ml-auto">
+               <button onclick="exportToCSV('At_A_Glance_Export.csv', 'atAGlanceTable')" class="bg-white hover:bg-gray-100 text-[#002147] text-sm font-bold py-1.5 px-4 rounded border border-[#002147] transition-colors shadow-sm flex items-center gap-2">
+                   <span>📥</span> Export CSV
+               </button>
                <button onclick="copyAtAGlance()" class="bg-white hover:bg-gray-100 text-[#002147] text-sm font-bold py-1.5 px-4 rounded border border-[#002147] transition-colors shadow-sm flex items-center gap-2">
                    <span>📋</span> Copy This Info
                </button>
@@ -577,7 +584,7 @@
 
       <div id="atAGlanceCopyContainer" class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-x-auto p-4">
         <!-- The table and footer will be rendered inside this container so it can be easily copied -->
-        <table class="w-full text-left border-collapse min-w-max border border-gray-300">
+        <table id="atAGlanceTable" class="w-full text-left border-collapse min-w-max border border-gray-300">
           <thead id="atAGlanceTableHeader">
              <tr class="bg-gray-50 border-b border-gray-300 text-sm text-gray-700 uppercase">
                 <!-- Columns dynamically injected -->
@@ -617,6 +624,9 @@
         <button onclick="switchSettingsTab('staffRosterTab')" id="btn-staffRosterTab" class="py-2 px-4 text-gray-500 hover:text-[#002147] font-medium focus:outline-none">
           Staff Roster
         </button>
+        <button onclick="switchSettingsTab('auditLogsTab')" id="btn-auditLogsTab" class="py-2 px-4 text-gray-500 hover:text-[#002147] font-medium focus:outline-none">
+          Audit Logs
+        </button>
       </div>
 
       <!-- General Settings -->
@@ -642,7 +652,7 @@
         <div class="overflow-x-auto">
           <table class="w-full text-left border-collapse min-w-max">
             <thead>
-              <tr class="bg-gray-50 border-b border-gray-200 text-sm text-gray-700 uppercase">
+              <tr class="bg-gray-50 border-b border-gray-200 text-sm text-gray-700 uppercase hidden sm:table-row">
                 <th class="p-3">User Email</th>
                 <th class="p-3">Assigned Role</th>
                 <th class="p-3 text-right">Actions</th>
@@ -693,7 +703,7 @@
         <div class="overflow-x-auto">
           <table class="w-full text-left border-collapse min-w-max">
             <thead>
-              <tr class="bg-gray-50 border-b border-gray-200 text-sm text-gray-700 uppercase">
+              <tr class="bg-gray-50 border-b border-gray-200 text-sm text-gray-700 uppercase hidden sm:table-row">
                 <th class="p-3">Name</th>
                 <th class="p-3">Email</th>
                 <th class="p-3">Duty</th>
@@ -707,6 +717,48 @@
         </div>
       </div>
     </main>
+
+
+      <!-- Audit Logs Tab -->
+      <div id="auditLogsTab" class="settings-tab-content bg-white rounded-xl shadow-sm border border-gray-200 p-6 hidden">
+        <div class="flex justify-between items-center mb-4 border-b pb-2">
+           <h3 class="text-xl font-bold text-[#002147]">Audit Logs</h3>
+        </div>
+
+        <div class="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200 flex flex-col md:flex-row gap-4 items-end">
+           <div class="w-full md:w-auto">
+             <label class="block text-sm font-bold mb-1">Start Date</label>
+             <input type="date" id="auditStartDate" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none text-sm">
+           </div>
+           <div class="w-full md:w-auto">
+             <label class="block text-sm font-bold mb-1">End Date</label>
+             <input type="date" id="auditEndDate" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none text-sm">
+           </div>
+           <button onclick="generateAuditReport()" id="btnGenerateAudit" class="bg-[#002147] hover:bg-blue-900 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-md text-sm w-full md:w-auto">
+              Generate Report
+           </button>
+           <button onclick="exportToCSV('Audit_Logs.csv', 'auditLogsTable')" class="bg-white hover:bg-gray-100 text-[#002147] text-sm font-bold py-2 px-4 rounded border border-[#002147] transition-colors shadow-sm ml-auto flex items-center gap-2">
+              <span>📥</span> Export CSV
+           </button>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table id="auditLogsTable" class="w-full text-left border-collapse min-w-max">
+            <thead>
+              <tr class="bg-gray-50 border-b border-gray-200 text-sm text-gray-700 uppercase">
+                <th class="p-3">Timestamp</th>
+                <th class="p-3">Actor</th>
+                <th class="p-3">Action Type</th>
+                <th class="p-3">Target ID</th>
+                <th class="p-3">Details</th>
+              </tr>
+            </thead>
+            <tbody id="auditLogsTableBody" class="divide-y divide-gray-100">
+               <tr><td colspan="5" class="p-8 text-center text-gray-400 italic">Select a date range and click Generate Report.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
 
     <!-- Settings Form & Logic -->
 
@@ -878,15 +930,15 @@
         google.script.run
           .withSuccessHandler(result => {
             if (result && result.success) {
-              alert("Settings saved successfully!");
+              showToast("Settings saved successfully!", "success");
             } else {
-              alert("Failed to save settings: " + (result ? result.error : "Unknown error"));
+              showToast("Failed to save settings: " + (result ? result.error : "Unknown error"), "error");
             }
             btn.disabled = false;
             btn.innerText = originalText;
           })
           .withFailureHandler(err => {
-            alert("Connection Error: " + err.message);
+            showToast("Connection Error: " + err.message, 'error');
             btn.disabled = false;
             btn.innerText = originalText;
           })
@@ -894,8 +946,7 @@
       }
 
       function clearMasterScheduleCacheClient() {
-        if (!confirm("Are you sure you want to clear the Master Schedule cache? It will be re-fetched from PowerSchool on the next load.")) return;
-
+        showConfirm("Are you sure you want to clear the Master Schedule cache? It will be re-fetched from PowerSchool on the next load.", () => {
         const btn = document.getElementById('clearCacheBtn');
         const originalText = btn.innerText;
         btn.disabled = true;
@@ -904,19 +955,20 @@
         google.script.run
           .withSuccessHandler(result => {
              if (result && result.success) {
-                 alert("Cache cleared successfully! Data will be fresh on next load.");
+                 showToast("Cache cleared successfully! Data will be fresh on next load.", 'success');
              } else {
-                 alert("Failed to clear cache: " + (result ? result.error : "Unknown error"));
+                 showToast("Failed to clear cache: " + (result ? result.error : "Unknown error"), "error");
              }
              btn.disabled = false;
              btn.innerText = originalText;
           })
           .withFailureHandler(err => {
-             alert("Error: " + err.message);
+             showToast("Error: " + err.message, 'error');
              btn.disabled = false;
              btn.innerText = originalText;
           })
           .clearMasterScheduleCache();
+        });
       }
 
       let currentRoles = [];
@@ -981,7 +1033,7 @@
         const newRole = document.getElementById(`edit-role-select-${idx}`).value;
 
         if (!newEmail || !newRole) {
-          alert("Email and Role cannot be empty.");
+          showToast("Email and Role cannot be empty.", 'info');
           return;
         }
 
@@ -990,32 +1042,32 @@
             if (result && result.success) {
               loadRolesData(); // Reload table
             } else {
-              alert("Failed to update role: " + (result ? result.error : "Unknown error"));
+              showToast("Failed to update role: " + (result ? result.error : "Unknown error"), "error");
               loadRolesData(); // Revert on failure
             }
           })
           .withFailureHandler(err => {
-            alert("Connection Error: " + err.message);
+            showToast("Connection Error: " + err.message, 'error');
             loadRolesData();
           })
           .editUserRole(oldEmail, newEmail, newRole);
       }
 
       function deleteRole(email) {
-        if (!confirm(`Are you sure you want to remove the role for ${email}?`)) return;
-
+        showConfirm(`Are you sure you want to remove the role for ${email}?`, () => {
         google.script.run
           .withSuccessHandler(result => {
             if (result && result.success) {
               loadRolesData();
             } else {
-              alert("Failed to delete role: " + (result ? result.error : "Unknown error"));
+              showToast("Failed to delete role: " + (result ? result.error : "Unknown error"), "error");
             }
           })
           .withFailureHandler(err => {
-            alert("Connection Error: " + err.message);
+            showToast("Connection Error: " + err.message, 'error');
           })
           .deleteUserRole(email);
+      });
       }
 
       function openAddRoleModal() {
@@ -1052,7 +1104,7 @@
         const role = document.getElementById('addRoleSelect').value;
 
         if (!email || !role) {
-          alert("Please fill in both email and role.");
+          showToast("Please fill in both email and role.", 'error');
           return;
         }
 
@@ -1067,13 +1119,13 @@
               closeAddRoleModal();
               loadRolesData();
             } else {
-              alert("Failed to add role: " + (result ? result.error : "Unknown error"));
+              showToast("Failed to add role: " + (result ? result.error : "Unknown error"), "error");
             }
             btn.disabled = false;
             btn.innerText = originalText;
           })
           .withFailureHandler(err => {
-            alert("Connection Error: " + err.message);
+            showToast("Connection Error: " + err.message, 'error');
             btn.disabled = false;
             btn.innerText = originalText;
           })
@@ -1260,6 +1312,108 @@
     </div>
 
     <script>
+
+
+      function exportToCSV(filename, tableId) {
+        const table = document.getElementById(tableId);
+        if (!table) return;
+
+        let csv = '';
+
+        // Get headers
+        const headers = Array.from(table.querySelectorAll('thead tr.sm\\:table-row th, thead tr:not(.sm\\:table-row) th'))
+                             .map(th => `"${th.innerText.replace(/"/g, '""')}"`);
+        if(headers.length > 0) csv += headers.join(',') + '\n';
+
+        // Get rows
+        const rows = Array.from(table.querySelectorAll('tbody tr'));
+        rows.forEach(tr => {
+            const cols = tr.querySelectorAll('td.sm\\:table-cell, td:not(.sm\\:hidden):not(.sm\\:table-cell)');
+            // Check if this is a loading/empty row (colspan)
+            if (cols.length === 1 && cols[0].hasAttribute('colspan')) return;
+
+            const rowData = Array.from(cols).map(td => {
+                let text = td.innerText.replace(/(\r\n|\n|\r)/gm, ' ');
+                text = text.replace(/"/g, '""');
+                return `"${text}"`;
+            });
+            if (rowData.length > 0) csv += rowData.join(',') + '\n';
+        });
+
+        if (csv.trim() === '') {
+            showToast('No data to export.', 'info');
+            return;
+        }
+
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', filename);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        showToast(`Exported ${filename}`, 'success');
+      }
+
+
+      function generateAuditReport() {
+        const startDate = document.getElementById('auditStartDate').value;
+        const endDate = document.getElementById('auditEndDate').value;
+
+        if (!startDate || !endDate) {
+          showToast("Please select both start and end dates.", "error");
+          return;
+        }
+
+        if (startDate > endDate) {
+          showToast("Start date cannot be after end date.", "error");
+          return;
+        }
+
+        const btn = document.getElementById('btnGenerateAudit');
+        const originalText = btn.innerText;
+        btn.disabled = true;
+        btn.innerText = "Loading...";
+
+        const tbody = document.getElementById('auditLogsTableBody');
+        tbody.innerHTML = '<tr><td colspan="5" class="p-8 text-center text-gray-400 italic">Fetching logs...</td></tr>';
+
+        google.script.run
+          .withSuccessHandler(logs => {
+             btn.disabled = false;
+             btn.innerText = originalText;
+
+             if (logs.length === 0) {
+               tbody.innerHTML = '<tr><td colspan="5" class="p-8 text-center text-gray-400 italic">No logs found in this date range.</td></tr>';
+               return;
+             }
+
+             let html = '';
+             logs.forEach(log => {
+               html += `
+                 <tr class="hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0">
+                   <td class="p-3 text-sm text-gray-600 whitespace-nowrap">${escapeHtml(log.timestamp)}</td>
+                   <td class="p-3 text-sm text-gray-800 font-medium">${escapeHtml(log.actor)}</td>
+                   <td class="p-3 text-sm font-bold text-gray-700">
+                     <span class="bg-gray-100 text-gray-800 px-2 py-1 rounded text-xs border border-gray-200">${escapeHtml(log.actionType)}</span>
+                   </td>
+                   <td class="p-3 text-sm text-gray-500 truncate max-w-[150px]" title="${escapeHtml(log.targetId)}">${escapeHtml(log.targetId)}</td>
+                   <td class="p-3 text-sm text-gray-600">${escapeHtml(log.details)}</td>
+                 </tr>
+               `;
+             });
+             tbody.innerHTML = html;
+          })
+          .withFailureHandler(err => {
+             btn.disabled = false;
+             btn.innerText = originalText;
+             tbody.innerHTML = `<tr><td colspan="5" class="p-8 text-center text-red-600 font-bold">Failed to load logs: ${err.message}</td></tr>`;
+             showToast("Connection Error: " + err.message, "error");
+          })
+          .getAuditLogs(startDate, endDate);
+      }
 
       // --- PUB-SUB EVENT EMITTER ---
       const EventBus = {
@@ -1559,16 +1713,19 @@
 
       function attemptCloseAllModals() {
         if (hasUnsavedData()) {
-          if (!confirm("You have unsaved changes. Are you sure you want to close this modal and discard them?")) {
-            return;
-          }
+
+          showConfirm("You have unsaved changes. Are you sure you want to close this modal and discard them?", () => {
+             originalModalData = {};
+             closeAllModals();
+          });
+          return;
         }
 
         // Reset the captured state
         originalModalData = {};
-
         closeAllModals();
       }
+
 
       document.addEventListener('keydown', function(event) {
         if (event.key === "Escape") {
@@ -1717,8 +1874,7 @@
       }
 
       function handleSignMeUp(absenceId, period, btnId) {
-        if (!confirm("Are you sure you want to cover this period?")) return;
-
+        showConfirm("Are you sure you want to cover this period?", () => {
         const btn = document.getElementById(btnId);
         const originalText = btn.innerText;
         btn.disabled = true;
@@ -1728,7 +1884,7 @@
         const subName = document.getElementById('userName').innerText;
 
         if (!subName || subName === "Loading...") {
-          alert("Error: User name not fully loaded yet. Please try again in a moment.");
+          showToast("Error: User name not fully loaded yet. Please try again in a moment.", "error");
           btn.disabled = false;
           btn.innerText = originalText;
           return;
@@ -1737,7 +1893,7 @@
         google.script.run
           .withSuccessHandler(result => {
             if (result && result.success) {
-              alert("Successfully signed up for period " + period + "!");
+              showToast("Successfully signed up for period " + period + "!", "success");
               // Refresh all relevant sections
               EventBus.publish('refresh_todaysOpenJobs');
               EventBus.publish('refresh_mySubDuties');
@@ -1747,7 +1903,7 @@
                  EventBus.publish('refresh_adminData');
               }
             } else {
-              alert(result ? result.error : "Unknown error");
+              showToast(result ? result.error : "Unknown error", 'error');
               btn.disabled = false;
               btn.innerText = originalText;
 
@@ -1757,11 +1913,12 @@
             }
           })
           .withFailureHandler(err => {
-            alert("Connection error: " + err.message);
+            showToast("Connection error: " + err.message, 'error');
             btn.disabled = false;
             btn.innerText = originalText;
           })
           .assignSubToPeriod(absenceId, period, subName);
+        });
       }
 
       function updateDynamicStaffList(dateStr, period) {
@@ -1868,6 +2025,15 @@
           if (typeof loadStaffRosterSettings === 'function') {
             loadStaffRosterSettings();
           }
+          const today = new Date();
+          const offset = today.getTimezoneOffset() * 60000;
+          const localISOTime = (new Date(today - offset)).toISOString().split('T')[0];
+          const pastDate = new Date(today - offset);
+          pastDate.setDate(pastDate.getDate() - 7);
+          const pastISOTime = pastDate.toISOString().split('T')[0];
+
+          if (!document.getElementById('auditStartDate').value) document.getElementById('auditStartDate').value = pastISOTime;
+          if (!document.getElementById('auditEndDate').value) document.getElementById('auditEndDate').value = localISOTime;
         } else {
           settingsView.classList.add('hidden');
           mainContent.classList.remove('hidden');
@@ -2167,7 +2333,7 @@
 
         if (adminCurrentView === 'period') {
           thead.innerHTML = `
-            <tr class="bg-gray-50 border-b border-gray-200 text-sm text-gray-700 uppercase">
+            <tr class="bg-gray-50 border-b border-gray-200 text-sm text-gray-700 uppercase hidden sm:table-row">
               <th class="p-3 cursor-pointer hover:bg-gray-100" onclick="sortAdminTable('teacherName')">Name ↕️</th>
               <th class="p-3 cursor-pointer hover:bg-gray-100" onclick="sortAdminTable('date')">Date ↕️</th>
               <th class="p-3 cursor-pointer hover:bg-gray-100" onclick="sortAdminTable('period')">Period ↕️</th>
@@ -2223,13 +2389,35 @@
 
             html += `
               <tr class="hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0 cursor-pointer" onclick="openDetailsModalForAdmin(${rawIdx})">
-                <td class="p-3 text-sm text-gray-800 font-medium"><a href="mailto:${escapeHtml(req.teacherEmail)}" class="hover:underline text-blue-600" onclick="event.stopPropagation()">${escapeHtml(req.teacherName)}</a></td>
-                <td class="p-3 text-sm text-gray-600">${escapeHtml(req.date)}</td>
-                <td class="p-3 text-sm font-bold text-gray-700">Period ${escapeHtml(req.period)}</td>
-                <td class="p-3 text-sm text-gray-600">${courseHtml}</td>
-                <td class="p-3 text-sm text-gray-600">${roomHtml}</td>
-                <td class="p-3 text-sm" onclick="event.stopPropagation()">${subHtml}</td>
-                <td class="p-3 text-sm text-gray-500 max-w-xs truncate" title="${escapeHtml(req.instructions) || ''}">${escapeHtml(req.instructions) || '-'}</td>
+                <!-- Mobile Card View -->
+                <td class="p-3 block sm:hidden">
+                    <div class="flex justify-between items-start mb-2">
+                        <div>
+                            <div class="font-bold text-[#002147]"><a href="mailto:${escapeHtml(req.teacherEmail)}" class="hover:underline text-blue-600" onclick="event.stopPropagation()">${escapeHtml(req.teacherName)}</a></div>
+                            <div class="text-sm text-gray-500">${escapeHtml(req.date)} &bull; <span class="font-bold text-gray-700">Period ${escapeHtml(req.period)}</span></div>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 text-sm text-gray-600 mb-2">
+                        <div><span class="font-semibold">Course:</span> ${courseHtml}</div>
+                        <div><span class="font-semibold">Room:</span> ${roomHtml}</div>
+                    </div>
+                    <div class="mb-2">
+                        <span class="font-semibold text-sm text-gray-600">Sub:</span>
+                        <div class="mt-1" onclick="event.stopPropagation()">${subHtml}</div>
+                    </div>
+                    <div class="text-sm text-gray-500 italic truncate" title="${escapeHtml(req.instructions) || ''}">
+                        ${escapeHtml(req.instructions) || 'No instructions'}
+                    </div>
+                </td>
+
+                <!-- Desktop Table View -->
+                <td class="p-3 text-sm text-gray-800 font-medium hidden sm:table-cell"><a href="mailto:${escapeHtml(req.teacherEmail)}" class="hover:underline text-blue-600" onclick="event.stopPropagation()">${escapeHtml(req.teacherName)}</a></td>
+                <td class="p-3 text-sm text-gray-600 hidden sm:table-cell">${escapeHtml(req.date)}</td>
+                <td class="p-3 text-sm font-bold text-gray-700 hidden sm:table-cell">Period ${escapeHtml(req.period)}</td>
+                <td class="p-3 text-sm text-gray-600 hidden sm:table-cell">${courseHtml}</td>
+                <td class="p-3 text-sm text-gray-600 hidden sm:table-cell">${roomHtml}</td>
+                <td class="p-3 text-sm hidden sm:table-cell" onclick="event.stopPropagation()">${subHtml}</td>
+                <td class="p-3 text-sm text-gray-500 max-w-xs truncate hidden sm:table-cell" title="${escapeHtml(req.instructions) || ''}">${escapeHtml(req.instructions) || '-'}</td>
               </tr>
             `;
           });
@@ -2238,7 +2426,7 @@
         } else {
           // Request View
           thead.innerHTML = `
-            <tr class="bg-gray-50 border-b border-gray-200 text-sm text-gray-700 uppercase">
+            <tr class="bg-gray-50 border-b border-gray-200 text-sm text-gray-700 uppercase hidden sm:table-row">
               <th class="p-3 cursor-pointer hover:bg-gray-100" onclick="sortAdminTable('teacherName')">Name ↕️</th>
               <th class="p-3 cursor-pointer hover:bg-gray-100" onclick="sortAdminTable('date')">Date ↕️</th>
               <th class="p-3 cursor-pointer hover:bg-gray-100" onclick="sortAdminTable('reason')">Reason ↕️</th>
@@ -2265,11 +2453,23 @@
           uniqueRequests.forEach((req, idx) => {
             html += `
               <tr class="hover:bg-gray-100 transition-colors border-b border-gray-100 last:border-b-0 cursor-pointer" onclick="openAdminEditModal('${escapeJs(req.id)}')">
-                <td class="p-3 text-sm text-gray-800 font-medium">${escapeHtml(req.teacherName)}</td>
-                <td class="p-3 text-sm text-gray-600">${escapeHtml(req.date)}</td>
-                <td class="p-3 text-sm text-gray-600">${escapeHtml(req.reason)}</td>
-                <td class="p-3 text-sm text-gray-600">${escapeHtml(req.duration)}</td>
-                <td class="p-3 text-sm text-gray-600 font-bold">${escapeHtml(req.periodsString)}</td>
+                <!-- Mobile Card View -->
+                <td class="p-3 block sm:hidden">
+                    <div class="font-bold text-[#002147] mb-1">${escapeHtml(req.teacherName)}</div>
+                    <div class="text-sm text-gray-500 mb-1">${escapeHtml(req.date)}</div>
+                    <div class="grid grid-cols-2 gap-2 text-sm text-gray-600 mb-1">
+                        <div><span class="font-semibold">Reason:</span> ${escapeHtml(req.reason)}</div>
+                        <div><span class="font-semibold">Duration:</span> ${escapeHtml(req.duration)}</div>
+                    </div>
+                    <div class="text-sm text-gray-600"><span class="font-semibold">Periods:</span> ${escapeHtml(req.periodsString)}</div>
+                </td>
+
+                <!-- Desktop Table View -->
+                <td class="p-3 text-sm text-gray-800 font-medium hidden sm:table-cell">${escapeHtml(req.teacherName)}</td>
+                <td class="p-3 text-sm text-gray-600 hidden sm:table-cell">${escapeHtml(req.date)}</td>
+                <td class="p-3 text-sm text-gray-600 hidden sm:table-cell">${escapeHtml(req.reason)}</td>
+                <td class="p-3 text-sm text-gray-600 hidden sm:table-cell">${escapeHtml(req.duration)}</td>
+                <td class="p-3 text-sm text-gray-600 font-bold hidden sm:table-cell">${escapeHtml(req.periodsString)}</td>
               </tr>
             `;
           });
@@ -2350,7 +2550,7 @@
         }
 
         if (subName && !staffList.some(s => s.name === subName)) {
-          alert("Please enter a valid staff name from the list, or leave it blank to clear.");
+          showToast("Please enter a valid staff name from the list, or leave it blank to clear.", 'error');
           return;
         }
 
@@ -2374,7 +2574,7 @@
               // Also refresh quick cover if it's the same 2-day window
               EventBus.publish('refresh_quickCover');
             } else {
-              alert(result ? result.error : "Unknown error");
+              showToast(result ? result.error : "Unknown error", 'error');
               btn.disabled = false;
               btn.innerText = originalText;
 
@@ -2385,7 +2585,7 @@
             }
           })
           .withFailureHandler(err => {
-            alert("Error: " + err.message);
+            showToast("Error: " + err.message, 'error');
             btn.disabled = false;
             btn.innerText = originalText;
           })
@@ -2408,7 +2608,7 @@
         }
 
         if (subName && !staffList.some(s => s.name === subName)) {
-          alert("Please enter a valid staff name from the list, or leave it blank to clear.");
+          showToast("Please enter a valid staff name from the list, or leave it blank to clear.", 'error');
           inputEl.value = originalValue;
           return;
         }
@@ -2431,7 +2631,7 @@
               EventBus.publish('refresh_adminData', { renderAtAGlance: isAtAGlanceVisible });
               EventBus.publish('refresh_quickCover');
             } else {
-              alert(result ? result.error : "Unknown error");
+              showToast(result ? result.error : "Unknown error", 'error');
               inputEl.value = originalValue;
               inputEl.disabled = false;
               inputEl.style.backgroundColor = previousBg;
@@ -2443,7 +2643,7 @@
             }
           })
           .withFailureHandler(err => {
-            alert("Error: " + err.message);
+            showToast("Error: " + err.message, 'error');
             inputEl.value = originalValue;
             inputEl.disabled = false;
             inputEl.style.backgroundColor = previousBg;
@@ -2525,7 +2725,7 @@
         let subName = selectEl.value;
 
         if (!subName) {
-          alert("Please enter a substitute to assign.");
+          showToast("Please enter a substitute to assign.", 'error');
           return;
         }
 
@@ -2533,7 +2733,7 @@
         subName = subName.replace(/\s+-\s+.*$/, '');
 
         if (!staffList.some(s => s.name === subName)) {
-          alert("Please enter a valid staff name from the list.");
+          showToast("Please enter a valid staff name from the list.", 'error');
           return;
         }
 
@@ -2551,7 +2751,7 @@
               EventBus.publish('refresh_quickCover'); // Refresh the list
               EventBus.publish('refresh_adminData');
             } else {
-              alert(result ? result.error : "Unknown error");
+              showToast(result ? result.error : "Unknown error", 'error');
               btn.disabled = false;
               btn.innerText = originalText;
 
@@ -2561,7 +2761,7 @@
             }
           })
           .withFailureHandler(err => {
-            alert("Connection error: " + err.message);
+            showToast("Connection error: " + err.message, 'error');
             btn.disabled = false;
             btn.innerText = originalText;
           })
@@ -2656,30 +2856,30 @@
       }
 
       function cancelMySubDutyClient(id, period) {
-        if (!confirm("Are you sure you want to cancel your assigned sub coverage for this period? The sub coordinator will be notified.")) return;
-
+        showConfirm("Are you sure you want to cancel your assigned sub coverage for this period? The sub coordinator will be notified.", () => {
         const container = document.getElementById('mySubDuties');
         container.innerHTML = '<div class="spinner mx-auto my-4"></div>';
 
         google.script.run
           .withSuccessHandler(result => {
              if (result && result.success) {
-               alert("Sub-duty cancelled successfully. The sub coordinator has been notified.");
+               showToast("Sub-duty cancelled successfully. The sub coordinator has been notified.", 'success');
                EventBus.publish('refresh_mySubDuties');
                if (!document.getElementById('adminSection').classList.contains('hidden')) {
                  EventBus.publish('refresh_quickCover');
                  EventBus.publish('refresh_adminData');
                }
              } else {
-               alert("Failed to cancel sub-duty: " + (result ? result.error : "Unknown"));
+               showToast("Failed to cancel sub-duty: " + (result ? result.error : "Unknown"), "error");
                loadMySubDuties();
              }
           })
           .withFailureHandler(err => {
-             alert("Error: " + err.message);
+             showToast("Error: " + err.message, 'error');
              loadMySubDuties();
           })
           .cancelMySubDuty(id, period);
+        });
       }
 
       function renderMyAbsences(absences) {
@@ -2838,8 +3038,7 @@
          const id = document.getElementById('editAbsenceId').value;
          if (!id) return;
 
-         if (!confirm("Are you sure you want to completely delete this absence request? The teacher will be notified.")) return;
-
+         showConfirm("Are you sure you want to completely delete this absence request? The teacher will be notified.", () => {
          const btn = document.getElementById('adminDeleteBtn');
          const originalText = btn.innerText;
          btn.disabled = true;
@@ -2848,14 +3047,14 @@
          google.script.run
            .withSuccessHandler(result => {
               if (result && result.success) {
-                alert("Request cancelled successfully.");
+                showToast("Request cancelled successfully.", 'success');
                 toggleModal(); // close modal
                 if (!document.getElementById('adminSection').classList.contains('hidden')) {
                   EventBus.publish('refresh_quickCover');
                   EventBus.publish('refresh_adminData');
                 }
               } else {
-                alert("Failed to cancel: " + (result ? result.error : "Unknown"));
+                showToast("Failed to cancel: " + (result ? result.error : "Unknown"), "error");
                 btn.disabled = false;
               btn.innerText = originalText;
 
@@ -2865,38 +3064,39 @@
             }
           })
           .withFailureHandler(err => {
-              alert("Error: " + err.message);
+              showToast("Error: " + err.message, 'error');
               btn.disabled = false;
               btn.innerText = originalText;
            })
            .cancelAbsence(id);
+         });
       }
 
       function cancelAbsence(id) {
-        if (!confirm("Are you sure you want to cancel this request? Any assigned substitutes will be automatically notified.")) return;
-
+        showConfirm("Are you sure you want to cancel this request? Any assigned substitutes will be automatically notified.", () => {
         const container = document.getElementById('myAbsences');
         container.innerHTML = '<div class="spinner mx-auto my-4"></div>';
 
         google.script.run
           .withSuccessHandler(result => {
              if (result && result.success) {
-               alert("Request cancelled successfully.");
+               showToast("Request cancelled successfully.", 'success');
                EventBus.publish('refresh_myAbsences');
                if (!document.getElementById('adminSection').classList.contains('hidden')) {
                  EventBus.publish('refresh_quickCover');
                  EventBus.publish('refresh_adminData');
                }
              } else {
-               alert("Failed to cancel: " + (result ? result.error : "Unknown"));
+               showToast("Failed to cancel: " + (result ? result.error : "Unknown"), "error");
                loadMyAbsences();
              }
           })
           .withFailureHandler(err => {
-             alert("Error: " + err.message);
+             showToast("Error: " + err.message, 'error');
              loadMyAbsences();
           })
           .cancelAbsence(id);
+        });
       }
 
       document.getElementById('absenceForm').onsubmit = function(e) {
@@ -2906,7 +3106,7 @@
                                      .map(cb => cb.value).join(', ');
 
         if (!selectedPeriods) {
-          alert("Please select at least one period for coverage.");
+          showToast("Please select at least one period for coverage.", 'error');
           return;
         }
 
@@ -2921,11 +3121,11 @@
         }
 
         if (hrRequired && !hrChecked) {
-          alert("Please confirm HR documentation has been provided.");
+          showToast("Please confirm HR documentation has been provided.", 'error');
           return;
         }
         if (!agreed) {
-          alert("You must agree to the terms to submit.");
+          showToast("You must agree to the terms to submit.", 'info');
           return;
         }
 
@@ -2949,7 +3149,7 @@
           google.script.run
             .withSuccessHandler((result) => {
               if (result && result.success) {
-                alert("Request Updated Successfully!");
+                showToast("Request Updated Successfully!", 'success');
                 btn.disabled = false;
                 btn.innerHTML = 'Save Changes';
                 toggleModal();
@@ -2959,13 +3159,13 @@
                   EventBus.publish('refresh_adminData');
                 }
               } else {
-                alert(result ? result.error : "Database Error");
+                showToast(result ? result.error : "Database Error", 'error');
                 btn.disabled = false;
                 btn.innerHTML = 'Save Changes';
               }
             })
             .withFailureHandler(err => {
-              alert("Connection Error: " + err.message);
+              showToast("Connection Error: " + err.message, 'error');
               btn.disabled = false;
               btn.innerHTML = 'Save Changes';
             })
@@ -2974,7 +3174,7 @@
           google.script.run
             .withSuccessHandler((result) => {
               if (result && result.success) {
-                alert("Request Submitted Successfully!");
+                showToast("Request Submitted Successfully!", 'success');
                 document.getElementById('absenceForm').reset();
                 setUrgency('Standard');
                 document.getElementById('hrSection').classList.add('hidden');
@@ -2988,13 +3188,13 @@
                   EventBus.publish('refresh_adminData');
                 }
               } else {
-                alert(result ? result.error : "Database Error");
+                showToast(result ? result.error : "Database Error", 'error');
                 btn.disabled = false;
                 btn.innerHTML = 'Submit Request';
               }
             })
             .withFailureHandler(err => {
-              alert("Connection Error: " + err.message);
+              showToast("Connection Error: " + err.message, 'error');
               btn.disabled = false;
               btn.innerHTML = 'Submit Request';
             })
@@ -3274,7 +3474,7 @@
         // Dynamically set headers based on view
         if (hrCurrentView === 'absences') {
           let headerHtml = `
-            <tr class="bg-gray-50 border-b border-gray-200 text-sm text-gray-700 uppercase">
+            <tr class="bg-gray-50 border-b border-gray-200 text-sm text-gray-700 uppercase hidden sm:table-row">
               <th class="p-3">Teacher Name</th>
           `;
 
@@ -3294,7 +3494,7 @@
           thead.innerHTML = headerHtml;
         } else {
           thead.innerHTML = `
-            <tr class="bg-gray-50 border-b border-gray-200 text-sm text-gray-700 uppercase">
+            <tr class="bg-gray-50 border-b border-gray-200 text-sm text-gray-700 uppercase hidden sm:table-row">
               <th class="p-3">Teacher Name</th>
               <th class="p-3 text-right">Duties</th>
               <th class="p-3 text-right">Extras</th>
@@ -3306,7 +3506,7 @@
         const colCount = hrCurrentView === 'absences' ? (2 + (dynamicReasons ? dynamicReasons.length : 0)) : 4;
 
         if (dataList.length === 0) {
-          tbody.innerHTML = `<tr><td colspan="${colCount}" class="p-8 text-center text-gray-400 italic">No data found for the selected dates.</td></tr>`;
+          tbody.innerHTML = `<tr><td colspan="${colCount}" class="p-8 text-center text-gray-400 italic hidden sm:table-cell">No data found for the selected dates.</td><td class="p-8 text-center text-gray-400 italic block sm:hidden">No data found for the selected dates.</td></tr>`;
           return;
         }
 
@@ -3315,21 +3515,39 @@
           if (hrCurrentView === 'absences') {
             html += `
               <tr class="hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0">
-                <td class="p-3 text-sm text-gray-800 font-medium">${escapeHtml(item.name)}</td>
+                <!-- Mobile View -->
+                <td class="p-3 block sm:hidden">
+                    <div class="font-bold text-[#002147] mb-2">${escapeHtml(item.name)}</div>
+                    <div class="grid grid-cols-2 gap-2 text-sm">
+                        ${dynamicReasons.map(reason => `<div><span class="font-semibold text-gray-600">${reason}:</span> ${escapeHtml(item[reason]) || 0}</div>`).join('')}
+                        <div class="col-span-2 pt-2 mt-1 border-t border-gray-100"><span class="font-bold text-gray-800">Total Hours:</span> ${escapeHtml(item.total) || 0}</div>
+                    </div>
+                </td>
+                <!-- Desktop View -->
+                <td class="p-3 text-sm text-gray-800 font-medium hidden sm:table-cell">${escapeHtml(item.name)}</td>
             `;
 
             dynamicReasons.forEach(reason => {
-                html += `<td class="p-3 text-sm text-gray-600 font-bold">${escapeHtml(item[reason]) || 0}</td>`;
+                html += `<td class="p-3 text-sm text-gray-600 font-bold hidden sm:table-cell">${escapeHtml(item[reason]) || 0}</td>`;
             });
 
             html += `
-                <td class="p-3 text-sm text-gray-600 font-bold text-right">${escapeHtml(item.total) || 0}</td>
+                <td class="p-3 text-sm text-gray-600 font-bold text-right hidden sm:table-cell">${escapeHtml(item.total) || 0}</td>
               </tr>
             `;
           } else {
             html += `
               <tr class="hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0">
-                <td class="p-3 text-sm text-gray-800 font-medium">${escapeHtml(item.name)}</td>
+                <!-- Mobile View -->
+                <td class="p-3 block sm:hidden">
+                    <div class="font-bold text-[#002147] mb-2">${escapeHtml(item.name)}</div>
+                    <div class="grid grid-cols-2 gap-2 text-sm">
+                        ${dynamicReasons.map(reason => `<div><span class="font-semibold text-gray-600">${reason}:</span> ${escapeHtml(item[reason]) || 0}</div>`).join('')}
+                        <div class="col-span-2 pt-2 mt-1 border-t border-gray-100"><span class="font-bold text-gray-800">Total Hours:</span> ${escapeHtml(item.total) || 0}</div>
+                    </div>
+                </td>
+                <!-- Desktop View -->
+                <td class="p-3 text-sm text-gray-800 font-medium hidden sm:table-cell">${escapeHtml(item.name)}</td>
                 <td class="p-3 text-sm text-gray-600 font-bold text-right">${escapeHtml(item.duties)}</td>
                 <td class="p-3 text-sm text-gray-600 font-bold text-right">${escapeHtml(item.extras)}</td>
                 <td class="p-3 text-sm text-gray-600 font-bold text-right">${escapeHtml(item.total)}</td>
@@ -3363,7 +3581,7 @@
         });
 
         if (tsv.trim() === '') {
-            alert('No data to copy.');
+            showToast('No data to copy.', 'info');
             return;
         }
 
@@ -3376,7 +3594,7 @@
             }, 2000);
         }).catch(err => {
             console.error('Failed to copy text: ', err);
-            alert('Failed to copy data to clipboard.');
+            showToast('Failed to copy data to clipboard.', 'error');
         });
       }
 
@@ -3405,7 +3623,7 @@
             }, 2000);
         } catch (err) {
             console.error('Failed to copy text: ', err);
-            alert('Failed to copy data to clipboard.');
+            showToast('Failed to copy data to clipboard.', 'error');
         }
 
         // Clean up
@@ -3413,5 +3631,103 @@
         footer.classList.add('hidden');
       }
     </script>
-  </body>
+
+    <!-- Custom Toast Component -->
+    <div id="toast-container" class="fixed top-5 right-5 z-[200] flex flex-col gap-2"></div>
+    <script>
+      function showToast(message, type = 'success') {
+        const container = document.getElementById('toast-container');
+        const toast = document.createElement('div');
+
+        let bgColor, icon;
+        if (type === 'success') {
+          bgColor = 'bg-[#00843D]';
+          icon = '✅';
+        } else if (type === 'error') {
+          bgColor = 'bg-red-600';
+          icon = '❌';
+        } else if (type === 'warning') {
+          bgColor = 'bg-yellow-500';
+          icon = '⚠️';
+        } else {
+          bgColor = 'bg-gray-800';
+          icon = 'ℹ️';
+        }
+
+        toast.className = `${bgColor} text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 transform transition-all duration-300 translate-y-[-100%] opacity-0`;
+
+        toast.innerHTML = `
+          <span class="text-lg">${icon}</span>
+          <span class="font-medium text-sm max-w-xs break-words">${escapeHtml(message)}</span>
+          <button class="ml-auto text-white hover:text-gray-200" onclick="this.parentElement.remove()">
+             <svg class="w-4 h-4 fill-current" viewBox="0 0 20 20"><path d="M10 8.586l4.95-4.95 1.414 1.414L11.414 10l4.95 4.95-1.414 1.414L10 11.414l-4.95 4.95-1.414-1.414L8.586 10 3.636 5.05l1.414-1.414L10 8.586z"></path></svg>
+          </button>
+        `;
+
+        container.appendChild(toast);
+
+        // Animate in
+        requestAnimationFrame(() => {
+          toast.classList.remove('translate-y-[-100%]', 'opacity-0');
+        });
+
+        // Auto remove
+        setTimeout(() => {
+          toast.classList.add('translate-y-[-100%]', 'opacity-0');
+          setTimeout(() => {
+            if (toast.parentElement) toast.remove();
+          }, 300);
+        }, 5000);
+      }
+    </script>
+
+    <!-- Custom Confirm Modal -->
+    <div id="customConfirmModal" class="modal opacity-0 pointer-events-none fixed w-full h-full top-0 left-0 flex items-center justify-center z-[250]" onclick="if(event.target === this) closeCustomConfirm()">
+      <div class="modal-overlay absolute w-full h-full bg-gray-900 opacity-50" onclick="closeCustomConfirm()"></div>
+      <div class="modal-container bg-white w-11/12 md:max-w-md mx-auto rounded-2xl shadow-2xl z-[260] overflow-y-auto">
+        <div class="p-6">
+          <div class="flex justify-between items-center pb-3 border-b">
+            <p id="confirmModalTitle" class="text-xl font-bold text-[#002147]">Confirm Action</p>
+            <div onclick="closeCustomConfirm()" class="cursor-pointer z-50 p-2 hover:bg-gray-100 rounded-full">
+              <svg class="fill-current text-black" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 18 18"><path d="M14.53 4.53l-1.06-1.06L9 7.94 4.53 3.47 3.47 4.53 7.94 9l-4.47 4.47 1.06 1.06L9 10.06l4.47 4.47 1.06-1.06L10.06 9z"></path></svg>
+            </div>
+          </div>
+          <div class="mt-4">
+             <p id="confirmModalMessage" class="text-gray-700 text-sm mb-6"></p>
+             <div class="flex justify-end gap-3">
+                <button onclick="closeCustomConfirm()" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold rounded-lg transition-colors">Cancel</button>
+                <button id="confirmModalActionBtn" class="px-4 py-2 bg-[#00843D] hover:bg-green-700 text-white font-bold rounded-lg transition-colors">Confirm</button>
+             </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script>
+      let currentConfirmCallback = null;
+      let originalConfirmModalData = null; // Stash existing state if we open over another modal
+
+      function showConfirm(message, callback) {
+        document.getElementById('confirmModalMessage').innerText = message;
+        currentConfirmCallback = callback;
+
+        const modal = document.getElementById('customConfirmModal');
+        modal.classList.remove('opacity-0', 'pointer-events-none');
+
+        document.getElementById('confirmModalActionBtn').onclick = () => {
+           closeCustomConfirm();
+           if (currentConfirmCallback) currentConfirmCallback();
+        };
+      }
+
+      function closeCustomConfirm() {
+        const modal = document.getElementById('customConfirmModal');
+        modal.classList.add('opacity-0', 'pointer-events-none');
+        currentConfirmCallback = null;
+      }
+
+      // Override attemptCloseAllModals to use showConfirm
+      const oldAttemptCloseAllModals = attemptCloseAllModals.toString();
+      // Wait, we need to inject this properly. Let's do it via regex on the actual function body later.
+    </script>
+</body>
 </html>

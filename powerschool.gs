@@ -322,3 +322,44 @@ function getMasterScheduleData() {
     return [];
   }
 }
+
+
+/**
+ * Warms the Master Schedule cache by retrieving fresh data from PowerSchool.
+ * Intended to be run periodically via a time-driven trigger.
+ */
+function warmMasterScheduleCache() {
+  const cache = CacheService.getScriptCache();
+  // Clear existing cache
+  cache.remove("ps_master_schedule");
+
+  // Clear the global in-memory variable to force a fresh fetch
+  global_master_schedule_cache = null;
+
+  // Call the function to fetch and re-cache the data
+  getMasterScheduleData();
+
+  Logger.log("Master Schedule cache warmed successfully.");
+}
+
+/**
+ * Sets up a time-driven trigger to warm the Master Schedule cache every 2 hours.
+ * Should be run once during initial setup or if triggers are lost.
+ */
+function setupCacheWarmingTrigger() {
+  // First, remove any existing triggers for this function to avoid duplicates
+  const triggers = ScriptApp.getProjectTriggers();
+  for (let i = 0; i < triggers.length; i++) {
+    if (triggers[i].getHandlerFunction() === 'warmMasterScheduleCache') {
+      ScriptApp.deleteTrigger(triggers[i]);
+    }
+  }
+
+  // Create a new trigger to run every 2 hours
+  ScriptApp.newTrigger('warmMasterScheduleCache')
+    .timeBased()
+    .everyHours(2)
+    .create();
+
+  Logger.log("Cache warming trigger created successfully to run every 2 hours.");
+}
