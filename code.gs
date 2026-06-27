@@ -48,6 +48,16 @@ function setupDatabase() {
     // ss.deleteSheet(splitSheet); // Uncomment to delete automatically, or delete manually.
   }
 
+  // Setup Audit Log Sheet
+  var auditSheet = ss.getSheetByName("Audit Log");
+  if (!auditSheet) {
+    auditSheet = ss.insertSheet("Audit Log");
+    var auditHeaders = ["Timestamp", "Actor", "Action Type", "Target ID", "Details"];
+    auditSheet.getRange(1, 1, 1, auditHeaders.length).setValues([auditHeaders]);
+    auditSheet.getRange(1, 1, 1, auditHeaders.length).setFontWeight("bold");
+    auditSheet.hideSheet(); // Keep it hidden from normal view
+  }
+
   // Setup Settings Sheet
   var settingsSheet = getSheetOrThrow(ss, "Settings");
   if (!settingsSheet) {
@@ -456,6 +466,7 @@ function saveStaffMemberAdmin(staffData) {
     if (rowIndexToUpdate !== -1) {
        // Update existing
        rosterSheet.getRange(rowIndexToUpdate, 1, 1, 3).setValues([[newName, newEmail, newDuty]]);
+       logAuditAction("STAFF_UPDATED", newEmail, "Updated staff member: " + newName + " (" + newDuty + ")");
     } else {
        // Check if new email already exists to prevent duplicates
        for (var i = 1; i < data.length; i++) {
@@ -465,9 +476,10 @@ function saveStaffMemberAdmin(staffData) {
        }
        // Append new
        rosterSheet.appendRow([newName, newEmail, newDuty]);
+       logAuditAction("STAFF_ADDED", newEmail, "Added staff member: " + newName + " (" + newDuty + ")");
     }
 
-    return { success: true };
+        return { success: true };
   } catch (err) {
     notifyAdminOfError("saveStaffMemberAdmin", err);
     return { success: false, error: err.message };
@@ -499,8 +511,9 @@ function deleteStaffMemberAdmin(email) {
 
     for (var i = 1; i < data.length; i++) {
       if (String(data[i][1]).trim().toLowerCase() === targetEmail) {
+        logAuditAction("STAFF_DELETED", targetEmail, "Deleted staff member");
         rosterSheet.deleteRow(i + 1);
-        return { success: true };
+            return { success: true };
       }
     }
 
@@ -573,6 +586,7 @@ function bulkUpsertStaffRoster(updates) {
        rosterSheet.getRange(startRow, 1, newRows.length, 3).setValues(newRows);
     }
 
+    logAuditAction("STAFF_BULK_UPLOAD", "Multiple", "Processed " + processedCount + " staff records");
     return { success: true, updated: processedCount };
   } catch (err) {
     notifyAdminOfError("bulkUpsertStaffRoster", err);
@@ -590,8 +604,9 @@ function addUserRole(email, role) {
 
     var roleSheet = getSheetOrThrow(ss, "User Roles");
 
+    logAuditAction("ROLE_ADDED", email, "Assigned role: " + role);
     roleSheet.appendRow([email.toLowerCase().trim(), role.trim()]);
-    return { success: true };
+        return { success: true };
   } catch (err) {
     notifyAdminOfError("addUserRole", err);
     return { success: false, error: err.message };
@@ -614,8 +629,9 @@ function editUserRole(oldEmail, newEmail, role) {
 
     for (var i = 1; i < data.length; i++) {
       if (String(data[i][0]).toLowerCase().trim() === targetEmail) {
+        logAuditAction("ROLE_UPDATED", oldEmail, "Changed role to: " + role + " (Email: " + newEmail + ")");
         roleSheet.getRange(i + 1, 1, 1, 2).setValues([[newEmail.toLowerCase().trim(), role.trim()]]);
-        return { success: true };
+            return { success: true };
       }
     }
     throw new Error("User not found.");
@@ -641,8 +657,9 @@ function deleteUserRole(email) {
 
     for (var i = 1; i < data.length; i++) {
       if (String(data[i][0]).toLowerCase().trim() === targetEmail) {
+        logAuditAction("ROLE_DELETED", targetEmail, "Removed role");
         roleSheet.deleteRow(i + 1);
-        return { success: true };
+            return { success: true };
       }
     }
     throw new Error("User not found.");
@@ -692,7 +709,8 @@ function updateSettings(newSettings) {
         settingsSheet.appendRow([key, newSettings[key]]);
       }
     }
-    return { success: true };
+    logAuditAction("SETTINGS_UPDATED", "Global", "Updated application settings");
+        return { success: true };
   } catch (err) {
     notifyAdminOfError("updateSettings", err);
     return { success: false, error: err.message };
@@ -850,6 +868,7 @@ function submitAbsence(formData) {
       sendUrgentCoverageEmail(ss, teacherName, formData, instructions);
     }
     
+    logAuditAction("ABSENCE_SUBMITTED", uniqueId, "Requested coverage for " + formData.date + " (Periods: " + formData.periods + ")");
     // SEND CONFIRMATION EMAIL TO SUBMITTER
     var settings = getSettings();
     var appUrl = settings["App URL"] || "https://script.google.com/a/macros/gocathedral.com/s/AKfycbwKZrBo4R-9O97aVNCjOHk9PddWCb6XNKviDS1lj4nNc49khl3T9OL8pGUDa7E1XE0/exec";
@@ -877,7 +896,7 @@ function submitAbsence(formData) {
 
     sendEmailHelper(email, confSubject, confBody, { htmlBody: confHtmlBody });
 
-    return { success: true };
+        return { success: true };
   } catch (err) {
     return { success: false, error: err.message };
   } finally {
@@ -917,6 +936,7 @@ function cancelMySubDuty(absenceId, period) {
           var details = getAbsenceDetails(absenceId, period);
 
           sheet.getRange(i + 1, subColumnIndex).setValue("");
+          logAuditAction("SUB_DUTY_CANCELLED", absenceId, "Cancelled coverage for period " + period);
 
           if (coordinatorEmail && details) {
             var subject = "SUB CANCELLATION: " + userName + " cancelled coverage";
@@ -944,7 +964,7 @@ function cancelMySubDuty(absenceId, period) {
             sendEmailHelper(coordinatorEmail, subject, body, { cc: userEmail, htmlBody: htmlBody });
           }
 
-          return { success: true };
+              return { success: true };
         } else {
           throw new Error("You are not currently assigned to this period.");
         }
@@ -1040,6 +1060,7 @@ function cancelAbsence(absenceId) {
         }
 
         sheet.getRange(i + 1, 18).setValue("Canceled");
+        logAuditAction("ABSENCE_CANCELLED", absenceId, "Cancelled entire absence request");
 
         for (var p = 1; p <= 8; p++) {
           var subIndex = 8 + p;
@@ -1078,7 +1099,7 @@ function cancelAbsence(absenceId) {
            sendEmailHelper(teacherEmail, teacherSubject, teacherBody, {htmlBody: teacherHtml});
         }
 
-        return { success: true };
+            return { success: true };
       }
     }
     throw new Error("Absence ID not found.");
@@ -1155,6 +1176,7 @@ function updateAbsence(absenceId, formData) {
           formData.date, "'" + formData.periods, formData.reason,
           formData.duration, urgencyFormatted, instructions
         ]]);
+        logAuditAction("ABSENCE_UPDATED", absenceId, "Updated absence details (Date: " + formData.date + ", Periods: " + formData.periods + ")");
 
         // Notify subs
         for (var p = 1; p <= 8; p++) {
@@ -1228,7 +1250,7 @@ function updateAbsence(absenceId, formData) {
            sendEmailHelper(teacherEmail, teacherSubject, teacherBody, {htmlBody: teacherHtml});
         }
 
-        return { success: true };
+            return { success: true };
       }
     }
     throw new Error("Absence ID not found.");
@@ -1431,7 +1453,7 @@ function assignSubToPeriod(absenceId, period, subName) {
         var newSub = String(subName || "").trim();
 
         if (existingSub === newSub) {
-           return { success: true }; // No change
+               return { success: true }; // No change
         }
 
         // Double check for race condition
@@ -1452,6 +1474,7 @@ function assignSubToPeriod(absenceId, period, subName) {
 
         // Write the subname
         sheet.getRange(i + 1, subColumnIndex).setValue(newSub);
+        logAuditAction("SUB_ASSIGNED", absenceId, "Assigned " + (newSub || "NO ONE") + " to period " + period);
 
         // Notify new sub if there is one
         if (newSub && details) {
@@ -1461,7 +1484,7 @@ function assignSubToPeriod(absenceId, period, subName) {
            }
         }
 
-        return { success: true };
+            return { success: true };
       }
     }
 
@@ -1976,7 +1999,7 @@ function clearMasterScheduleCache() {
     var cache = CacheService.getScriptCache();
     cache.remove("ps_master_schedule");
 
-    return { success: true };
+        return { success: true };
   } catch (err) {
     notifyAdminOfError("clearMasterScheduleCache", err);
     return { success: false, error: err.message };
@@ -2003,5 +2026,69 @@ function refreshData(components) {
   } catch (e) {
     notifyAdminOfError("refreshData", e);
     throw new Error("Failed to refresh data: " + e.message);
+  }
+}
+
+
+/**
+ * Logs an action to the hidden Audit Log sheet.
+ * @param {string} actionType - The type of action (e.g., "ASSIGN_SUB", "CANCEL_ABSENCE").
+ * @param {string} targetId - The ID of the affected record.
+ * @param {string} details - A description of the action.
+ */
+function logAuditAction(actionType, targetId, details) {
+  try {
+    var ss = getSS();
+    var auditSheet = ss.getSheetByName("Audit Log");
+    if (!auditSheet) return; // Fail silently if not set up
+
+    var timestamp = new Date();
+    var actor = Session.getActiveUser().getEmail();
+
+    auditSheet.appendRow([timestamp, actor, actionType, targetId, details]);
+  } catch (e) {
+    console.error("Failed to log audit action: " + e.message);
+  }
+}
+
+/**
+ * Fetches audit logs within a specific date range for the Admin dashboard.
+ */
+function getAuditLogs(startDateStr, endDateStr) {
+  try {
+    var ss = getSS();
+    var user = getUserData(ss);
+    assertRole(user, "admin");
+
+    var auditSheet = ss.getSheetByName("Audit Log");
+    if (!auditSheet) return [];
+
+    var data = auditSheet.getDataRange().getValues();
+    var logs = [];
+
+    var startDate = new Date(startDateStr);
+    startDate.setHours(0,0,0,0);
+    var endDate = new Date(endDateStr);
+    endDate.setHours(23,59,59,999);
+
+    // Skip header
+    for (var i = 1; i < data.length; i++) {
+      var rowDate = new Date(data[i][0]);
+      if (rowDate >= startDate && rowDate <= endDate) {
+        logs.push({
+          timestamp: Utilities.formatDate(rowDate, Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss"),
+          actor: String(data[i][1]),
+          actionType: String(data[i][2]),
+          targetId: String(data[i][3]),
+          details: String(data[i][4])
+        });
+      }
+    }
+
+    // Reverse to show newest first
+    return logs.reverse();
+  } catch (err) {
+    notifyAdminOfError("getAuditLogs", err);
+    throw new Error("Failed to load audit logs: " + err.message);
   }
 }
