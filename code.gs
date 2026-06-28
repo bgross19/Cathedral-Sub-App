@@ -2150,3 +2150,109 @@ function getAuditLogs(startDateStr, endDateStr) {
     throw new Error("Failed to load audit logs: " + err.message);
   }
 }
+
+
+function bulkUpsertPayPeriods(updates) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+  } catch (e) {
+    notifyAdminOfError("bulkUpsertPayPeriods_lock", e);
+    return { success: false, error: "The server is currently busy. Please try again." };
+  }
+
+  try {
+    var ss = getSS();
+    var user = getUserData(ss);
+    assertRole(user, ["admin", "hr"]);
+
+    var sheet = getSheetOrThrow(ss, "PayPeriods");
+
+    // updates is an array of objects: {period: "", start: "", end: ""}
+    var newRows = [];
+    for (var i = 0; i < updates.length; i++) {
+       var u = updates[i];
+       newRows.push([u.period, u.start, u.end]);
+    }
+
+    if (newRows.length > 0) {
+       var startRow = sheet.getLastRow() + 1;
+       sheet.getRange(startRow, 1, newRows.length, 3).setValues(newRows);
+    }
+
+    logAuditAction("PAY_PERIODS_BULK_UPLOAD", "Multiple", "Added " + newRows.length + " pay periods");
+
+    // Clear cache because PayPeriods data changed
+    // In hrData, pay periods are retrieved directly from the sheet, so it's live
+    // but we can clear cache just in case.
+
+    return { success: true, updated: newRows.length };
+  } catch (err) {
+    notifyAdminOfError("bulkUpsertPayPeriods", err);
+    return { success: false, error: err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function deleteAllPayPeriods() {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+  } catch (e) {
+    notifyAdminOfError("deleteAllPayPeriods_lock", e);
+    return { success: false, error: "The server is currently busy. Please try again." };
+  }
+
+  try {
+    var ss = getSS();
+    var user = getUserData(ss);
+    assertRole(user, ["admin", "hr"]);
+
+    var sheet = getSheetOrThrow(ss, "PayPeriods");
+    var lastRow = sheet.getLastRow();
+
+    if (lastRow > 1) {
+       sheet.getRange(2, 1, lastRow - 1, 3).clearContent();
+    }
+
+    logAuditAction("PAY_PERIODS_DELETE_ALL", "All", "Deleted all pay periods");
+
+    return { success: true };
+  } catch (err) {
+    notifyAdminOfError("deleteAllPayPeriods", err);
+    return { success: false, error: err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function loadPayPeriodsSettings() {
+  try {
+    var ss = getSS();
+    var user = getUserData(ss);
+    assertRole(user, ["admin", "hr"]);
+
+    var sheet = getSheetOrThrow(ss, "PayPeriods");
+    var data = sheet.getDataRange().getValues();
+    var payPeriods = [];
+
+    for (var i = 1; i < data.length; i++) {
+        var row = data[i];
+        if (row[0] && row[1] && row[2]) {
+            var periodNum = String(row[0]).trim();
+            var startFormatted = row[1] instanceof Date ? Utilities.formatDate(row[1], Session.getScriptTimeZone(), "yyyy-MM-dd") : String(row[1]);
+            var endFormatted = row[2] instanceof Date ? Utilities.formatDate(row[2], Session.getScriptTimeZone(), "yyyy-MM-dd") : String(row[2]);
+
+            payPeriods.push({
+                period: periodNum,
+                start: startFormatted,
+                end: endFormatted
+            });
+        }
+    }
+    return payPeriods;
+  } catch(err) {
+    throw new Error("Failed to load pay periods: " + err.message);
+  }
+}
