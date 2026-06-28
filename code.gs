@@ -2054,9 +2054,25 @@ function logAuditAction(actionType, targetId, details) {
     if (!auditSheet) return; // Fail silently if not set up
 
     var timestamp = new Date();
-    var actor = Session.getActiveUser().getEmail();
+    var actor = Session.getActiveUser().getEmail() || "Unknown";
 
-    auditSheet.appendRow([timestamp, actor, actionType, targetId, details]);
+    // Sanitize inputs for appendRow
+    var safeActionType = String(actionType != null ? actionType : "");
+    var safeTargetId = typeof targetId === 'object' ? JSON.stringify(targetId) : String(targetId != null ? targetId : "");
+    var safeDetails = typeof details === 'object' ? JSON.stringify(details) : String(details != null ? details : "");
+
+    var lock = LockService.getScriptLock();
+    // Wait up to 10 seconds for other processes to finish logging
+    if (lock.tryLock(10000)) {
+      try {
+        auditSheet.appendRow([timestamp, actor, safeActionType, safeTargetId, safeDetails]);
+        SpreadsheetApp.flush();
+      } finally {
+        lock.releaseLock();
+      }
+    } else {
+      console.warn("Could not obtain lock to log audit action: " + safeActionType);
+    }
   } catch (e) {
     console.error("Failed to log audit action: " + e.message);
   }
