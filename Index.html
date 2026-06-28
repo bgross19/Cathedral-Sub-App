@@ -10,6 +10,9 @@
         if (tabId === 'staffRosterTab' && typeof loadStaffRosterSettings === 'function') {
            loadStaffRosterSettings();
         }
+        if (tabId === 'hrSettingsTab' && typeof loadPayPeriodsSettings === 'function') {
+           loadPayPeriodsSettings();
+        }
         // Hide all tabs
         const tabs = document.querySelectorAll('.settings-tab-content');
         tabs.forEach(tab => {
@@ -18,7 +21,7 @@
         });
 
         // Reset all tab buttons
-        const tabBtns = ['generalSettingsTab', 'roleManagementTab', 'staffRosterTab'];
+        const tabBtns = ['generalSettingsTab', 'roleManagementTab', 'staffRosterTab', 'auditLogsTab', 'hrSettingsTab'];
         tabBtns.forEach(btn => {
           const btnEl = document.getElementById('btn-' + btn);
           if (btnEl) {
@@ -198,7 +201,7 @@
                      } else {
                          inQuotes = !inQuotes;
                      }
-                 } else if (char === ',' && !inQuotes) {
+                 } else if ((char === ',' || char === '\t') && !inQuotes) {
                      result.push(current);
                      current = '';
                  } else {
@@ -288,6 +291,160 @@
                showToast("Connection Error: " + err.message, 'error');
             })
             .bulkUpsertStaffRoster(updates);
+         });
+      }
+
+
+      // === Pay Periods Logic ===
+      let currentPayPeriodsSettings = [];
+
+      function loadPayPeriodsSettings() {
+        const tbody = document.getElementById('payPeriodsTableBody');
+        tbody.innerHTML = '<tr><td colspan="3" class="p-8 text-center text-gray-400 italic">Loading pay periods...</td></tr>';
+        google.script.run
+          .withSuccessHandler(periods => {
+            currentPayPeriodsSettings = periods;
+            renderPayPeriodsTable();
+          })
+          .withFailureHandler(err => {
+            tbody.innerHTML = `<tr><td colspan="3" class="p-8 text-center text-red-600 font-bold">Failed to load pay periods: ${err.message}</td></tr>`;
+          })
+          .loadPayPeriodsSettings();
+      }
+
+      function renderPayPeriodsTable() {
+        const tbody = document.getElementById('payPeriodsTableBody');
+        if (currentPayPeriodsSettings.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="3" class="p-8 text-center text-gray-400 italic">No pay periods found.</td></tr>';
+          return;
+        }
+
+        let html = '';
+        currentPayPeriodsSettings.forEach((pp) => {
+          html += `
+            <tr class="hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0">
+              <td class="p-3 text-sm text-gray-800 font-medium">${escapeHtml(pp.period)}</td>
+              <td class="p-3 text-sm text-gray-600">${escapeHtml(pp.start)}</td>
+              <td class="p-3 text-sm text-gray-600">${escapeHtml(pp.end)}</td>
+            </tr>
+          `;
+        });
+        tbody.innerHTML = html;
+      }
+
+      function deleteAllPayPeriodsClient() {
+        showConfirm('Are you sure you want to delete all pay periods? This cannot be undone.', () => {
+          google.script.run
+            .withSuccessHandler(result => {
+               if (result && result.success) {
+                  showToast('All pay periods deleted.', 'success');
+                  loadPayPeriodsSettings();
+               } else {
+                  showToast("Failed to delete pay periods: " + (result ? result.error : "Unknown error"), "error");
+               }
+            })
+            .withFailureHandler(err => {
+               showToast("Connection Error: " + err.message, 'error');
+            })
+            .deleteAllPayPeriods();
+        });
+      }
+
+      function processPayPeriodsCsvUpload() {
+         const fileInput = document.getElementById('payPeriodsCsvFileInput');
+         const textarea = document.getElementById('payPeriodsCsvTextarea');
+
+         if (fileInput.files.length > 0) {
+            const file = fileInput.files[0];
+            const reader = new FileReader();
+            reader.onload = function(e) {
+               parseAndSubmitPayPeriodsCsv(e.target.result);
+               fileInput.value = ""; // clear input
+            };
+            reader.readAsText(file);
+         } else if (textarea.value.trim() !== "") {
+            parseAndSubmitPayPeriodsCsv(textarea.value);
+            textarea.value = ""; // clear textarea
+         } else {
+            showToast("Please select a CSV file or paste CSV/TSV data.", 'error');
+         }
+      }
+
+      function parseAndSubmitPayPeriodsCsv(csvText) {
+         const lines = csvText.split(/\r?\n/).filter(line => line.trim() !== '');
+         if (lines.length === 0) {
+            showToast("Data is empty.", 'info');
+            return;
+         }
+
+         function parseCsvLine(text) {
+             const result = [];
+             let current = '';
+             let inQuotes = false;
+             for (let i = 0; i < text.length; i++) {
+                 const char = text[i];
+                 if (char === '"') {
+                     if (inQuotes && text[i+1] === '"') {
+                         current += '"';
+                         i++;
+                     } else {
+                         inQuotes = !inQuotes;
+                     }
+                 } else if ((char === ',' || char === '\t') && !inQuotes) {
+                     result.push(current);
+                     current = '';
+                 } else {
+                     current += char;
+                 }
+             }
+             result.push(current);
+             return result.map(s => s.trim());
+         }
+
+         const firstLine = parseCsvLine(lines[0]);
+         const firstLineUpper = firstLine.map(s => s.toUpperCase());
+
+         const hasHeaders = firstLineUpper.includes('PAYCHECK') || firstLineUpper.includes('PERIOD START') || firstLineUpper.includes('PERIOD END');
+         const startIndex = hasHeaders ? 1 : 0;
+
+         if (lines.length <= startIndex) {
+            showToast("Data contains no rows.", 'info');
+            return;
+         }
+
+         const updates = [];
+         for (let i = startIndex; i < lines.length; i++) {
+            let row = parseCsvLine(lines[i]);
+            if (row.length < 3) continue;
+
+            let period = row[0].replace(/^"|"$/g, '').trim();
+            let start = row[1].replace(/^"|"$/g, '').trim();
+            let end = row[2].replace(/^"|"$/g, '').trim();
+
+            if (period && start && end) {
+                updates.push({period: period, start: start, end: end});
+            }
+         }
+
+         if (updates.length === 0) {
+            showToast("No valid rows found to process. Make sure each row contains Period, Start Date, and End Date.", 'info');
+            return;
+         }
+
+         showConfirm(`Are you sure you want to process ${updates.length} pay periods? Existing ones will not be deleted but they will be appended to the bottom. Consider deleting all current pay periods first if replacing them.`, () => {
+             google.script.run
+            .withSuccessHandler(result => {
+               if (result && result.success) {
+                  showToast(`Successfully added ${result.updated} pay periods.`, 'success');
+                  loadPayPeriodsSettings();
+               } else {
+                  showToast("Failed to process data: " + (result ? result.error : "Unknown error"), "error");
+               }
+            })
+            .withFailureHandler(err => {
+               showToast("Connection Error: " + err.message, 'error');
+            })
+            .bulkUpsertPayPeriods(updates);
          });
       }
 
@@ -639,6 +796,9 @@
         <button onclick="switchSettingsTab('auditLogsTab')" id="btn-auditLogsTab" class="py-2 px-4 text-gray-500 hover:text-[#002147] font-medium focus:outline-none">
           Audit Logs
         </button>
+        <button onclick="switchSettingsTab('hrSettingsTab')" id="btn-hrSettingsTab" class="py-2 px-4 text-gray-500 hover:text-[#002147] font-medium focus:outline-none">
+          HR Settings
+        </button>
       </div>
 
       <!-- General Settings -->
@@ -730,6 +890,53 @@
       </div>
     </main>
 
+
+      <!-- HR Settings Tab -->
+      <div id="hrSettingsTab" class="settings-tab-content bg-white rounded-xl shadow-sm border border-gray-200 p-6 hidden">
+        <div class="flex justify-between items-center mb-4 border-b pb-2">
+           <h3 class="text-xl font-bold text-[#002147]">HR Settings (Pay Periods)</h3>
+           <button onclick="deleteAllPayPeriodsClient()" class="bg-red-100 hover:bg-red-200 text-red-700 font-bold py-1.5 px-4 rounded-lg transition-colors text-sm flex items-center gap-2 border border-red-200">
+               <span>🗑️</span> Delete All Pay Periods
+           </button>
+        </div>
+
+        <div class="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+           <h4 class="text-md font-bold text-[#002147] mb-2">CSV Upload (Bulk Update/Create Pay Periods)</h4>
+           <div class="flex flex-col gap-3">
+               <div>
+                 <label class="block text-sm text-gray-600 mb-1">Select a .csv file...</label>
+                 <input type="file" id="payPeriodsCsvFileInput" accept=".csv" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-[#002147] file:text-white hover:file:bg-blue-900"/>
+               </div>
+               <div class="text-center text-gray-500 font-semibold text-sm">OR</div>
+               <div>
+                 <label class="block text-sm text-gray-600 mb-1">...Paste CSV / Tab-Delimited data directly</label>
+                 <textarea id="payPeriodsCsvTextarea" rows="4" placeholder="Paycheck	Period Start	Period End
+1	8/1/2023	8/15/2023
+2	8/16/2023	8/31/2023" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none text-sm font-mono"></textarea>
+               </div>
+               <div class="flex justify-end">
+                  <button onclick="processPayPeriodsCsvUpload()" class="bg-[#002147] hover:bg-blue-900 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-md text-sm">
+                    Process Pay Periods
+                  </button>
+               </div>
+           </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse min-w-max">
+            <thead>
+              <tr class="bg-gray-50 border-b border-gray-200 text-sm text-gray-700 uppercase hidden sm:table-row">
+                <th class="p-3">Period</th>
+                <th class="p-3">Start Date</th>
+                <th class="p-3">End Date</th>
+              </tr>
+            </thead>
+            <tbody id="payPeriodsTableBody" class="divide-y divide-gray-100">
+               <tr><td colspan="3" class="p-8 text-center text-gray-400 italic">Loading pay periods...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
 
       <!-- Audit Logs Tab -->
       <div id="auditLogsTab" class="settings-tab-content bg-white rounded-xl shadow-sm border border-gray-200 p-6 hidden">
@@ -1540,6 +1747,7 @@
           .withSuccessHandler(payload => {
             const data = payload.userData;
             document.getElementById('userName').innerText = data.name;
+            document.getElementById('userName').dataset.role = data.role;
             document.getElementById('welcomeName').innerText = (data.name.split(',')[1] || data.name).trim();
             
             if (data.appUrl) {
@@ -1586,7 +1794,7 @@
                   renderQuickCover(payload.quickCover);
               }
             }
-            if (lowerRole === 'admin') {
+            if (lowerRole === 'admin' || lowerRole === 'hr') {
               document.getElementById('navSettingsBtn').classList.remove('hidden');
             }
             if (lowerRole === 'sub coordinator') {
@@ -2023,6 +2231,15 @@
 
       function toggleSettingsDashboard() {
         const mainContent = document.getElementById('mainContent');
+        const userRole = (document.getElementById('userName').dataset.role || 'user').toLowerCase();
+
+        if (userRole === 'hr') {
+            const adminTabs = ['btn-generalSettingsTab', 'btn-roleManagementTab', 'btn-staffRosterTab', 'btn-auditLogsTab'];
+            adminTabs.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.classList.add('hidden');
+            });
+        }
         const adminView = document.getElementById('adminDashboardView');
         const hrView = document.getElementById('hrDashboardView');
         const atAGlanceView = document.getElementById('atAGlanceDashboardView');
@@ -2036,10 +2253,22 @@
           settingsView.classList.remove('hidden');
 
           // load Settings Data
-          loadSettingsData();
-          loadRolesData();
+          if (userRole === 'admin') {
+             loadSettingsData();
+             loadRolesData();
+          }
+          if (userRole === 'admin' || userRole === 'hr') {
+             if (typeof loadPayPeriodsSettings === 'function') {
+                loadPayPeriodsSettings();
+             }
+          }
           if (typeof loadStaffRosterSettings === 'function') {
             loadStaffRosterSettings();
+          }
+          if (userRole === 'hr') {
+            switchSettingsTab('hrSettingsTab');
+          } else {
+            switchSettingsTab('generalSettingsTab');
           }
           const today = new Date();
           const offset = today.getTimezoneOffset() * 60000;
