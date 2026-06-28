@@ -1461,6 +1461,37 @@ function assignSubToPeriod(absenceId, period, subName) {
           throw new Error("Sorry, this job was just filled by someone else!");
         }
 
+        // Check if the new sub is absent for a full day on the same date
+        if (newSub !== "") {
+          var targetDateRaw = data[i][3]; // Date object or string
+          var targetDateStr = (targetDateRaw instanceof Date) ? Utilities.formatDate(targetDateRaw, Session.getScriptTimeZone(), "yyyy-MM-dd") : String(targetDateRaw).trim();
+          var newSubEmail = (subEmailLookup[newSub] || "").toLowerCase();
+
+          if (newSubEmail !== "") {
+            for (var j = 1; j < data.length; j++) {
+              var rowEmail = String(data[j][2] || "").toLowerCase();
+              if (rowEmail === "") continue;
+
+              var rowStatus = String(data[j][17] || "Active");
+              var rowDuration = String(data[j][6] || "").trim();
+
+              if (rowEmail === newSubEmail && rowStatus !== "Canceled" && rowDuration === "Full Day") {
+                var rowDateRaw = data[j][3];
+                var rowDateStr = (rowDateRaw instanceof Date) ? Utilities.formatDate(rowDateRaw, Session.getScriptTimeZone(), "yyyy-MM-dd") : String(rowDateRaw).trim();
+
+                if (rowDateStr === targetDateStr) {
+                  var currentUserEmail = (Session.getActiveUser().getEmail() || "").toLowerCase();
+                  if (currentUserEmail === newSubEmail) {
+                    throw new Error("Cannot sign up due to your own absence.");
+                  } else {
+                    throw new Error("Cannot assign " + newSub + " as a substitute because they have an absence request on this date.");
+                  }
+                }
+              }
+            }
+          }
+        }
+
         // Get details for email
         var details = getAbsenceDetailsLocal(data[i], period, scheduleLookup, nameLookup);
 
