@@ -1890,16 +1890,36 @@
                const absenceId = location.parameter.absenceId;
                const period = location.parameter.period;
                if (absenceId && period) {
-                   // Wait for user name to be populated
-                   setTimeout(() => {
-                       const dummyBtnId = 'dummy-btn-' + Date.now();
-                       const dummyBtn = document.createElement('button');
-                       dummyBtn.id = dummyBtnId;
-                       dummyBtn.innerText = "Sign Me Up";
-                       dummyBtn.style.display = "none";
-                       document.body.appendChild(dummyBtn);
-                       handleSignMeUp(absenceId, period, dummyBtnId);
-                   }, 2000);
+                   // Fetch details first to populate the confirmation prompt accurately
+                   google.script.run
+                     .withSuccessHandler(details => {
+                         setTimeout(() => {
+                             const dummyBtnId = 'dummy-btn-' + Date.now();
+                             const dummyBtn = document.createElement('button');
+                             dummyBtn.id = dummyBtnId;
+                             dummyBtn.innerText = "Sign Me Up";
+                             dummyBtn.style.display = "none";
+                             document.body.appendChild(dummyBtn);
+                             if (details) {
+                                 handleSignMeUp(absenceId, period, dummyBtnId, details.teacherName, details.course);
+                             } else {
+                                 handleSignMeUp(absenceId, period, dummyBtnId);
+                             }
+                         }, 1500); // Wait briefly for UI and user name to load
+                     })
+                     .withFailureHandler(err => {
+                         console.error("Failed to fetch absence details for Quick Cover:", err);
+                         // Fallback to basic if fetch fails
+                         setTimeout(() => {
+                             const dummyBtnId = 'dummy-btn-' + Date.now();
+                             const dummyBtn = document.createElement('button');
+                             dummyBtn.id = dummyBtnId;
+                             dummyBtn.style.display = "none";
+                             document.body.appendChild(dummyBtn);
+                             handleSignMeUp(absenceId, period, dummyBtnId);
+                         }, 1500);
+                     })
+                     .getAbsenceDetails(absenceId, period);
                }
            }
         });
@@ -2260,7 +2280,7 @@
                     </div>
                   </div>
                   <div class="flex items-center gap-2 w-full sm:w-auto" onclick="event.stopPropagation()">
-                    <button id="${escapeHtml(assignId)}" onclick="handleSignMeUp('${escapeJs(req.id)}', '${escapeJs(req.period)}', '${escapeJs(assignId)}')" class="bg-[#00843D] hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg text-sm transition-colors shadow-sm">
+                    <button id="${escapeHtml(assignId)}" onclick="handleSignMeUp('${escapeJs(req.id)}', '${escapeJs(req.period)}', '${escapeJs(assignId)}', '${escapeJs(req.teacherName)}', '${escapeJs(req.course)}')"  class="bg-[#00843D] hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg text-sm transition-colors shadow-sm">
                       Sign Me Up
                     </button>
                   </div>
@@ -2282,8 +2302,13 @@
           .refreshData(['todaysOpenJobs']);
       }
 
-      function handleSignMeUp(absenceId, period, btnId) {
-        showConfirm("Are you sure you want to cover this period?", () => {
+      function handleSignMeUp(absenceId, period, btnId, teacherName, courseName) {
+        let confirmMsg = "Are you sure you want to cover this period?";
+        if (teacherName && courseName) {
+            confirmMsg = `Are you sure you want to cover Period ${period}, ${courseName}, for ${teacherName}?`;
+        }
+
+        showConfirm(confirmMsg, () => {
         const btn = document.getElementById(btnId);
         const originalText = btn.innerText;
         btn.disabled = true;
