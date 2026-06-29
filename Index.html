@@ -850,6 +850,32 @@
             </tbody>
           </table>
         </div>
+
+        <div class="mt-8 flex justify-between items-center mb-4 border-b pb-2">
+           <h3 class="text-xl font-bold text-[#002147]">Role Permissions</h3>
+           <button onclick="saveRolePermissions()" class="bg-[#002147] hover:bg-blue-900 text-white font-bold py-1.5 px-4 rounded-lg transition-colors text-sm flex items-center gap-2">
+               <span>💾</span> Save Permissions
+           </button>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse min-w-max text-sm">
+            <thead>
+              <tr class="bg-gray-50 border-b border-gray-200 text-gray-700 uppercase">
+                <th class="p-3">Role</th>
+                <th class="p-3 text-center">Admin Dashboard</th>
+                <th class="p-3 text-center">HR Dashboard</th>
+                <th class="p-3 text-center">Today at a Glance</th>
+                <th class="p-3 text-center">My Upcoming Sub Duties</th>
+                <th class="p-3 text-center">Today's Open Jobs</th>
+                <th class="p-3 text-center">My Past Absences</th>
+                <th class="p-3 text-center">Settings</th>
+              </tr>
+            </thead>
+            <tbody id="rolePermissionsTableBody" class="divide-y divide-gray-100">
+               <tr><td colspan="8" class="p-8 text-center text-gray-400 italic">Loading permissions...</td></tr>
+            </tbody>
+          </table>
+        </div>
       </div>
 
 
@@ -1112,6 +1138,12 @@
             `;
             container.innerHTML = html;
             renderAbsenceReasons();
+            try {
+                 rolePermissionsMatrix = JSON.parse(settings['RolePermissions'] || '{}');
+                 renderRolePermissionsMatrix();
+            } catch (e) {
+                 console.error("Failed to parse RolePermissions", e);
+            }
           })
           .withFailureHandler(err => {
             document.getElementById('generalSettingsContainer').innerHTML = `<p class="text-red-600 font-bold">Failed to load settings: ${err.message}</p>`;
@@ -1232,6 +1264,68 @@
           })
           .clearMasterScheduleCache();
         });
+      }
+
+
+      let rolePermissionsMatrix = {};
+
+      function renderRolePermissionsMatrix() {
+        const tbody = document.getElementById('rolePermissionsTableBody');
+        const roles = ["admin", "hr", "sub coordinator", "principal", "user", "substitute"];
+        const views = ["Admin Dashboard", "HR Dashboard", "Today at a Glance", "My Upcoming Sub Duties", "Today's Open Jobs", "My Past Absences", "Settings"];
+
+        let html = '';
+        roles.forEach(role => {
+          let perms = rolePermissionsMatrix[role] || {};
+          html += `<tr class="hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0">`;
+          html += `<td class="p-3 text-sm text-gray-800 font-medium capitalize">${escapeHtml(role)}</td>`;
+
+          views.forEach(view => {
+             const isChecked = perms[view] === true ? 'checked' : '';
+             const isDisabled = (role === 'admin' && view === 'Settings') ? 'disabled' : '';
+             html += `
+                <td class="p-3 text-center">
+                    <input type="checkbox" class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                           data-role="${role}" data-view="${view}" ${isChecked} ${isDisabled}>
+                </td>
+             `;
+          });
+          html += `</tr>`;
+        });
+
+        tbody.innerHTML = html;
+      }
+
+      function saveRolePermissions() {
+         const checkboxes = document.querySelectorAll('#rolePermissionsTableBody input[type="checkbox"]');
+         let newMatrix = {};
+
+         checkboxes.forEach(cb => {
+            const role = cb.dataset.role;
+            const view = cb.dataset.view;
+            if (!newMatrix[role]) newMatrix[role] = {};
+            newMatrix[role][view] = cb.checked;
+         });
+
+         // Enforce Admin -> Settings is true
+         if (!newMatrix['admin']) newMatrix['admin'] = {};
+         newMatrix['admin']['Settings'] = true;
+
+         const settingsToUpdate = {
+             "RolePermissions": JSON.stringify(newMatrix)
+         };
+
+         showToast('Saving permissions...', 'info');
+         google.script.run
+          .withSuccessHandler(() => {
+             showToast('Permissions saved successfully! Reloading...', 'success');
+             rolePermissionsMatrix = newMatrix;
+             setTimeout(() => { location.reload() }, 1000);
+          })
+          .withFailureHandler(err => {
+             showToast('Failed to save permissions: ' + err.message, 'error');
+          })
+          .updateSettings(settingsToUpdate);
       }
 
       let currentRoles = [];
@@ -1825,26 +1919,50 @@
             renderTodaysOpenJobs(payload.todaysOpenJobs);
 
             let lowerRole = data.role.toLowerCase();
-            if (lowerRole === 'admin' || lowerRole === 'sub coordinator' || lowerRole === 'hr' || lowerRole === 'principal') {
+            // Toggle Navigation Buttons and Main Sections using permissions payload
+            var perms = payload.permissions || {};
+            currentUserPermissions = perms;
+
+            if (perms["Admin Dashboard"] || perms["HR Dashboard"] || perms["Today at a Glance"]) {
                if (payload.staffList) renderStaffList(payload.staffList);
             }
 
-            if (lowerRole === 'admin' || lowerRole === 'sub coordinator') {
-              document.getElementById('adminSection').classList.remove('hidden');
+            if (perms["Admin Dashboard"]) {
               document.getElementById('navAdminBtn').classList.remove('hidden');
+            }
 
-              if (payload.adminData) {
-                  renderAdminDataRawSilent(payload.adminData);
+            if (perms["HR Dashboard"]) {
+              document.getElementById('navHRBtn').classList.remove('hidden');
+              if (payload.hrData) {
+                  hrDataRaw = payload.hrData.requests || [];
+                  hrPayPeriods = payload.hrData.payPeriods || [];
               }
+            }
+
+            if (perms["Today at a Glance"]) {
+              document.getElementById('navAtAGlanceBtn').classList.remove('hidden');
+            }
+
+            if (perms["Settings"]) {
+              document.getElementById('navSettingsBtn').classList.remove('hidden');
+            }
+
+            if (perms["Admin Dashboard"] || perms["Today's Open Jobs"] || perms["Today at a Glance"]) {
               if (payload.quickCover) {
                   renderQuickCover(payload.quickCover);
               }
             }
-            if (lowerRole === 'admin' || lowerRole === 'hr') {
-              document.getElementById('navSettingsBtn').classList.remove('hidden');
+
+            if (perms["Admin Dashboard"] || perms["Today's Open Jobs"]) {
+               if (perms["Admin Dashboard"]) document.getElementById('adminSection').classList.remove('hidden');
+               if (payload.adminData) {
+                  renderAdminDataRawSilent(payload.adminData);
+              }
             }
-            if (lowerRole === 'sub coordinator') {
-              document.getElementById('navAtAGlanceBtn').classList.remove('hidden');
+
+            if (!perms["My Upcoming Sub Duties"]) {
+                document.getElementById('headerMySubDuties').classList.add('hidden');
+                document.getElementById('mySubDutiesWrapper').classList.add('hidden');
             }
             if (lowerRole === 'hr' || lowerRole === 'principal') {
               document.getElementById('navHRBtn').classList.remove('hidden');
