@@ -1229,25 +1229,6 @@ function updateAbsence(absenceId, formData) {
 /**
  * Helper to get teacher name from email.
  */
-function getTeacherNameFromEmail(email, nameLookup) {
-  var targetEmail = email.trim().toLowerCase();
-  if (nameLookup !== undefined) {
-    return nameLookup[targetEmail] || email;
-  }
-
-  // Fallback to slow lookup if nameLookup is not provided
-  var ss = getSS();
-  var sheet = getSheetOrThrow(ss, "Staff Roster");
-  if (!sheet) return email;
-  var data = sheet.getDataRange().getValues();
-  for (var i = 1; i < data.length; i++) {
-    if (String(data[i][1]).trim().toLowerCase() === targetEmail) {
-      return String(data[i][0]).trim();
-    }
-  }
-  return email;
-}
-
 /**
  * Helper to get full absence details.
  */
@@ -1267,57 +1248,20 @@ function getAbsenceDetails(absenceId, period) {
 
   var scheduleLookup = {};
   var scheduleData = getMasterScheduleData();
-    if (scheduleData.length > 0) {
-      var headers = scheduleData[0];
-      var joinIdx = headers.indexOf("EMAIL_PERIOD_JOIN");
-      var roomIdx = headers.indexOf("ROOM");
-      var courseIdx = headers.indexOf("COURSE_NAMES");
-      if (joinIdx > -1) {
-        for (var s = 1; s < scheduleData.length; s++) {
-          var joinKey = String(scheduleData[s][joinIdx]).toLowerCase();
-          var room = roomIdx > -1 ? scheduleData[s][roomIdx] : "";
-          var course = courseIdx > -1 ? scheduleData[s][courseIdx] : "";
-          scheduleLookup[joinKey] = { room: room, course: course };
-        }
-      }
-    }
+  if (scheduleData.length > 0) {
+    scheduleLookup = buildScheduleLookup(scheduleData);
+  }
 
   for (var i = 1; i < data.length; i++) {
     if (String(data[i][0]) === String(absenceId)) {
-      var teacherEmail = String(data[i][2]);
-      var teacherName = getTeacherNameFromEmail(teacherEmail, nameLookup);
-      var dateVal = data[i][3];
-      var formattedDate = dateVal;
-      if (dateVal instanceof Date) {
-        formattedDate = Utilities.formatDate(dateVal, Session.getScriptTimeZone(), "MMM d, yyyy");
-      }
-      var instructions = String(data[i][8]);
-
-      var roomStr = "No Class Assigned";
-      var courseStr = "No Class Assigned";
-
-      if (period) {
-        var joinKey = teacherEmail.toLowerCase() + "-" + period;
-        var scheduleInfo = scheduleLookup[joinKey];
-        if (scheduleInfo) {
-          roomStr = scheduleInfo.room || roomStr;
-          courseStr = scheduleInfo.course || courseStr;
-        }
-      }
-
-      return {
-        teacherName: teacherName,
-        date: formattedDate,
-        period: period,
-        room: roomStr,
-        course: courseStr,
-        instructions: instructions,
-        rowIndex: i + 1 // 1-based index for Apps Script Range
-      };
+      var details = getAbsenceDetailsLocal(data[i], period, scheduleLookup, nameLookup);
+      details.rowIndex = i + 1;
+      return details;
     }
   }
   return null;
 }
+
 
 /**
  * Sends a notification email to a substitute.
