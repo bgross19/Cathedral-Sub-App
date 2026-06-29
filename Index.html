@@ -91,12 +91,12 @@
            showToast("No data to copy.", 'info');
            return;
         }
-        let csvText = "LASTFIRST,EMAIL_ADDR,Duty\n";
+        let tsvText = "LASTFIRST\tEMAIL_ADDR\tDuty\n";
         currentStaffRoster.forEach(staff => {
-           csvText += `"${staff.name}","${staff.email}","${staff.duty || ''}"\n`;
+           tsvText += `${staff.name}\t${staff.email}\t${staff.duty || ''}\n`;
         });
-        navigator.clipboard.writeText(csvText).then(() => {
-           showToast("Staff roster copied to clipboard as CSV!", 'info');
+        navigator.clipboard.writeText(tsvText).then(() => {
+           showToast("Staff roster copied to clipboard as TSV!", 'info');
         }).catch(err => {
            showToast("Failed to copy data: " + err, "error");
         });
@@ -177,15 +177,20 @@
             parseAndSubmitStaffCsv(textarea.value);
             textarea.value = ""; // clear textarea
          } else {
-            showToast("Please select a CSV file or paste CSV data.", 'error');
+            showToast("Please select a CSV file or paste Data.", 'error');
          }
       }
 
       function parseAndSubmitStaffCsv(csvText) {
          const lines = csvText.split(/\r?\n/).filter(line => line.trim() !== '');
          if (lines.length === 0) {
-            showToast("CSV is empty.", 'info');
+            showToast("Data is empty.", 'info');
             return;
+         }
+
+         let delimiter = ',';
+         if (lines[0].includes('\t')) {
+             delimiter = '\t';
          }
 
          function parseCsvLine(text) {
@@ -201,7 +206,7 @@
                      } else {
                          inQuotes = !inQuotes;
                      }
-                 } else if ((char === ',' || char === '\t') && !inQuotes) {
+                 } else if (char === delimiter && !inQuotes) {
                      result.push(current);
                      current = '';
                  } else {
@@ -219,7 +224,7 @@
          const startIndex = hasHeaders ? 1 : 0;
 
          if (lines.length <= startIndex) {
-            showToast("CSV contains no data rows.", 'info');
+            showToast("Data contains no data rows.", 'info');
             return;
          }
 
@@ -284,7 +289,7 @@
                   showToast(`Successfully processed ${result.updated} records.`, 'success');
                   loadStaffRosterSettings();
                } else {
-                  showToast("Failed to process CSV: " + (result ? result.error : "Unknown error"), "error");
+                  showToast("Failed to process Data: " + (result ? result.error : "Unknown error"), "error");
                }
             })
             .withFailureHandler(err => {
@@ -871,12 +876,12 @@
                </div>
                <div class="text-center text-gray-500 font-semibold text-sm">OR</div>
                <div>
-                 <label class="block text-sm text-gray-600 mb-1">...Paste CSV data directly</label>
-                 <textarea id="staffCsvTextarea" rows="4" placeholder="Ford, Lisa, lford@gocathedral.com, 1&#10;Smith John, jsmith@gocathedral.com, 2" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none text-sm font-mono"></textarea>
+                 <label class="block text-sm text-gray-600 mb-1">...Paste CSV / Tab-Delimited data directly</label>
+                 <textarea id="staffCsvTextarea" rows="4" placeholder="LASTFIRST&#9;EMAIL_ADDR&#9;Duty&#10;Ford, Lisa&#9;lford@gocathedral.com&#9;1&#10;Smith John&#9;jsmith@gocathedral.com&#9;2" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none text-sm font-mono"></textarea>
                </div>
                <div class="flex justify-end">
                   <button onclick="processStaffCsvUpload()" class="bg-[#002147] hover:bg-blue-900 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-md text-sm">
-                    Process CSV
+                    Process Data
                   </button>
                </div>
            </div>
