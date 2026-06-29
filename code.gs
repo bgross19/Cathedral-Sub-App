@@ -79,7 +79,15 @@ function setupDatabase() {
         {reason: "Athletics", hrRequired: false},
         {reason: "Jury Duty", hrRequired: true},
         {reason: "Bereavement", hrRequired: true}
-      ])]
+      ])],
+      ["RolePermissions", JSON.stringify({
+        "admin": { "Admin Dashboard": true, "HR Dashboard": true, "Today at a Glance": true, "My Upcoming Sub Duties": true, "Today's Open Jobs": true, "My Past Absences": true, "Settings": true },
+        "hr": { "Admin Dashboard": false, "HR Dashboard": true, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Open Jobs": false, "My Past Absences": true, "Settings": true },
+        "sub coordinator": { "Admin Dashboard": true, "HR Dashboard": false, "Today at a Glance": true, "My Upcoming Sub Duties": true, "Today's Open Jobs": true, "My Past Absences": true, "Settings": false },
+        "principal": { "Admin Dashboard": true, "HR Dashboard": true, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Open Jobs": false, "My Past Absences": true, "Settings": false },
+        "user": { "Admin Dashboard": false, "HR Dashboard": false, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Open Jobs": true, "My Past Absences": true, "Settings": false },
+        "substitute": { "Admin Dashboard": false, "HR Dashboard": false, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Open Jobs": true, "My Past Absences": true, "Settings": false }
+      })]
     ];
     settingsSheet.getRange(1, 1, 1, 2).setValues([settingsHeaders]);
     settingsSheet.getRange(1, 1, 1, 2).setFontWeight("bold");
@@ -108,7 +116,15 @@ function getSettings(ss) {
       {reason: "Athletics", hrRequired: false},
       {reason: "Jury Duty", hrRequired: true},
       {reason: "Bereavement", hrRequired: true}
-    ])
+    ]),
+    "RolePermissions": JSON.stringify({
+        "admin": { "Admin Dashboard": true, "HR Dashboard": true, "Today at a Glance": true, "My Upcoming Sub Duties": true, "Today's Open Jobs": true, "My Past Absences": true, "Settings": true },
+        "hr": { "Admin Dashboard": false, "HR Dashboard": true, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Open Jobs": false, "My Past Absences": true, "Settings": true },
+        "sub coordinator": { "Admin Dashboard": true, "HR Dashboard": false, "Today at a Glance": true, "My Upcoming Sub Duties": true, "Today's Open Jobs": true, "My Past Absences": true, "Settings": false },
+        "principal": { "Admin Dashboard": true, "HR Dashboard": true, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Open Jobs": false, "My Past Absences": true, "Settings": false },
+        "user": { "Admin Dashboard": false, "HR Dashboard": false, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Open Jobs": true, "My Past Absences": true, "Settings": false },
+        "substitute": { "Admin Dashboard": false, "HR Dashboard": false, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Open Jobs": true, "My Past Absences": true, "Settings": false }
+      })
   };
 
   try {
@@ -228,6 +244,26 @@ function assertRole(user, allowedRoles, customErrorMessage) {
 /**
  * Grabs the user's name and role on startup.
  */
+
+/**
+ * Asserts that a user has a specific permission view via Settings.
+ */
+function assertPermission(user, viewName, customErrorMessage) {
+  if (!user || !user.role) {
+    throw new Error(customErrorMessage || "Unauthorized");
+  }
+
+  var lowerRole = user.role.toLowerCase();
+  if (lowerRole === "admin") return; // Admin bypass
+
+  var settings = getSettings();
+  var rolePermissionsStr = settings["RolePermissions"] || "{}";
+
+  if (!hasPermission(lowerRole, viewName, rolePermissionsStr)) {
+    throw new Error(customErrorMessage || "Unauthorized");
+  }
+}
+
 function getUserData(ss) {
   var email = Session.getActiveUser().getEmail();
   var ss = ss || getSS();
@@ -358,7 +394,7 @@ function getUserRoles() {
   try {
     var ss = getSS();
     var user = getUserData(ss);
-    assertRole(user, "admin");
+    assertPermission(user, "Settings");
 
     var roleSheet = getSheetOrThrow(ss, "User Roles");
     if (!roleSheet) return [];
@@ -390,7 +426,7 @@ function getStaffRosterForAdmin() {
   try {
     var ss = getSS();
     var user = getUserData(ss);
-    assertRole(user, "admin");
+    assertPermission(user, "Settings");
 
     var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
     var data = rosterSheet.getDataRange().getValues();
@@ -438,7 +474,7 @@ function saveStaffMemberAdmin(staffData) {
   try {
     var ss = getSS();
     var user = getUserData(ss);
-    assertRole(user, "admin");
+    assertPermission(user, "Settings");
 
     var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
     var data = rosterSheet.getDataRange().getValues();
@@ -503,7 +539,7 @@ function deleteStaffMemberAdmin(email) {
   try {
     var ss = getSS();
     var user = getUserData(ss);
-    assertRole(user, "admin");
+    assertPermission(user, "Settings");
 
     var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
     var data = rosterSheet.getDataRange().getValues();
@@ -541,7 +577,7 @@ function bulkUpsertStaffRoster(updates) {
   try {
     var ss = getSS();
     var user = getUserData(ss);
-    assertRole(user, "admin");
+    assertPermission(user, "Settings");
 
     var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
     var data = rosterSheet.getDataRange().getValues();
@@ -600,7 +636,7 @@ function addUserRole(email, role) {
   try {
     var ss = getSS();
     var user = getUserData(ss);
-    assertRole(user, "admin");
+    assertPermission(user, "Settings");
 
     var roleSheet = getSheetOrThrow(ss, "User Roles");
 
@@ -620,7 +656,7 @@ function editUserRole(oldEmail, newEmail, role) {
   try {
     var ss = getSS();
     var user = getUserData(ss);
-    assertRole(user, "admin");
+    assertPermission(user, "Settings");
 
     var roleSheet = getSheetOrThrow(ss, "User Roles");
 
@@ -648,7 +684,7 @@ function deleteUserRole(email) {
   try {
     var ss = getSS();
     var user = getUserData(ss);
-    assertRole(user, "admin");
+    assertPermission(user, "Settings");
 
     var roleSheet = getSheetOrThrow(ss, "User Roles");
 
@@ -676,7 +712,7 @@ function getSettingsForFrontend() {
   try {
     var ss = getSS();
     var user = getUserData(ss);
-    assertRole(user, "admin");
+    assertPermission(user, "Settings");
     return getSettings();
   } catch (err) {
     throw new Error("Failed to fetch settings: " + err.message);
@@ -690,7 +726,7 @@ function updateSettings(newSettings) {
   try {
     var ss = getSS();
     var user = getUserData(ss);
-    assertRole(user, "admin");
+    assertPermission(user, "Settings");
 
     var settingsSheet = getSheetOrThrow(ss, "Settings");
 
@@ -1056,7 +1092,7 @@ function cancelAbsence(absenceId) {
 
         if (currentUserEmail !== teacherEmail) {
           var user = getUserData(ss);
-          assertRole(user, ["admin", "sub coordinator"], "Unauthorized to cancel this absence.");
+          assertPermission(user, "Admin Dashboard", "Unauthorized to cancel this absence.");
         }
 
         sheet.getRange(i + 1, 18).setValue("Canceled");
@@ -1146,7 +1182,7 @@ function updateAbsence(absenceId, formData) {
 
         if (currentUserEmail !== teacherEmail) {
           var user = getUserData(ss);
-          assertRole(user, ["admin", "sub coordinator"], "Unauthorized to modify this absence.");
+          assertPermission(user, "Admin Dashboard", "Unauthorized to modify this absence.");
         }
 
         var oldPeriods = String(data[i][4]).split(",").map(function(p){return p.trim()});
@@ -1539,6 +1575,23 @@ function assignSubToPeriod(absenceId, period, subName) {
 /**
  * Fetches all necessary data for the initial application load in a single call.
  */
+
+/**
+ * Helper to check if a role has a specific permission.
+ */
+function hasPermission(role, view, rolePermissionsStr) {
+  try {
+    var permissions = JSON.parse(rolePermissionsStr || '{}');
+    var lowerRole = String(role).toLowerCase();
+    if (permissions[lowerRole] && permissions[lowerRole][view] === true) {
+      return true;
+    }
+    return false;
+  } catch (e) {
+    return false;
+  }
+}
+
 function getInitialPayload() {
   try {
     var ss = getSS();
@@ -1606,6 +1659,18 @@ function getInitialPayload() {
         {reason: "Bereavement", hrRequired: true}
     ]);
     var absenceReasons = settings["Absence Reasons"] || defaultAbsenceReasons;
+    var rolePermissions = settings["RolePermissions"] || "{}";
+
+    // Set permissions to return in payload
+    var permissions = {
+      "Admin Dashboard": hasPermission(lowerRole, "Admin Dashboard", rolePermissions),
+      "HR Dashboard": hasPermission(lowerRole, "HR Dashboard", rolePermissions),
+      "Today at a Glance": hasPermission(lowerRole, "Today at a Glance", rolePermissions),
+      "My Upcoming Sub Duties": hasPermission(lowerRole, "My Upcoming Sub Duties", rolePermissions),
+      "Today's Open Jobs": hasPermission(lowerRole, "Today's Open Jobs", rolePermissions),
+      "My Past Absences": hasPermission(lowerRole, "My Past Absences", rolePermissions),
+      "Settings": hasPermission(lowerRole, "Settings", rolePermissions) || lowerRole === "admin"
+    };
 
     var userData = {
       name: String(name),
@@ -1763,12 +1828,13 @@ function getInitialPayload() {
       myAbsences: myUpcomingAbsences,
       myPastAbsences: myPastAbsences,
       mySubDuties: mySubDuties,
-      todaysOpenJobs: todaysOpenJobs
+      todaysOpenJobs: todaysOpenJobs,
+      permissions: permissions
     };
 
 
     // --- 4. Extract Admin / Sub Coordinator data if applicable ---
-    if (lowerRole === "admin" || lowerRole === "sub coordinator" || lowerRole === "hr" || lowerRole === "principal") {
+    if (permissions["Admin Dashboard"] || permissions["HR Dashboard"] || permissions["Today at a Glance"]) {
       // Staff List
       var staffList = [];
       for (var i = 1; i < rosterData.length; i++) {
@@ -1790,7 +1856,7 @@ function getInitialPayload() {
       payload.staffList = staffList;
     }
 
-    if (lowerRole === "admin" || lowerRole === "sub coordinator") {
+    if (permissions["Admin Dashboard"] || permissions["Today at a Glance"] || permissions["Today's Open Jobs"]) {
       // Quick Cover Data
       var quickCover = [];
       var targetEndQC = new Date(today);
@@ -1907,7 +1973,7 @@ function getInitialPayload() {
 
 
     // --- 5. Extract HR data if applicable ---
-    if (lowerRole === "hr" || lowerRole === "principal") {
+    if (permissions["HR Dashboard"]) {
       var hrData = [];
       var payPeriods = [];
 
@@ -2036,7 +2102,7 @@ function clearMasterScheduleCache() {
   try {
     var ss = getSS();
     var user = getUserData(ss);
-    assertRole(user, "admin");
+    assertPermission(user, "Settings");
 
     var cache = CacheService.getScriptCache();
     cache.remove("ps_master_schedule");
@@ -2116,7 +2182,7 @@ function getAuditLogs(startDateStr, endDateStr) {
   try {
     var ss = getSS();
     var user = getUserData(ss);
-    assertRole(user, "admin");
+    assertPermission(user, "Settings");
 
     var auditSheet = ss.getSheetByName("Audit Log");
     if (!auditSheet) return [];
@@ -2164,7 +2230,7 @@ function bulkUpsertPayPeriods(updates) {
   try {
     var ss = getSS();
     var user = getUserData(ss);
-    assertRole(user, ["admin", "hr"]);
+    assertPermission(user, "HR Dashboard");
 
     var sheet = getSheetOrThrow(ss, "PayPeriods");
 
@@ -2207,7 +2273,7 @@ function deleteAllPayPeriods() {
   try {
     var ss = getSS();
     var user = getUserData(ss);
-    assertRole(user, ["admin", "hr"]);
+    assertPermission(user, "HR Dashboard");
 
     var sheet = getSheetOrThrow(ss, "PayPeriods");
     var lastRow = sheet.getLastRow();
@@ -2231,7 +2297,7 @@ function loadPayPeriodsSettings() {
   try {
     var ss = getSS();
     var user = getUserData(ss);
-    assertRole(user, ["admin", "hr"]);
+    assertPermission(user, "HR Dashboard");
 
     var sheet = getSheetOrThrow(ss, "PayPeriods");
     var data = sheet.getDataRange().getValues();
