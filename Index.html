@@ -1883,6 +1883,27 @@
 
       function initApp() {
         initToggles();
+
+        // Parse URL parameters for "Sign Me Up" links
+        google.script.url.getLocation(function(location) {
+           if (location.parameter && location.parameter.action === 'quickCover') {
+               const absenceId = location.parameter.absenceId;
+               const period = location.parameter.period;
+               if (absenceId && period) {
+                   // Wait for user name to be populated
+                   setTimeout(() => {
+                       const dummyBtnId = 'dummy-btn-' + Date.now();
+                       const dummyBtn = document.createElement('button');
+                       dummyBtn.id = dummyBtnId;
+                       dummyBtn.innerText = "Sign Me Up";
+                       dummyBtn.style.display = "none";
+                       document.body.appendChild(dummyBtn);
+                       handleSignMeUp(absenceId, period, dummyBtnId);
+                   }, 2000);
+               }
+           }
+        });
+
         google.script.run
           .withSuccessHandler(payload => {
             const data = payload.userData;
@@ -1891,6 +1912,7 @@
             document.getElementById('welcomeName').innerText = (data.name.split(',')[1] || data.name).trim();
             
             if (data.appUrl) {
+                window.globalAppUrl = data.appUrl;
                 const footerLink = document.getElementById('atAGlanceFooterUrl');
                 if (footerLink) footerLink.href = data.appUrl;
             }
@@ -2674,9 +2696,15 @@
                                     <div class="text-gray-500 mt-1">${escapeHtml(pData.room)}</div>
                                  </td>`;
                     } else {
-                        html += `<td class="p-3 text-xs text-center border border-gray-300 bg-yellow-100 align-top cursor-pointer hover:opacity-80 transition-opacity" onclick="openDetailsModalForAdmin(${pData.rawIdx})">
-                                    <div class="font-bold text-yellow-800">Unassigned</div>
-                                    <div class="text-gray-600 mt-1">${escapeHtml(pData.room)}</div>
+                        const req = adminDataRaw[pData.rawIdx];
+                        const quickCoverLink = window.globalAppUrl ? `${window.globalAppUrl}?action=quickCover&absenceId=${req.id}&period=${req.period}` : '#';
+
+                        html += `<td class="p-3 text-xs text-center border border-gray-300 bg-yellow-100 align-top hover:opacity-80 transition-opacity relative group" onclick="openDetailsModalForAdmin(${pData.rawIdx})">
+                                    <div class="font-bold text-yellow-800 cursor-pointer">Unassigned</div>
+                                    <div class="text-gray-600 mt-1 cursor-pointer">${escapeHtml(pData.room)}</div>
+                                    <div class="mt-2 text-center" onclick="event.stopPropagation()">
+                                        <a href="${quickCoverLink}" target="_blank" class="inline-block bg-[#00843D] text-white text-[10px] font-bold px-2 py-1 rounded no-underline hover:bg-green-700">Sign Me Up</a>
+                                    </div>
                                  </td>`;
                     }
                 } else {
