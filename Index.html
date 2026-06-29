@@ -2931,12 +2931,22 @@
                roomHtml = `<span class="tooltip text-red-500 font-bold px-2 py-1 bg-red-50 rounded cursor-help">--<span class="tooltiptext">No room found</span></span>`;
             }
 
-            let assignId = `inline-assign-${req.id}-${req.period}`;
-            let subHtml = `<input type="text" id="${escapeHtml(assignId)}" list="dynamicStaffDataList"
+            let assignIdMobile = `inline-assign-mobile-${req.id}-${req.period}`;
+            let subHtmlMobile = `<input type="text" id="${escapeHtml(assignIdMobile)}" list="dynamicStaffDataList"
                                onfocus="updateDynamicStaffList('${escapeJs(req.formDateString || req.date)}', '${escapeJs(req.period)}')"
                                data-original-value="${escapeHtml(req.assignedSub) || ''}"
                                value="${escapeHtml(req.assignedSub) || ''}"
-                               onblur="handleInlineAdminAssign('${escapeJs(req.id)}', '${escapeJs(req.period)}', '${escapeJs(assignId)}')"
+                               onblur="handleInlineAdminAssign('${escapeJs(req.id)}', '${escapeJs(req.period)}', '${escapeJs(assignIdMobile)}')"
+                               onkeydown="if(event.key === 'Enter') { this.blur(); }"
+                               placeholder="Unassigned"
+                               class="w-full sm:w-32 md:w-40 p-1 border border-transparent hover:border-gray-300 rounded text-sm outline-none focus:border-[#00843D] focus:ring-1 focus:ring-[#00843D] bg-transparent focus:bg-white transition-all ${req.assignedSub ? 'text-green-700 font-bold' : 'text-gray-400 italic'}">`;
+
+            let assignIdDesktop = `inline-assign-desktop-${req.id}-${req.period}`;
+            let subHtmlDesktop = `<input type="text" id="${escapeHtml(assignIdDesktop)}" list="dynamicStaffDataList"
+                               onfocus="updateDynamicStaffList('${escapeJs(req.formDateString || req.date)}', '${escapeJs(req.period)}')"
+                               data-original-value="${escapeHtml(req.assignedSub) || ''}"
+                               value="${escapeHtml(req.assignedSub) || ''}"
+                               onblur="handleInlineAdminAssign('${escapeJs(req.id)}', '${escapeJs(req.period)}', '${escapeJs(assignIdDesktop)}')"
                                onkeydown="if(event.key === 'Enter') { this.blur(); }"
                                placeholder="Unassigned"
                                class="w-full sm:w-32 md:w-40 p-1 border border-transparent hover:border-gray-300 rounded text-sm outline-none focus:border-[#00843D] focus:ring-1 focus:ring-[#00843D] bg-transparent focus:bg-white transition-all ${req.assignedSub ? 'text-green-700 font-bold' : 'text-gray-400 italic'}">`;
@@ -2957,7 +2967,7 @@
                     </div>
                     <div class="mb-2">
                         <span class="font-semibold text-sm text-gray-600">Sub:</span>
-                        <div class="mt-1" onclick="event.stopPropagation()">${subHtml}</div>
+                        <div class="mt-1" onclick="event.stopPropagation()">${subHtmlMobile}</div>
                     </div>
                     <div class="text-sm text-gray-500 italic truncate" title="${escapeHtml(req.instructions) || ''}">
                         ${escapeHtml(req.instructions) || 'No instructions'}
@@ -2970,7 +2980,7 @@
                 <td class="p-3 text-sm font-bold text-gray-700 hidden sm:table-cell">Period ${escapeHtml(req.period)}</td>
                 <td class="p-3 text-sm text-gray-600 hidden sm:table-cell">${courseHtml}</td>
                 <td class="p-3 text-sm text-gray-600 hidden sm:table-cell">${roomHtml}</td>
-                <td class="p-3 text-sm hidden sm:table-cell" onclick="event.stopPropagation()">${subHtml}</td>
+                <td class="p-3 text-sm hidden sm:table-cell" onclick="event.stopPropagation()">${subHtmlDesktop}</td>
                 <td class="p-3 text-sm text-gray-500 max-w-xs truncate hidden sm:table-cell" title="${escapeHtml(req.instructions) || ''}">${escapeHtml(req.instructions) || '-'}</td>
               </tr>
             `;
