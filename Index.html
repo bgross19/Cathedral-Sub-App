@@ -1779,6 +1779,7 @@
       let adminCurrentView = 'period'; // 'period' or 'request'
       let hrDataRaw = [];
       let hrPayPeriods = [];
+      let hrDashboardLoaded = false;
       let hrCurrentView = 'absences'; // 'absences' or 'subs'
 
       function initApp() {
@@ -1843,8 +1844,7 @@
             if (lowerRole === 'hr' || lowerRole === 'principal') {
               document.getElementById('navHRBtn').classList.remove('hidden');
               if (payload.hrData) {
-                  hrDataRaw = payload.hrData.requests || [];
-                  hrPayPeriods = payload.hrData.payPeriods || [];
+                  renderHRDashboardData(payload.hrData);
               }
             }
             if (lowerRole === 'hr') {
@@ -3663,7 +3663,7 @@
           if (settingsView) settingsView.classList.add('hidden');
           hrView.classList.remove('hidden');
 
-          if (hrDataRaw.length === 0) {
+          if (!hrDashboardLoaded) {
             loadHRDashboardData();
           }
         } else {
@@ -3689,6 +3689,7 @@
       }
 
       function renderHRDashboardData(data) {
+            hrDashboardLoaded = true;
             hrDataRaw = data.requests || [];
             hrPayPeriods = data.payPeriods || [];
 
