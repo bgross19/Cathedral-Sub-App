@@ -21,7 +21,7 @@
         });
 
         // Reset all tab buttons
-        const tabBtns = ['generalSettingsTab', 'roleManagementTab', 'staffRosterTab', 'auditLogsTab', 'hrSettingsTab'];
+        const tabBtns = ['generalSettingsTab', 'roleManagementTab', 'staffRosterTab', 'auditLogsTab', 'hrSettingsTab', 'dataManagementTab'];
         tabBtns.forEach(btn => {
           const btnEl = document.getElementById('btn-' + btn);
           if (btnEl) {
@@ -91,12 +91,12 @@
            showToast("No data to copy.", 'info');
            return;
         }
-        let csvText = "LASTFIRST,EMAIL_ADDR,Duty\n";
+        let tsvText = "LASTFIRST\tEMAIL_ADDR\tDuty\n";
         currentStaffRoster.forEach(staff => {
-           csvText += `"${staff.name}","${staff.email}","${staff.duty || ''}"\n`;
+           tsvText += `${staff.name}\t${staff.email}\t${staff.duty || ''}\n`;
         });
-        navigator.clipboard.writeText(csvText).then(() => {
-           showToast("Staff roster copied to clipboard as CSV!", 'info');
+        navigator.clipboard.writeText(tsvText).then(() => {
+           showToast("Staff roster copied to clipboard as TSV!", 'info');
         }).catch(err => {
            showToast("Failed to copy data: " + err, "error");
         });
@@ -177,15 +177,20 @@
             parseAndSubmitStaffCsv(textarea.value);
             textarea.value = ""; // clear textarea
          } else {
-            showToast("Please select a CSV file or paste CSV data.", 'error');
+            showToast("Please select a CSV file or paste Data.", 'error');
          }
       }
 
       function parseAndSubmitStaffCsv(csvText) {
          const lines = csvText.split(/\r?\n/).filter(line => line.trim() !== '');
          if (lines.length === 0) {
-            showToast("CSV is empty.", 'info');
+            showToast("Data is empty.", 'info');
             return;
+         }
+
+         let delimiter = ',';
+         if (lines[0].includes('\t')) {
+             delimiter = '\t';
          }
 
          function parseCsvLine(text) {
@@ -201,7 +206,7 @@
                      } else {
                          inQuotes = !inQuotes;
                      }
-                 } else if ((char === ',' || char === '\t') && !inQuotes) {
+                 } else if (char === delimiter && !inQuotes) {
                      result.push(current);
                      current = '';
                  } else {
@@ -219,7 +224,7 @@
          const startIndex = hasHeaders ? 1 : 0;
 
          if (lines.length <= startIndex) {
-            showToast("CSV contains no data rows.", 'info');
+            showToast("Data contains no data rows.", 'info');
             return;
          }
 
@@ -284,7 +289,7 @@
                   showToast(`Successfully processed ${result.updated} records.`, 'success');
                   loadStaffRosterSettings();
                } else {
-                  showToast("Failed to process CSV: " + (result ? result.error : "Unknown error"), "error");
+                  showToast("Failed to process Data: " + (result ? result.error : "Unknown error"), "error");
                }
             })
             .withFailureHandler(err => {
@@ -543,11 +548,18 @@
       </div>
 
       <div id="adminSection" class="hidden mb-6">
-        <h3 class="text-lg font-bold text-[#002147] mb-3 flex items-center gap-2">
-          <span class="text-orange-500">🚩</span> Quick Cover (2-Day Triage)
-        </h3>
-        <div id="quickCoverContainer" class="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-200">
-           <div class="p-8 text-center text-gray-400 italic">Scanning database...</div>
+        <div class="mb-3 flex items-center cursor-pointer select-none" id="headerQuickCover" onclick="toggleSection('quickCoverWrapper', 'iconQuickCover')">
+          <svg id="iconQuickCover" class="fill-current text-[#002147] mr-2 transition-transform duration-300" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+          <h3 class="text-lg font-bold text-[#002147] flex items-center gap-2">
+            <span class="text-orange-500">🚩</span> Quick Cover (2-Day Triage)
+          </h3>
+        </div>
+        <div id="quickCoverWrapper" class="grid grid-rows-1 transition-all duration-300 ease-in-out">
+          <div class="overflow-hidden">
+            <div id="quickCoverContainer" class="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-200">
+               <div class="p-8 text-center text-gray-400 italic">Scanning database...</div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -799,6 +811,9 @@
         <button onclick="switchSettingsTab('hrSettingsTab')" id="btn-hrSettingsTab" class="py-2 px-4 text-gray-500 hover:text-[#002147] font-medium focus:outline-none">
           HR Settings
         </button>
+        <button onclick="switchSettingsTab('dataManagementTab')" id="btn-dataManagementTab" class="py-2 px-4 text-gray-500 hover:text-[#002147] font-medium focus:outline-none">
+          Data Management
+        </button>
       </div>
 
       <!-- General Settings -->
@@ -887,12 +902,12 @@
                </div>
                <div class="text-center text-gray-500 font-semibold text-sm">OR</div>
                <div>
-                 <label class="block text-sm text-gray-600 mb-1">...Paste CSV data directly</label>
-                 <textarea id="staffCsvTextarea" rows="4" placeholder="Ford, Lisa, lford@gocathedral.com, 1&#10;Smith John, jsmith@gocathedral.com, 2" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none text-sm font-mono"></textarea>
+                 <label class="block text-sm text-gray-600 mb-1">...Paste CSV / Tab-Delimited data directly</label>
+                 <textarea id="staffCsvTextarea" rows="4" placeholder="LASTFIRST&#9;EMAIL_ADDR&#9;Duty&#10;Ford, Lisa&#9;lford@gocathedral.com&#9;1&#10;Smith John&#9;jsmith@gocathedral.com&#9;2" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none text-sm font-mono"></textarea>
                </div>
                <div class="flex justify-end">
                   <button onclick="processStaffCsvUpload()" class="bg-[#002147] hover:bg-blue-900 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-md text-sm">
-                    Process CSV
+                    Process Data
                   </button>
                </div>
            </div>
@@ -914,6 +929,35 @@
           </table>
         </div>
       </div>
+
+      <!-- Data Management Tab -->
+      <div id="dataManagementTab" class="settings-tab-content bg-white rounded-xl shadow-sm border border-gray-200 p-6 hidden">
+        <h3 class="text-xl font-bold text-[#002147] mb-4 border-b pb-2">Data Management</h3>
+
+        <div class="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+           <h4 class="text-md font-bold text-[#002147] mb-2">Export Complete History</h4>
+           <p class="text-sm text-gray-600 mb-3">Download the entire raw history of all absence requests (including those not visible on the main dashboard).</p>
+           <button onclick="exportAllAbsenceRequestsClient()" id="btn-exportAllData" class="bg-[#002147] hover:bg-blue-900 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-sm text-sm flex items-center gap-2">
+               <span>📥</span> Export All Absence Requests (CSV)
+           </button>
+        </div>
+
+        <div class="p-4 bg-red-50 rounded-lg border border-red-200">
+           <h4 class="text-md font-bold text-red-700 mb-2">Archive Old Requests</h4>
+           <p class="text-sm text-red-600 mb-3">Moving older records to the "Archived Data" sheet will permanently remove them from the active Absence Requests view and speed up the application. This action cannot be easily undone.</p>
+
+           <div class="flex flex-col sm:flex-row gap-4 items-end">
+               <div>
+                   <label class="block text-sm font-bold text-red-800 mb-1">Archive records strictly BEFORE this date:</label>
+                   <input type="date" id="archiveCutoffDate" class="p-2 border border-red-300 rounded-lg focus:ring-2 focus:ring-red-500 outline-none w-full sm:w-auto">
+               </div>
+               <button onclick="archiveOldDataClient()" id="btn-archiveData" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-sm text-sm flex items-center gap-2">
+                   <span>⚠️</span> Archive Old Data
+               </button>
+           </div>
+        </div>
+      </div>
+
     </main>
 
 
@@ -1777,6 +1821,7 @@
 
       function initToggles() {
         const sections = [
+          { wrapperId: 'quickCoverWrapper', iconId: 'iconQuickCover' },
           { wrapperId: 'myAbsencesWrapper', iconId: 'iconMyAbsences' },
           { wrapperId: 'mySubDutiesWrapper', iconId: 'iconMySubDuties' },
           { wrapperId: 'todaysOpenJobsWrapper', iconId: 'iconTodaysOpenJobs' },
@@ -1833,6 +1878,7 @@
       let adminCurrentView = 'period'; // 'period' or 'request'
       let hrDataRaw = [];
       let hrPayPeriods = [];
+      let hrDashboardLoaded = false;
       let hrCurrentView = 'absences'; // 'absences' or 'subs'
 
       function initApp() {
@@ -1918,13 +1964,11 @@
                 document.getElementById('headerMySubDuties').classList.add('hidden');
                 document.getElementById('mySubDutiesWrapper').classList.add('hidden');
             }
-            if (!perms["Today's Open Jobs"]) {
-                document.getElementById('headerTodaysOpenJobs').classList.add('hidden');
-                document.getElementById('todaysOpenJobsWrapper').classList.add('hidden');
-            }
-            if (!perms["My Past Absences"]) {
-                document.getElementById('headerMyPastAbsences').classList.add('hidden');
-                document.getElementById('myPastAbsencesWrapper').classList.add('hidden');
+            if (lowerRole === 'hr' || lowerRole === 'principal') {
+              document.getElementById('navHRBtn').classList.remove('hidden');
+              if (payload.hrData) {
+                  renderHRDashboardData(payload.hrData);
+              }
             }
             if (lowerRole === 'hr') {
               toggleHRDashboard();
@@ -2348,12 +2392,105 @@
           .refreshData(['quickCover']);
       }
 
+
+      function exportAllAbsenceRequestsClient() {
+        const btn = document.getElementById('btn-exportAllData');
+        const originalText = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span>⏳</span> Exporting...';
+
+        google.script.run
+          .withSuccessHandler(jsonString => {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+            try {
+              const data = JSON.parse(jsonString);
+              if (!data || data.length === 0) {
+                 showToast("No data to export.", "info");
+                 return;
+              }
+              let csvContent = "data:text/csv;charset=utf-8,";
+              data.forEach(row => {
+                 let rowStr = row.map(val => {
+                    if (val === null || val === undefined) return '""';
+                    // Check if it's a date string that needs formatting
+                    let strVal = String(val);
+                    if (strVal.includes('GMT') || strVal.includes('Z')) {
+                        let tryDate = new Date(val);
+                        if (!isNaN(tryDate.getTime())) {
+                            strVal = tryDate.toISOString().split('T')[0];
+                        }
+                    }
+                    strVal = strVal.replace(/"/g, '""');
+                    if (strVal.search(/("|,|\n)/g) >= 0) {
+                        strVal = `"${strVal}"`;
+                    }
+                    return strVal;
+                 }).join(",");
+                 csvContent += rowStr + "\r\n";
+              });
+              const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+              const link = document.createElement("a");
+              const url = URL.createObjectURL(blob);
+              link.setAttribute("href", url);
+              link.setAttribute("download", "All_Absence_Requests.csv");
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+              URL.revokeObjectURL(url);
+              showToast("Exported complete history.", "success");
+            } catch(e) {
+              showToast("Error processing export data: " + e.message, "error");
+            }
+          })
+          .withFailureHandler(err => {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+            showToast("Export failed: " + err.message, "error");
+          })
+          .exportAllAbsenceRequests();
+      }
+
+      function archiveOldDataClient() {
+        const dateInput = document.getElementById('archiveCutoffDate').value;
+        if (!dateInput) {
+            showToast("Please select a valid date.", "warning");
+            return;
+        }
+
+        showConfirm(`Are you sure you want to archive all absence requests strictly BEFORE ${dateInput}? This will move them to the Archived Data sheet and they will no longer be visible here.`, () => {
+            const btn = document.getElementById('btn-archiveData');
+            const originalText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<span>⏳</span> Archiving...';
+
+            google.script.run
+              .withSuccessHandler(res => {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+                if (res && res.success) {
+                    showToast(`Successfully archived ${res.count} records.`, "success");
+                    document.getElementById('archiveCutoffDate').value = "";
+                    // Refresh data if needed, but not strictly necessary since they are historical
+                } else {
+                    showToast("Failed to archive: " + (res ? res.error : "Unknown Error"), "error");
+                }
+              })
+              .withFailureHandler(err => {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+                showToast("Connection Error: " + err.message, "error");
+              })
+              .archiveAbsenceRequests(dateInput);
+        });
+      }
+
       function toggleSettingsDashboard() {
         const mainContent = document.getElementById('mainContent');
         const userRole = (document.getElementById('userName').dataset.role || 'user').toLowerCase();
 
-        if (!currentUserPermissions["Admin Dashboard"]) {
-            const adminTabs = ['btn-generalSettingsTab', 'btn-roleManagementTab', 'btn-staffRosterTab', 'btn-auditLogsTab'];
+        if (userRole === 'hr') {
+            const adminTabs = ['btn-generalSettingsTab', 'btn-roleManagementTab', 'btn-staffRosterTab', 'btn-auditLogsTab', 'btn-dataManagementTab'];
             adminTabs.forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.classList.add('hidden');
@@ -3649,7 +3786,7 @@
           if (settingsView) settingsView.classList.add('hidden');
           hrView.classList.remove('hidden');
 
-          if (hrDataRaw.length === 0) {
+          if (!hrDashboardLoaded) {
             loadHRDashboardData();
           }
         } else {
@@ -3675,6 +3812,7 @@
       }
 
       function renderHRDashboardData(data) {
+            hrDashboardLoaded = true;
             hrDataRaw = data.requests || [];
             hrPayPeriods = data.payPeriods || [];
 

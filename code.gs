@@ -24,78 +24,6 @@ function notifyAdminOfError(funcName, e) {
 }
 
 /**
- * Sets up the database headers in the Google Sheet.
- * Run this function once from the Apps Script editor.
- */
-function setupDatabase() {
-  var ss = getSS();
-  var sheet = getSheetOrThrow(ss, "Absence Requests");
-  if (!sheet) {
-    sheet = ss.insertSheet("Absence Requests");
-  }
-
-  var headers = [
-    "ID", "Timestamp", "Email", "Date", "Periods", "Reason", "Duration",
-    "Urgency", "Instructions", "Period 1 Sub", "Period 2 Sub", "Period 3 Sub",
-    "Period 4 Sub", "Period 5 Sub", "Period 6 Sub", "Period 7 Sub", "Period 8 Sub", "Status"
-  ];
-
-  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-
-  // Optionally delete Split Responses sheet as it's no longer used
-  var splitSheet = getSheetOrThrow(ss, "Split Responses");
-  if (splitSheet) {
-    // ss.deleteSheet(splitSheet); // Uncomment to delete automatically, or delete manually.
-  }
-
-  // Setup Audit Log Sheet
-  var auditSheet = ss.getSheetByName("Audit Log");
-  if (!auditSheet) {
-    auditSheet = ss.insertSheet("Audit Log");
-    var auditHeaders = ["Timestamp", "Actor", "Action Type", "Target ID", "Details"];
-    auditSheet.getRange(1, 1, 1, auditHeaders.length).setValues([auditHeaders]);
-    auditSheet.getRange(1, 1, 1, auditHeaders.length).setFontWeight("bold");
-    auditSheet.hideSheet(); // Keep it hidden from normal view
-  }
-
-  // Setup Settings Sheet
-  var settingsSheet = getSheetOrThrow(ss, "Settings");
-  if (!settingsSheet) {
-    settingsSheet = ss.insertSheet("Settings");
-    var settingsHeaders = ["Setting Name", "Setting Value"];
-    var defaultSettings = [
-      ["Email Mode", "Live"],
-      ["Redirect Email", "Bgross@gocathedral.com"],
-      ["App URL", "https://script.google.com/a/macros/gocathedral.com/s/AKfycbwKZrBo4R-9O97aVNCjOHk9PddWCb6XNKviDS1lj4nNc49khl3T9OL8pGUDa7E1XE0/exec"],
-      ["Urgency Cutoff Time", "15"],
-      ["Term ID", "3503"],
-      ["PS_CLIENT_ID", ""],
-      ["PS_CLIENT_SECRET", ""],
-      ["PS_URL", ""],
-      ["Absence Reasons", JSON.stringify([
-        {reason: "Personal", hrRequired: false},
-        {reason: "Professional Development", hrRequired: false},
-        {reason: "Retreat", hrRequired: false},
-        {reason: "Athletics", hrRequired: false},
-        {reason: "Jury Duty", hrRequired: true},
-        {reason: "Bereavement", hrRequired: true}
-      ])],
-      ["RolePermissions", JSON.stringify({
-        "admin": { "Admin Dashboard": true, "HR Dashboard": true, "Today at a Glance": true, "My Upcoming Sub Duties": true, "Today's Open Jobs": true, "My Past Absences": true, "Settings": true },
-        "hr": { "Admin Dashboard": false, "HR Dashboard": true, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Open Jobs": false, "My Past Absences": true, "Settings": true },
-        "sub coordinator": { "Admin Dashboard": true, "HR Dashboard": false, "Today at a Glance": true, "My Upcoming Sub Duties": true, "Today's Open Jobs": true, "My Past Absences": true, "Settings": false },
-        "principal": { "Admin Dashboard": true, "HR Dashboard": true, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Open Jobs": false, "My Past Absences": true, "Settings": false },
-        "user": { "Admin Dashboard": false, "HR Dashboard": false, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Open Jobs": true, "My Past Absences": true, "Settings": false },
-        "substitute": { "Admin Dashboard": false, "HR Dashboard": false, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Open Jobs": true, "My Past Absences": true, "Settings": false }
-      })]
-    ];
-    settingsSheet.getRange(1, 1, 1, 2).setValues([settingsHeaders]);
-    settingsSheet.getRange(1, 1, 1, 2).setFontWeight("bold");
-    settingsSheet.getRange(2, 1, defaultSettings.length, 2).setValues(defaultSettings);
-  }
-}
-
-/**
  * Retrieves settings from the Settings sheet as an object.
  * Uses defaults in memory if the sheet does not exist or user lacks permission.
  */
@@ -2178,6 +2106,93 @@ function logAuditAction(actionType, targetId, details) {
 /**
  * Fetches audit logs within a specific date range for the Admin dashboard.
  */
+
+/**
+ * Exports all absence requests as a JSON string to be converted to CSV on the frontend.
+ */
+function exportAllAbsenceRequests() {
+  try {
+    var ss = getSS();
+    var user = getUserData(ss);
+    assertRole(user, "admin");
+
+    var sheet = getSheetOrThrow(ss, "Absence Requests");
+    var data = sheet.getDataRange().getValues();
+
+    return JSON.stringify(data);
+  } catch (err) {
+    notifyAdminOfError("exportAllAbsenceRequests", err);
+    throw new Error("Failed to export absence requests: " + err.message);
+  }
+}
+
+/**
+ * Archives absence requests before the given date cutoff.
+ */
+function archiveAbsenceRequests(cutoffDateStr) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+  } catch (e) {
+    notifyAdminOfError("archiveAbsenceRequests_lock", e);
+    return { success: false, error: "The server is currently busy. Please try again." };
+  }
+
+  try {
+    var ss = getSS();
+    var user = getUserData(ss);
+    assertRole(user, "admin");
+
+    var mainSheet = getSheetOrThrow(ss, "Absence Requests");
+    var archiveSheet = ss.getSheetByName("Archived Data");
+    if (!archiveSheet) {
+      archiveSheet = ss.insertSheet("Archived Data");
+      var headersRow = mainSheet.getRange(1, 1, 1, mainSheet.getLastColumn()).getValues()[0];
+      archiveSheet.getRange(1, 1, 1, headersRow.length).setValues([headersRow]);
+    }
+
+    var data = mainSheet.getDataRange().getValues();
+    if (data.length <= 1) {
+      return { success: true, count: 0 };
+    }
+
+    var headers = data[0];
+    var cutoffDate = new Date(cutoffDateStr);
+    cutoffDate.setHours(0, 0, 0, 0);
+
+    var rowsToKeep = [headers];
+    var rowsToArchive = [];
+
+    for (var i = 1; i < data.length; i++) {
+      var row = data[i];
+      var rowDate = new Date(row[3]);
+
+      if (!isNaN(rowDate.getTime()) && rowDate < cutoffDate) {
+        rowsToArchive.push(row);
+      } else {
+        rowsToKeep.push(row);
+      }
+    }
+
+    if (rowsToArchive.length > 0) {
+      var startRow = archiveSheet.getLastRow() + 1;
+      archiveSheet.getRange(startRow, 1, rowsToArchive.length, rowsToArchive[0].length).setValues(rowsToArchive);
+
+      mainSheet.clearContents();
+      mainSheet.getRange(1, 1, rowsToKeep.length, rowsToKeep[0].length).setValues(rowsToKeep);
+
+      logAuditAction("ARCHIVE_DATA", "N/A", "Archived " + rowsToArchive.length + " absence requests older than " + cutoffDateStr);
+    }
+
+    return { success: true, count: rowsToArchive.length };
+  } catch (err) {
+    notifyAdminOfError("archiveAbsenceRequests", err);
+    return { success: false, error: err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 function getAuditLogs(startDateStr, endDateStr) {
   try {
     var ss = getSS();
