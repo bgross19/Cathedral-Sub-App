@@ -58,6 +58,13 @@ function setupDatabase() {
     auditSheet.hideSheet(); // Keep it hidden from normal view
   }
 
+  // Setup Archived Data Sheet
+  var archiveSheet = ss.getSheetByName("Archived Data");
+  if (!archiveSheet) {
+    archiveSheet = ss.insertSheet("Archived Data");
+    archiveSheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  }
+
   // Setup Settings Sheet
   var settingsSheet = getSheetOrThrow(ss, "Settings");
   if (!settingsSheet) {
@@ -2112,6 +2119,93 @@ function logAuditAction(actionType, targetId, details) {
 /**
  * Fetches audit logs within a specific date range for the Admin dashboard.
  */
+
+/**
+ * Exports all absence requests as a JSON string to be converted to CSV on the frontend.
+ */
+function exportAllAbsenceRequests() {
+  try {
+    var ss = getSS();
+    var user = getUserData(ss);
+    assertRole(user, "admin");
+
+    var sheet = getSheetOrThrow(ss, "Absence Requests");
+    var data = sheet.getDataRange().getValues();
+
+    return JSON.stringify(data);
+  } catch (err) {
+    notifyAdminOfError("exportAllAbsenceRequests", err);
+    throw new Error("Failed to export absence requests: " + err.message);
+  }
+}
+
+/**
+ * Archives absence requests before the given date cutoff.
+ */
+function archiveAbsenceRequests(cutoffDateStr) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+  } catch (e) {
+    notifyAdminOfError("archiveAbsenceRequests_lock", e);
+    return { success: false, error: "The server is currently busy. Please try again." };
+  }
+
+  try {
+    var ss = getSS();
+    var user = getUserData(ss);
+    assertRole(user, "admin");
+
+    var mainSheet = getSheetOrThrow(ss, "Absence Requests");
+    var archiveSheet = ss.getSheetByName("Archived Data");
+    if (!archiveSheet) {
+      archiveSheet = ss.insertSheet("Archived Data");
+      var headersRow = mainSheet.getRange(1, 1, 1, mainSheet.getLastColumn()).getValues()[0];
+      archiveSheet.getRange(1, 1, 1, headersRow.length).setValues([headersRow]);
+    }
+
+    var data = mainSheet.getDataRange().getValues();
+    if (data.length <= 1) {
+      return { success: true, count: 0 };
+    }
+
+    var headers = data[0];
+    var cutoffDate = new Date(cutoffDateStr);
+    cutoffDate.setHours(0, 0, 0, 0);
+
+    var rowsToKeep = [headers];
+    var rowsToArchive = [];
+
+    for (var i = 1; i < data.length; i++) {
+      var row = data[i];
+      var rowDate = new Date(row[3]);
+
+      if (!isNaN(rowDate.getTime()) && rowDate < cutoffDate) {
+        rowsToArchive.push(row);
+      } else {
+        rowsToKeep.push(row);
+      }
+    }
+
+    if (rowsToArchive.length > 0) {
+      var startRow = archiveSheet.getLastRow() + 1;
+      archiveSheet.getRange(startRow, 1, rowsToArchive.length, rowsToArchive[0].length).setValues(rowsToArchive);
+
+      mainSheet.clearContents();
+      mainSheet.getRange(1, 1, rowsToKeep.length, rowsToKeep[0].length).setValues(rowsToKeep);
+
+      logAuditAction("ARCHIVE_DATA", "N/A", "Archived " + rowsToArchive.length + " absence requests older than " + cutoffDateStr);
+    }
+
+    return { success: true, count: rowsToArchive.length };
+  } catch (err) {
+    notifyAdminOfError("archiveAbsenceRequests", err);
+    return { success: false, error: err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 function getAuditLogs(startDateStr, endDateStr) {
   try {
     var ss = getSS();

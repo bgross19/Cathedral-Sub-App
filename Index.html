@@ -21,7 +21,7 @@
         });
 
         // Reset all tab buttons
-        const tabBtns = ['generalSettingsTab', 'roleManagementTab', 'staffRosterTab', 'auditLogsTab', 'hrSettingsTab'];
+        const tabBtns = ['generalSettingsTab', 'roleManagementTab', 'staffRosterTab', 'auditLogsTab', 'hrSettingsTab', 'dataManagementTab'];
         tabBtns.forEach(btn => {
           const btnEl = document.getElementById('btn-' + btn);
           if (btnEl) {
@@ -799,6 +799,9 @@
         <button onclick="switchSettingsTab('hrSettingsTab')" id="btn-hrSettingsTab" class="py-2 px-4 text-gray-500 hover:text-[#002147] font-medium focus:outline-none">
           HR Settings
         </button>
+        <button onclick="switchSettingsTab('dataManagementTab')" id="btn-dataManagementTab" class="py-2 px-4 text-gray-500 hover:text-[#002147] font-medium focus:outline-none">
+          Data Management
+        </button>
       </div>
 
       <!-- General Settings -->
@@ -888,6 +891,35 @@
           </table>
         </div>
       </div>
+
+      <!-- Data Management Tab -->
+      <div id="dataManagementTab" class="settings-tab-content bg-white rounded-xl shadow-sm border border-gray-200 p-6 hidden">
+        <h3 class="text-xl font-bold text-[#002147] mb-4 border-b pb-2">Data Management</h3>
+
+        <div class="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+           <h4 class="text-md font-bold text-[#002147] mb-2">Export Complete History</h4>
+           <p class="text-sm text-gray-600 mb-3">Download the entire raw history of all absence requests (including those not visible on the main dashboard).</p>
+           <button onclick="exportAllAbsenceRequestsClient()" id="btn-exportAllData" class="bg-[#002147] hover:bg-blue-900 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-sm text-sm flex items-center gap-2">
+               <span>📥</span> Export All Absence Requests (CSV)
+           </button>
+        </div>
+
+        <div class="p-4 bg-red-50 rounded-lg border border-red-200">
+           <h4 class="text-md font-bold text-red-700 mb-2">Archive Old Requests</h4>
+           <p class="text-sm text-red-600 mb-3">Moving older records to the "Archived Data" sheet will permanently remove them from the active Absence Requests view and speed up the application. This action cannot be easily undone.</p>
+
+           <div class="flex flex-col sm:flex-row gap-4 items-end">
+               <div>
+                   <label class="block text-sm font-bold text-red-800 mb-1">Archive records strictly BEFORE this date:</label>
+                   <input type="date" id="archiveCutoffDate" class="p-2 border border-red-300 rounded-lg focus:ring-2 focus:ring-red-500 outline-none w-full sm:w-auto">
+               </div>
+               <button onclick="archiveOldDataClient()" id="btn-archiveData" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-sm text-sm flex items-center gap-2">
+                   <span>⚠️</span> Archive Old Data
+               </button>
+           </div>
+        </div>
+      </div>
+
     </main>
 
 
@@ -2229,12 +2261,105 @@
           .refreshData(['quickCover']);
       }
 
+
+      function exportAllAbsenceRequestsClient() {
+        const btn = document.getElementById('btn-exportAllData');
+        const originalText = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span>⏳</span> Exporting...';
+
+        google.script.run
+          .withSuccessHandler(jsonString => {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+            try {
+              const data = JSON.parse(jsonString);
+              if (!data || data.length === 0) {
+                 showToast("No data to export.", "info");
+                 return;
+              }
+              let csvContent = "data:text/csv;charset=utf-8,";
+              data.forEach(row => {
+                 let rowStr = row.map(val => {
+                    if (val === null || val === undefined) return '""';
+                    // Check if it's a date string that needs formatting
+                    let strVal = String(val);
+                    if (strVal.includes('GMT') || strVal.includes('Z')) {
+                        let tryDate = new Date(val);
+                        if (!isNaN(tryDate.getTime())) {
+                            strVal = tryDate.toISOString().split('T')[0];
+                        }
+                    }
+                    strVal = strVal.replace(/"/g, '""');
+                    if (strVal.search(/("|,|\n)/g) >= 0) {
+                        strVal = `"${strVal}"`;
+                    }
+                    return strVal;
+                 }).join(",");
+                 csvContent += rowStr + "\r\n";
+              });
+              const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+              const link = document.createElement("a");
+              const url = URL.createObjectURL(blob);
+              link.setAttribute("href", url);
+              link.setAttribute("download", "All_Absence_Requests.csv");
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+              URL.revokeObjectURL(url);
+              showToast("Exported complete history.", "success");
+            } catch(e) {
+              showToast("Error processing export data: " + e.message, "error");
+            }
+          })
+          .withFailureHandler(err => {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+            showToast("Export failed: " + err.message, "error");
+          })
+          .exportAllAbsenceRequests();
+      }
+
+      function archiveOldDataClient() {
+        const dateInput = document.getElementById('archiveCutoffDate').value;
+        if (!dateInput) {
+            showToast("Please select a valid date.", "warning");
+            return;
+        }
+
+        showConfirm(`Are you sure you want to archive all absence requests strictly BEFORE ${dateInput}? This will move them to the Archived Data sheet and they will no longer be visible here.`, () => {
+            const btn = document.getElementById('btn-archiveData');
+            const originalText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<span>⏳</span> Archiving...';
+
+            google.script.run
+              .withSuccessHandler(res => {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+                if (res && res.success) {
+                    showToast(`Successfully archived ${res.count} records.`, "success");
+                    document.getElementById('archiveCutoffDate').value = "";
+                    // Refresh data if needed, but not strictly necessary since they are historical
+                } else {
+                    showToast("Failed to archive: " + (res ? res.error : "Unknown Error"), "error");
+                }
+              })
+              .withFailureHandler(err => {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+                showToast("Connection Error: " + err.message, "error");
+              })
+              .archiveAbsenceRequests(dateInput);
+        });
+      }
+
       function toggleSettingsDashboard() {
         const mainContent = document.getElementById('mainContent');
         const userRole = (document.getElementById('userName').dataset.role || 'user').toLowerCase();
 
         if (userRole === 'hr') {
-            const adminTabs = ['btn-generalSettingsTab', 'btn-roleManagementTab', 'btn-staffRosterTab', 'btn-auditLogsTab'];
+            const adminTabs = ['btn-generalSettingsTab', 'btn-roleManagementTab', 'btn-staffRosterTab', 'btn-auditLogsTab', 'btn-dataManagementTab'];
             adminTabs.forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.classList.add('hidden');
