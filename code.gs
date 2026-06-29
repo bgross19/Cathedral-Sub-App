@@ -1312,8 +1312,7 @@ function getAbsenceDetails(absenceId, period) {
         room: roomStr,
         course: courseStr,
         instructions: instructions,
-        rowIndex: i + 1, // 1-based index for Apps Script Range
-        row: data[i]
+        rowIndex: i + 1 // 1-based index for Apps Script Range
       };
     }
   }
