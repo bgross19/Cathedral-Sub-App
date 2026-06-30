@@ -65,7 +65,22 @@ function _mergeAndAppendMissingDefaults(settings, defaults, settingsSheet) {
  * Retrieves settings from the Settings sheet as an object.
  * Uses defaults in memory if the sheet does not exist or user lacks permission.
  */
+var _globalSettingsCache = null;
+
 function getSettings(ss) {
+  if (_globalSettingsCache) return _globalSettingsCache;
+
+  var cache = CacheService.getScriptCache();
+  var cachedSettings = cache.get("app_settings");
+  if (cachedSettings) {
+    try {
+      _globalSettingsCache = JSON.parse(cachedSettings);
+      return _globalSettingsCache;
+    } catch (e) {
+      console.warn("Failed to parse cached settings, reading from sheet.");
+    }
+  }
+
   var defaults = {
     "Email Mode": "Live",
     "Redirect Email": "Bgross@gocathedral.com",
@@ -100,9 +115,12 @@ function getSettings(ss) {
     var settings = _parseSettingsData(settingsSheet);
     settings = _mergeAndAppendMissingDefaults(settings, defaults, settingsSheet);
 
+    _globalSettingsCache = settings;
+    cache.put("app_settings", JSON.stringify(settings), 300); // Cache for 5 minutes
     return settings;
   } catch (e) {
     console.warn("Could not read settings from spreadsheet, using defaults: " + e.message);
+    _globalSettingsCache = defaults;
     return defaults;
   }
 }
@@ -514,6 +532,46 @@ function getStaffRosterForAdmin() {
   }
 }
 
+var _globalRosterCache = null;
+
+/**
+ * Retrieves the staff roster data from CacheService, falling back to reading the sheet.
+ */
+function getRosterDataCached(ss) {
+  if (_globalRosterCache) return _globalRosterCache;
+
+  var cache = CacheService.getScriptCache();
+  var cachedData = cache.get("staff_roster_data");
+  if (cachedData) {
+    try {
+      _globalRosterCache = JSON.parse(cachedData);
+      return _globalRosterCache;
+    } catch (e) {
+      console.warn("Failed to parse cached roster data.");
+    }
+  }
+
+  var sheetSS = ss || getSS();
+  var rosterSheet = getSheetOrThrow(sheetSS, "Staff Roster");
+  var rosterData = rosterSheet ? rosterSheet.getDataRange().getValues() : [];
+
+  // Try to cache if it's not huge
+  try {
+     var stringified = JSON.stringify(rosterData);
+     if (stringified.length < 100000) { // Keep under 100KB cache limit
+        cache.put("staff_roster_data", stringified, 1800); // 30 mins
+     }
+  } catch (e) {}
+
+  _globalRosterCache = rosterData;
+  return rosterData;
+}
+
+function clearRosterCache() {
+  _globalRosterCache = null;
+  CacheService.getScriptCache().remove("staff_roster_data");
+}
+
 /**
  * Saves a staff member (creates or updates) for the Admin Settings dashboard.
  */
@@ -570,6 +628,8 @@ function saveStaffMemberAdmin(staffData) {
        logAuditAction("STAFF_ADDED", newEmail, "Added staff member: " + newName + " (" + newDuty + ")");
     }
 
+    clearRosterCache();
+
         return { success: true };
   } catch (err) {
     notifyAdminOfError("saveStaffMemberAdmin", err);
@@ -604,6 +664,7 @@ function deleteStaffMemberAdmin(email) {
       if (String(data[i][1]).trim().toLowerCase() === targetEmail) {
         logAuditAction("STAFF_DELETED", targetEmail, "Deleted staff member");
         rosterSheet.deleteRow(i + 1);
+        clearRosterCache();
             return { success: true };
       }
     }
@@ -678,6 +739,7 @@ function bulkUpsertStaffRoster(updates) {
     }
 
     logAuditAction("STAFF_BULK_UPLOAD", "Multiple", "Processed " + processedCount + " staff records");
+    clearRosterCache();
     return { success: true, updated: processedCount };
   } catch (err) {
     notifyAdminOfError("bulkUpsertStaffRoster", err);
@@ -801,6 +863,12 @@ function updateSettings(newSettings) {
       }
     }
     logAuditAction("SETTINGS_UPDATED", "Global", "Updated application settings");
+
+    // Clear the cache
+    _globalSettingsCache = null;
+    var cache = CacheService.getScriptCache();
+    cache.remove("app_settings");
+
         return { success: true };
   } catch (err) {
     notifyAdminOfError("updateSettings", err);
@@ -1127,8 +1195,7 @@ function cancelAbsence(absenceId) {
     var ss = getSS();
     var sheet = getSheetOrThrow(ss, "Absence Requests");
 
-    var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
-    var rosterData = rosterSheet ? rosterSheet.getDataRange().getValues() : [];
+    var rosterData = getRosterDataCached(ss);
     var scheduleData = getMasterScheduleData();
 
     var subEmailLookup = {};
@@ -1217,8 +1284,7 @@ function updateAbsence(absenceId, formData) {
     var ss = getSS();
     var sheet = getSheetOrThrow(ss, "Absence Requests");
 
-    var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
-    var rosterData = rosterSheet ? rosterSheet.getDataRange().getValues() : [];
+    var rosterData = getRosterDataCached(ss);
     var scheduleData = getMasterScheduleData();
 
     var subEmailLookup = {};
@@ -1458,16 +1524,13 @@ function assignSubToPeriod(absenceId, period, subName) {
     var ss = getSS();
     var sheet = getSheetOrThrow(ss, "Absence Requests");
 
-    var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
-    var rosterData = rosterSheet ? rosterSheet.getDataRange().getValues() : [];
-    var scheduleData = getMasterScheduleData();
+    var rosterData = getRosterDataCached(ss);
 
     var subEmailLookup = {};
     for (var r = 1; r < rosterData.length; r++) {
       subEmailLookup[String(rosterData[r][0]).trim()] = String(rosterData[r][1]).trim();
     }
 
-    var scheduleLookup = buildScheduleLookup(scheduleData);
     var nameLookup = buildNameLookup(rosterData);
 
     // Re-read data under lock
@@ -1526,13 +1589,13 @@ function assignSubToPeriod(absenceId, period, subName) {
           }
         }
 
-        // Get details for email
-        var details = getAbsenceDetailsLocal(data[i], period, scheduleLookup, nameLookup);
-
         // Cancel existing sub if there is one (and we are clearing it)
-        if (existingSub && details) {
+        if (existingSub) {
            var existingEmail = subEmailLookup[existingSub];
            if (existingEmail) {
+              var scheduleData = getMasterScheduleData();
+              var scheduleLookup = buildScheduleLookup(scheduleData);
+              var details = getAbsenceDetailsLocal(data[i], period, scheduleLookup, nameLookup);
               sendSubNotification(existingEmail, 'Canceled', details);
            }
         }
@@ -1542,9 +1605,12 @@ function assignSubToPeriod(absenceId, period, subName) {
         logAuditAction("SUB_ASSIGNED", absenceId, "Assigned " + (newSub || "NO ONE") + " to period " + period);
 
         // Notify new sub if there is one
-        if (newSub && details) {
+        if (newSub) {
            var newEmail = subEmailLookup[newSub];
            if (newEmail) {
+              var scheduleData = getMasterScheduleData();
+              var scheduleLookup = buildScheduleLookup(scheduleData);
+              var details = getAbsenceDetailsLocal(data[i], period, scheduleLookup, nameLookup);
               sendSubNotification(newEmail, 'Assigned', details);
            }
         }
@@ -2161,18 +2227,7 @@ function logAuditAction(actionType, targetId, details) {
     var safeTargetId = typeof targetId === 'object' ? JSON.stringify(targetId) : String(targetId != null ? targetId : "");
     var safeDetails = typeof details === 'object' ? JSON.stringify(details) : String(details != null ? details : "");
 
-    var lock = LockService.getScriptLock();
-    // Wait up to 10 seconds for other processes to finish logging
-    if (lock.tryLock(10000)) {
-      try {
-        auditSheet.appendRow([timestamp, actor, safeActionType, safeTargetId, safeDetails]);
-        SpreadsheetApp.flush();
-      } finally {
-        lock.releaseLock();
-      }
-    } else {
-      console.warn("Could not obtain lock to log audit action: " + safeActionType);
-    }
+    auditSheet.appendRow([timestamp, actor, safeActionType, safeTargetId, safeDetails]);
   } catch (e) {
     console.error("Failed to log audit action: " + e.message);
   }
