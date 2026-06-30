@@ -750,7 +750,15 @@
         <div class="flex flex-col sm:flex-row gap-4 items-center justify-between">
             <div class="flex items-center gap-2 w-full sm:w-auto">
                <label class="text-sm font-bold text-gray-700">Date:</label>
-               <input type="date" id="atAGlanceDate" class="border rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-[#00843D]" onchange="applyAtAGlanceFilter()">
+               <div class="flex items-center">
+                   <button onclick="shiftAtAGlanceDate(-1)" class="px-2 py-1 bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded-l text-gray-700 transition-colors focus:outline-none" title="Previous Day">
+                       &larr;
+                   </button>
+                   <input type="date" id="atAGlanceDate" class="border-y border-gray-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-[#00843D]" onchange="applyAtAGlanceFilter()">
+                   <button onclick="shiftAtAGlanceDate(1)" class="px-2 py-1 bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded-r text-gray-700 transition-colors focus:outline-none" title="Next Day">
+                       &rarr;
+                   </button>
+               </div>
             </div>
             <div class="flex items-center gap-2 w-full sm:w-auto ml-auto">
                <button onclick="exportToCSV('At_A_Glance_Export.csv', 'atAGlanceTable')" class="bg-white hover:bg-gray-100 text-[#002147] text-sm font-bold py-1.5 px-4 rounded border border-[#002147] transition-colors shadow-sm flex items-center gap-2">
@@ -779,6 +787,21 @@
            <br>
            Please refer to the <a id="atAGlanceFooterUrl" href="#" style="color: #00843D; text-decoration: underline;">Cathedral Sub App</a> for more information.
         </div>
+      </div>
+
+      <!-- Assignable Table Container (Only visible to Admin/Sub Coordinator) -->
+      <div id="atAGlanceAssignableContainer" class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-x-auto p-4 mt-6 hidden">
+        <h3 class="text-lg font-bold text-[#002147] mb-4">Assign Substitutes</h3>
+        <table id="atAGlanceAssignableTable" class="w-full text-left border-collapse min-w-max border border-gray-300">
+          <thead id="atAGlanceAssignableTableHeader">
+             <tr class="bg-gray-50 border-b border-gray-300 text-sm text-gray-700 uppercase">
+                <!-- Columns dynamically injected -->
+             </tr>
+          </thead>
+          <tbody id="atAGlanceAssignableTableBody" class="divide-y divide-gray-200">
+             <tr><td class="p-8 text-center text-gray-400 italic">Loading assignable table...</td></tr>
+          </tbody>
+        </table>
       </div>
     </main>
 
@@ -2355,6 +2378,36 @@
         });
       }
 
+      function assignSubFromAtAGlance(absenceId, period, inputId, btnId) {
+        const input = document.getElementById(inputId);
+        const btn = document.getElementById(btnId);
+        if (!input || !btn) return;
+
+        const subName = input.value.trim();
+
+        // Optional validation like in assignSubFromAdmin
+        if (subName && !staffList.some(s => s.name === subName)) {
+            const isConfirmed = confirm('The name "' + subName + '" is not in the staff roster. Do you still want to assign them?');
+            if (!isConfirmed) return;
+        }
+
+        const originalText = btn.innerText;
+        btn.disabled = true;
+        btn.innerText = "Saving...";
+
+        google.script.run
+          .withSuccessHandler(() => {
+            showToast('Sub assigned successfully!', 'success');
+            EventBus.publish('refresh_adminData', { renderAtAGlance: true });
+          })
+          .withFailureHandler((err) => {
+            showToast("Connection error: " + err.message, 'error');
+            btn.disabled = false;
+            btn.innerText = originalText;
+          })
+          .assignSubToPeriod(absenceId, period, subName);
+      }
+
       function updateDynamicStaffList(dateStr, period) {
           const datalist = document.getElementById('dynamicStaffDataList');
           if (!datalist) return;
@@ -2653,6 +2706,31 @@
         }
       }
 
+      function shiftAtAGlanceDate(days) {
+        const dateInput = document.getElementById('atAGlanceDate');
+        if (!dateInput.value) return;
+
+        let currentDate = new Date(dateInput.value + 'T12:00:00'); // Use noon to avoid timezone shift
+
+        // Add or subtract days, skipping weekends
+        let daysToAdd = days;
+        while (daysToAdd !== 0) {
+            currentDate.setDate(currentDate.getDate() + Math.sign(daysToAdd));
+            const dayOfWeek = currentDate.getDay();
+            if (dayOfWeek !== 0 && dayOfWeek !== 6) { // 0 = Sunday, 6 = Saturday
+                daysToAdd -= Math.sign(daysToAdd);
+            }
+        }
+
+        // Format back to YYYY-MM-DD local
+        const year = currentDate.getFullYear();
+        const month = String(currentDate.getMonth() + 1).padStart(2, '0');
+        const day = String(currentDate.getDate()).padStart(2, '0');
+        dateInput.value = `${year}-${month}-${day}`;
+
+        applyAtAGlanceFilter();
+      }
+
       function applyAtAGlanceFilter() {
         const selectedDate = document.getElementById('atAGlanceDate').value;
         if (!selectedDate) return;
@@ -2660,6 +2738,13 @@
         // Filter for records on the exact selected date
         const todaysRecords = adminDataRaw.filter(req => req.date === selectedDate);
         renderAtAGlanceTable(todaysRecords);
+
+        if (currentUserPermissions && (currentUserPermissions["Admin Dashboard"] || currentUserRole === 'admin' || currentUserRole === 'sub coordinator')) {
+            document.getElementById('atAGlanceAssignableContainer').classList.remove('hidden');
+            renderAtAGlanceAssignableTable(todaysRecords);
+        } else {
+            document.getElementById('atAGlanceAssignableContainer').classList.add('hidden');
+        }
       }
 
       function renderAtAGlanceTable(records) {
@@ -2734,6 +2819,89 @@
                     }
                 } else {
                     // Did not request a sub for this period
+                    html += `<td class="p-3 text-xs text-center border border-gray-300 bg-gray-200">
+                                <div style="width: 100%; height: 2px; background-color: #9ca3af; margin: 10px 0;"></div>
+                             </td>`;
+                }
+            });
+            html += `</tr>`;
+        });
+
+        tbody.innerHTML = html;
+      }
+
+      function renderAtAGlanceAssignableTable(records) {
+        const thead = document.getElementById('atAGlanceAssignableTableHeader');
+        const tbody = document.getElementById('atAGlanceAssignableTableBody');
+
+        if (records.length === 0) {
+            thead.innerHTML = '<tr class="bg-gray-50 border-b border-gray-300 text-sm text-gray-700 uppercase"><th class="p-3 border border-gray-300">Teacher Name</th></tr>';
+            tbody.innerHTML = '<tr><td class="p-8 text-center text-gray-400 italic border border-gray-300">No absence requests found for this date.</td></tr>';
+            return;
+        }
+
+        // 1. Group records by teacher
+        const teacherMap = {};
+        const activePeriods = new Set();
+
+        records.forEach(req => {
+            if (!teacherMap[req.teacherName]) {
+                teacherMap[req.teacherName] = {
+                    name: req.teacherName,
+                    periods: {}
+                };
+            }
+
+            const rawIdx = adminDataRaw.findIndex(r => r.id === req.id && r.period === req.period);
+
+            teacherMap[req.teacherName].periods[req.period] = {
+                assignedSub: req.assignedSub || null,
+                room: req.room || "N/A",
+                rawIdx: rawIdx,
+                req: req
+            };
+            activePeriods.add(parseInt(req.period));
+        });
+
+        const sortedActivePeriods = Array.from(activePeriods).sort((a, b) => a - b);
+
+        // 2. Build Header
+        let headerHtml = `<th class="p-3 border border-gray-300 min-w-[150px]">Teacher Name</th>`;
+        sortedActivePeriods.forEach(p => {
+            headerHtml += `<th class="p-3 border border-gray-300 text-center w-64">Period ${p}</th>`;
+        });
+        thead.innerHTML = headerHtml;
+
+        // 3. Build Body
+        let html = '';
+        const teachers = Object.values(teacherMap).sort((a, b) => a.name.localeCompare(b.name));
+
+        teachers.forEach(t => {
+            html += `<tr class="hover:bg-gray-50 transition-colors">`;
+            html += `<td class="p-3 text-sm text-gray-800 font-bold border border-gray-300">${t.name}</td>`;
+
+            sortedActivePeriods.forEach(p => {
+                const pData = t.periods[p];
+                if (pData) {
+                    const req = pData.req;
+                    const assignId = 'assign_atAGlance_' + req.id + '_' + req.period;
+                    const btnId = 'btn_assign_atAGlance_' + req.id + '_' + req.period;
+
+                    html += `<td class="p-3 text-xs text-center border border-gray-300 bg-white align-top">`;
+                    html += `<div class="flex items-center gap-2">`;
+                    html += `<input type="text" id="${escapeHtml(assignId)}" list="dynamicStaffDataList"
+                               onfocus="updateDynamicStaffList('${escapeJs(req.formDateString || req.date)}', '${escapeJs(req.period)}')"
+                               value="${escapeHtml(req.assignedSub) || ''}"
+                               placeholder="Enter sub name..."
+                               onkeypress="if(event.key === 'Enter') assignSubFromAtAGlance('${escapeJs(req.id)}', '${escapeJs(req.period)}', '${escapeJs(assignId)}', '${escapeJs(btnId)}')"
+                               class="w-full p-2 border rounded text-sm outline-none focus:ring-2 focus:ring-[#00843D] bg-white">
+                             <button id="${escapeHtml(btnId)}" onclick="assignSubFromAtAGlance('${escapeJs(req.id)}', '${escapeJs(req.period)}', '${escapeJs(assignId)}', '${escapeJs(btnId)}')" class="bg-[#002147] hover:bg-[#003366] text-white px-3 py-2 rounded text-sm font-bold transition-colors">Assign</button>`;
+                    html += `</div>`;
+                    if (pData.room && pData.room !== "N/A") {
+                       html += `<div class="text-gray-500 mt-1">${escapeHtml(pData.room)}</div>`;
+                    }
+                    html += `</td>`;
+                } else {
                     html += `<td class="p-3 text-xs text-center border border-gray-300 bg-gray-200">
                                 <div style="width: 100%; height: 2px; background-color: #9ca3af; margin: 10px 0;"></div>
                              </td>`;
