@@ -24,6 +24,44 @@ function notifyAdminOfError(funcName, e) {
 }
 
 /**
+ * Helper to parse settings from the sheet data.
+ */
+function _parseSettingsData(settingsSheet) {
+  var settings = {};
+  if (!settingsSheet) return settings;
+
+  var data = settingsSheet.getDataRange().getValues();
+  // Skip header row
+  for (var i = 1; i < data.length; i++) {
+    var key = String(data[i][0]).trim();
+    var value = String(data[i][1]).trim();
+    if (key) {
+      settings[key] = value;
+    }
+  }
+  return settings;
+}
+
+/**
+ * Helper to merge defaults and append missing ones to the sheet.
+ */
+function _mergeAndAppendMissingDefaults(settings, defaults, settingsSheet) {
+  for (var k in defaults) {
+    if (!(k in settings)) {
+      settings[k] = defaults[k];
+      if (settingsSheet) {
+        try {
+          settingsSheet.appendRow([k, defaults[k]]);
+        } catch (appendErr) {
+          console.warn("Could not append default setting: " + appendErr.message);
+        }
+      }
+    }
+  }
+  return settings;
+}
+
+/**
  * Retrieves settings from the Settings sheet as an object.
  * Uses defaults in memory if the sheet does not exist or user lacks permission.
  */
@@ -59,34 +97,8 @@ function getSettings(ss) {
     var sheetSS = ss || getSS();
     var settingsSheet = getSheetOrThrow(sheetSS, "Settings");
 
-    var settings = {};
-
-    if (settingsSheet) {
-      var data = settingsSheet.getDataRange().getValues();
-      // Skip header row
-      for (var i = 1; i < data.length; i++) {
-        var key = String(data[i][0]).trim();
-        var value = String(data[i][1]).trim();
-        if (key) {
-          settings[key] = value;
-        }
-      }
-    }
-
-    // Merge with defaults if not present
-    var settingsUpdated = false;
-    for (var k in defaults) {
-      if (!(k in settings)) {
-        settings[k] = defaults[k];
-        if (settingsSheet) {
-          try {
-            settingsSheet.appendRow([k, defaults[k]]);
-          } catch (appendErr) {
-            console.warn("Could not append default setting: " + appendErr.message);
-          }
-        }
-      }
-    }
+    var settings = _parseSettingsData(settingsSheet);
+    settings = _mergeAndAppendMissingDefaults(settings, defaults, settingsSheet);
 
     return settings;
   } catch (e) {
