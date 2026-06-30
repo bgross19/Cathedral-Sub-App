@@ -265,7 +265,7 @@ function sendEmailHelper(to, subject, body, options) {
 
   if (mode === "Off") {
     console.log("Email sending is turned Off. Suppressed email to: " + to);
-    return;
+    return "SUPPRESSED";
   }
 
   if (mode === "Redirect" && redirectEmail) {
@@ -286,6 +286,7 @@ function sendEmailHelper(to, subject, body, options) {
   }
 
   GmailApp.sendEmail(to, subject, body, options);
+  return "SENT";
 }
 
 /**
@@ -346,8 +347,12 @@ function processEmailQueue() {
         }
 
         try {
-          sendEmailHelper(to, subject, body, options);
-          sheet.getRange(i + 1, 6).setValue("Sent");
+          var result = sendEmailHelper(to, subject, body, options);
+          if (result === "SUPPRESSED") {
+            sheet.getRange(i + 1, 6).setValue("Suppressed (Off)");
+          } else {
+            sheet.getRange(i + 1, 6).setValue("Sent");
+          }
         } catch (e) {
           console.error("Failed to send queued email to " + to + ": " + e.message);
           sheet.getRange(i + 1, 6).setValue("Failed: " + e.message);
