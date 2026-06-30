@@ -321,6 +321,44 @@ function enqueueEmail(to, subject, body, options) {
       sheet.appendRow(["Timestamp", "To", "Subject", "Body", "Options", "Status"]);
     }
 
+    // Look up the name from the Staff Roster
+    var recipientName = to; // Default to email
+    try {
+      var rosterSheet = ss.getSheetByName("Staff Roster");
+      if (rosterSheet) {
+        var rosterData = rosterSheet.getDataRange().getValues();
+        var targetEmail = String(to).toLowerCase().trim();
+        for (var i = 1; i < rosterData.length; i++) {
+          if (String(rosterData[i][1]).toLowerCase().trim() === targetEmail) {
+            recipientName = String(rosterData[i][0]).trim();
+            break;
+          }
+        }
+      }
+    } catch(e) {
+      // Ignore roster lookup errors, fallback to email
+    }
+
+    // Reformat name if it contains a comma (e.g., "Last, First")
+    if (recipientName.indexOf(",") > -1) {
+      var parts = recipientName.split(",");
+      recipientName = parts[1].trim() + " " + parts[0].trim();
+    }
+
+    // Split on space and get the first and last name
+    var nameParts = recipientName.split(" ");
+    var firstName = nameParts[0];
+    var lastName = nameParts.length > 1 ? nameParts[nameParts.length - 1] : "";
+    var formattedName = lastName ? firstName + " " + lastName : firstName;
+
+    var plainGreeting = "Dear " + formattedName + ",\n\n";
+    body = plainGreeting + body;
+
+    if (options && options.htmlBody) {
+      var htmlGreeting = "<p>Dear " + formattedName + ",</p>";
+      options.htmlBody = htmlGreeting + options.htmlBody;
+    }
+
     var timestamp = new Date();
     var optionsStr = options ? JSON.stringify(options) : "{}";
 
