@@ -52,7 +52,7 @@ To start using the app, you need to populate the initial data:
 To optimize performance, the app caches the PowerSchool Master Schedule.
 1. Open `powerschool.gs` in the editor.
 2. Select the `setupCacheWarmingTrigger` function.
-3. Click the **Run** button to create a time-driven trigger that refreshes the cache every 2 hours.
+3. Click the **Run** button to create a time-driven trigger that refreshes the cache daily between 1 AM and 2 AM.
 
 ## Architecture & Code Structure
 The application is structured into the following key files:
