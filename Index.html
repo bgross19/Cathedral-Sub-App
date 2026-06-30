@@ -2383,7 +2383,11 @@
         const btn = document.getElementById(btnId);
         if (!input || !btn) return;
 
-        const subName = input.value.trim();
+        let subName = input.value.trim();
+
+        if (subName) {
+           subName = subName.replace(/\s+-\s+.*$/, '');
+        }
 
         // Optional validation like in assignSubFromAdmin
         if (subName && !staffList.some(s => s.name === subName)) {
