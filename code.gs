@@ -289,6 +289,116 @@ function sendEmailHelper(to, subject, body, options) {
 }
 
 /**
+ * Enqueues an email to be sent later by a background trigger.
+ * Stores email details in the "Email Queue" sheet.
+ */
+function enqueueEmail(to, subject, body, options) {
+  try {
+    var ss = getSS();
+    var sheet = ss.getSheetByName("Email Queue");
+
+    if (!sheet) {
+      sheet = ss.insertSheet("Email Queue");
+      sheet.appendRow(["Timestamp", "To", "Subject", "Body", "Options", "Status"]);
+    }
+
+    var timestamp = new Date();
+    var optionsStr = options ? JSON.stringify(options) : "{}";
+
+    sheet.appendRow([timestamp, to, subject, body, optionsStr, "Pending"]);
+  } catch (e) {
+    console.error("Failed to enqueue email: " + e.message);
+    // Fallback to sending synchronously if queue fails
+    sendEmailHelper(to, subject, body, options);
+  }
+}
+
+/**
+ * Processes the email queue. Runs periodically via a time-driven trigger.
+ */
+function processEmailQueue() {
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(30000)) {
+    console.warn("Could not obtain lock for processEmailQueue");
+    return;
+  }
+
+  try {
+    var ss = getSS();
+    var sheet = ss.getSheetByName("Email Queue");
+    if (!sheet) return;
+
+    var data = sheet.getDataRange().getValues();
+    if (data.length <= 1) return; // Only headers
+
+    for (var i = 1; i < data.length; i++) {
+      if (data[i][5] === "Pending") {
+        var to = data[i][1];
+        var subject = data[i][2];
+        var body = data[i][3];
+        var optionsStr = data[i][4];
+        var options = {};
+
+        try {
+          options = JSON.parse(optionsStr);
+        } catch (e) {
+          console.error("Failed to parse options for queued email: " + e.message);
+        }
+
+        try {
+          sendEmailHelper(to, subject, body, options);
+          sheet.getRange(i + 1, 6).setValue("Sent");
+        } catch (e) {
+          console.error("Failed to send queued email to " + to + ": " + e.message);
+          sheet.getRange(i + 1, 6).setValue("Failed: " + e.message);
+        }
+      }
+    }
+
+    // Optional: Cleanup old sent/failed emails
+    // We could delete rows that are marked "Sent" to keep the sheet small
+    var rowsToDelete = [];
+    for (var i = data.length - 1; i >= 1; i--) {
+      var status = String(sheet.getRange(i + 1, 6).getValue() || "");
+      if (status === "Sent" || status.indexOf("Failed") > -1) {
+         rowsToDelete.push(i + 1);
+      }
+    }
+
+    // Delete from bottom up
+    for (var j = 0; j < rowsToDelete.length; j++) {
+       sheet.deleteRow(rowsToDelete[j]);
+    }
+
+  } catch (e) {
+    console.error("Error in processEmailQueue: " + e.message);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * Sets up a time-driven trigger to process the email queue every 1 minute.
+ */
+function setupEmailQueueTrigger() {
+  // First, remove any existing triggers for this function to avoid duplicates
+  var triggers = ScriptApp.getProjectTriggers();
+  for (var i = 0; i < triggers.length; i++) {
+    if (triggers[i].getHandlerFunction() === 'processEmailQueue') {
+      ScriptApp.deleteTrigger(triggers[i]);
+    }
+  }
+
+  // Create a new trigger to run every 1 minute
+  ScriptApp.newTrigger('processEmailQueue')
+    .timeBased()
+    .everyMinutes(1)
+    .create();
+
+  console.log("Email Queue trigger created successfully to run every 1 minute.");
+}
+
+/**
  * Helper to build a name lookup dictionary from Staff Roster data.
  */
 function buildNameLookup(rosterData) {
@@ -801,7 +911,7 @@ function sendUrgentCoverageEmail(ss, teacherName, formData, instructions) {
                    "<p><strong>Instructions:</strong> " + (instructions ? instructions : "None") + "</p>" +
                    "<p>Please log into the <a href='" + appUrl + "'>Cathedral Sub App</a> to assign a sub.</p>";
 
-    sendEmailHelper(coordinatorEmail, subject, body, { htmlBody: htmlBody });
+    enqueueEmail(coordinatorEmail, subject, body, { htmlBody: htmlBody });
   }
 }
 
@@ -870,7 +980,7 @@ function submitAbsence(formData) {
                        "<p><strong>Instructions:</strong> " + (instructions ? instructions : "None") + "</p>" +
                        "<p><a href='" + appUrl + "'>Return to Cathedral Sub App</a></p>";
 
-    sendEmailHelper(email, confSubject, confBody, { htmlBody: confHtmlBody });
+    enqueueEmail(email, confSubject, confBody, { htmlBody: confHtmlBody });
 
         return { success: true };
   } catch (err) {
@@ -937,7 +1047,7 @@ function cancelMySubDuty(absenceId, period) {
                            "</ul>" +
                            "<p>This period is now UNFILLED. Please log into the <a href='" + appUrl + "'>Cathedral Sub App</a> to reassign a sub.</p>";
 
-            sendEmailHelper(coordinatorEmail, subject, body, { cc: userEmail, htmlBody: htmlBody });
+            enqueueEmail(coordinatorEmail, subject, body, { cc: userEmail, htmlBody: htmlBody });
           }
 
               return { success: true };
@@ -1072,7 +1182,7 @@ function cancelAbsence(absenceId) {
                              "<li><strong>Periods:</strong> " + data[i][4] + "</li></ul>" +
                              "<p>If you have questions, please contact the sub coordinator.</p>";
 
-           sendEmailHelper(teacherEmail, teacherSubject, teacherBody, {htmlBody: teacherHtml});
+           enqueueEmail(teacherEmail, teacherSubject, teacherBody, {htmlBody: teacherHtml});
         }
 
             return { success: true };
@@ -1223,7 +1333,7 @@ function updateAbsence(absenceId, formData) {
                              "<li><strong>Duration:</strong> " + formData.duration + "</li></ul>" +
                              "<p>If you have questions, please contact the sub coordinator.</p>";
 
-           sendEmailHelper(teacherEmail, teacherSubject, teacherBody, {htmlBody: teacherHtml});
+           enqueueEmail(teacherEmail, teacherSubject, teacherBody, {htmlBody: teacherHtml});
         }
 
             return { success: true };
@@ -1321,9 +1431,9 @@ function sendSubNotification(subEmail, type, details) {
   }
 
   try {
-    sendEmailHelper(subEmail, subject, body, { htmlBody: htmlBody });
+    enqueueEmail(subEmail, subject, body, { htmlBody: htmlBody });
   } catch (e) {
-    console.error("Failed to send email to " + subEmail + ": " + e.message);
+    console.error("Failed to enqueue email to " + subEmail + ": " + e.message);
   }
 }
 
@@ -1987,10 +2097,15 @@ function clearMasterScheduleCache() {
     var user = getUserData(ss);
     assertPermission(user, "Settings");
 
-    var cache = CacheService.getScriptCache();
-    cache.remove("ps_master_schedule");
+    var sheet = ss.getSheetByName("Master Schedule Cache");
+    if (sheet) {
+      sheet.clearContents();
+    }
 
-        return { success: true };
+    // Attempt to warm it immediately
+    warmMasterScheduleCache();
+
+    return { success: true };
   } catch (err) {
     notifyAdminOfError("clearMasterScheduleCache", err);
     return { success: false, error: err.message };
