@@ -355,7 +355,7 @@ function warmMasterScheduleCache() {
 }
 
 /**
- * Sets up a time-driven trigger to warm the Master Schedule cache every 2 hours.
+ * Sets up a time-driven trigger to warm the Master Schedule cache daily between 1 AM and 2 AM.
  * Should be run once during initial setup or if triggers are lost.
  */
 function setupCacheWarmingTrigger() {
@@ -367,11 +367,12 @@ function setupCacheWarmingTrigger() {
     }
   }
 
-  // Create a new trigger to run every 2 hours
+  // Create a new trigger to run daily between 1 AM and 2 AM
   ScriptApp.newTrigger('warmMasterScheduleCache')
     .timeBased()
-    .everyHours(2)
+    .everyDays(1)
+    .atHour(1) // Runs between 1 AM and 2 AM
     .create();
 
-  Logger.log("Cache warming trigger created successfully to run every 2 hours.");
+  Logger.log("Cache warming trigger created successfully to run daily between 1 AM and 2 AM.");
 }
