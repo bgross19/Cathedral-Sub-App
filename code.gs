@@ -804,6 +804,22 @@ function addUserRole(email, role) {
   }
 }
 
+function refreshMasterScheduleCache() {
+  try {
+    var ss = getSS();
+    var user = getUserData(ss);
+    assertPermission(user, "Settings");
+
+    // Warm it immediately
+    warmMasterScheduleCache();
+
+    return { success: true };
+  } catch (err) {
+    notifyAdminOfError("refreshMasterScheduleCache", err);
+    return { success: false, error: err.message };
+  }
+}
+
 /**
  * Edits an existing user role.
  */

@@ -1140,9 +1140,14 @@
               </div>
 
               <div class="mt-6 flex justify-between items-center">
-                <button id="clearCacheBtn" onclick="clearMasterScheduleCacheClient()" class="bg-red-100 hover:bg-red-200 text-red-700 font-bold py-2 px-4 rounded-lg transition-colors shadow-sm text-sm border border-red-200">
-                  Clear Master Schedule Cache
-                </button>
+                <div class="flex gap-2">
+                  <button id="clearCacheBtn" onclick="clearMasterScheduleCacheClient()" class="bg-red-100 hover:bg-red-200 text-red-700 font-bold py-2 px-4 rounded-lg transition-colors shadow-sm text-sm border border-red-200">
+                    Clear Master Schedule Cache
+                  </button>
+                  <button id="refreshCacheBtn" onclick="refreshMasterScheduleCacheClient()" class="bg-blue-100 hover:bg-blue-200 text-blue-700 font-bold py-2 px-4 rounded-lg transition-colors shadow-sm text-sm border border-blue-200">
+                    Refresh Master Schedule Cache
+                  </button>
+                </div>
                 <button id="saveSettingsBtn" onclick="saveSettings()" class="bg-[#002147] hover:bg-blue-900 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-md">
                   Save General Settings
                 </button>
@@ -1276,6 +1281,30 @@
           })
           .clearMasterScheduleCache();
         });
+      }
+
+      function refreshMasterScheduleCacheClient() {
+        const btn = document.getElementById('refreshCacheBtn');
+        const originalText = btn.innerText;
+        btn.disabled = true;
+        btn.innerText = "Refreshing...";
+
+        google.script.run
+          .withSuccessHandler(result => {
+             if (result && result.success) {
+                 showToast("Cache refreshed successfully! Data is now up to date.", 'success');
+             } else {
+                 showToast("Failed to refresh cache: " + (result ? result.error : "Unknown error"), "error");
+             }
+             btn.disabled = false;
+             btn.innerText = originalText;
+          })
+          .withFailureHandler(err => {
+             showToast("Error: " + err.message, 'error');
+             btn.disabled = false;
+             btn.innerText = originalText;
+          })
+          .refreshMasterScheduleCache();
       }
 
 
