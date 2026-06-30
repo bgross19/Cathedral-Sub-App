@@ -203,29 +203,11 @@ let global_master_schedule_cache = null;
 
 /**
  * Fetches the Master Schedule from PowerSchool API and formats it into a 2D array.
- * Caches the result in Script Cache to avoid excessive API calls.
- * Uses a global variable to avoid repeated JSON parsing in the same execution context.
  */
-function getMasterScheduleData() {
-  if (global_master_schedule_cache) {
-    return global_master_schedule_cache;
-  }
-
-  const cache = CacheService.getScriptCache();
-  const cachedData = cache.get("ps_master_schedule");
-
-  if (cachedData) {
-    try {
-      global_master_schedule_cache = JSON.parse(cachedData);
-      return global_master_schedule_cache;
-    } catch (e) {
-      Logger.log("Error parsing cached master schedule: " + e.toString());
-    }
-  }
-
+function fetchMasterScheduleFromAPI() {
   const token = getPowerSchoolToken();
   if (!token) {
-    Logger.log("Failed to get PowerSchool token in getMasterScheduleData.");
+    Logger.log("Failed to get PowerSchool token in fetchMasterScheduleFromAPI.");
     return [];
   }
 
@@ -265,7 +247,7 @@ function getMasterScheduleData() {
     statusCode = response.getResponseCode();
     responseText = response.getContentText();
   } catch (error) {
-    Logger.log("API Fetch Error in getMasterScheduleData: " + error.toString());
+    Logger.log("API Fetch Error in fetchMasterScheduleFromAPI: " + error.toString());
     return [];
   }
 
@@ -303,18 +285,6 @@ function getMasterScheduleData() {
       ]);
     });
 
-    // Cache limits to 6 hours (21600 seconds)
-    // 100kb string limit for Script Cache, if it exceeds, we may need to handle it or compress
-    const stringifiedData = JSON.stringify(scheduleData);
-    if (stringifiedData.length <= 100000) {
-      cache.put("ps_master_schedule", stringifiedData, 21600);
-    } else {
-      Logger.log("Master Schedule data exceeds cache size limit. Not caching.");
-      // In a robust implementation, you might chunk the cache.
-      // E.g., caching multiple chunks. Let's start simple.
-    }
-
-    global_master_schedule_cache = scheduleData;
     return scheduleData;
 
   } catch (parseError) {
@@ -323,23 +293,65 @@ function getMasterScheduleData() {
   }
 }
 
+/**
+ * Gets the Master Schedule data by reading directly from the "Master Schedule Cache" sheet.
+ * This completely avoids API calls during normal app usage.
+ * Uses a global variable to avoid repeated sheet reads in the same execution context.
+ */
+function getMasterScheduleData() {
+  if (global_master_schedule_cache) {
+    return global_master_schedule_cache;
+  }
+
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName("Master Schedule Cache");
+    if (!sheet) {
+      Logger.log("Master Schedule Cache sheet not found. Attempting to fetch from API as fallback.");
+      const data = fetchMasterScheduleFromAPI();
+      global_master_schedule_cache = data;
+      return data;
+    }
+
+    const data = sheet.getDataRange().getValues();
+    if (data && data.length > 0) {
+      global_master_schedule_cache = data;
+      return data;
+    }
+    return [];
+  } catch (e) {
+    Logger.log("Error reading Master Schedule Cache sheet: " + e.toString());
+    return [];
+  }
+}
 
 /**
- * Warms the Master Schedule cache by retrieving fresh data from PowerSchool.
+ * Warms the Master Schedule cache by retrieving fresh data from PowerSchool
+ * and saving it to the "Master Schedule Cache" sheet.
  * Intended to be run periodically via a time-driven trigger.
  */
 function warmMasterScheduleCache() {
-  const cache = CacheService.getScriptCache();
-  // Clear existing cache
-  cache.remove("ps_master_schedule");
-
-  // Clear the global in-memory variable to force a fresh fetch
+  // Clear the global in-memory variable
   global_master_schedule_cache = null;
 
-  // Call the function to fetch and re-cache the data
-  getMasterScheduleData();
+  // Fetch from API
+  const scheduleData = fetchMasterScheduleFromAPI();
 
-  Logger.log("Master Schedule cache warmed successfully.");
+  if (scheduleData && scheduleData.length > 0) {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    let sheet = ss.getSheetByName("Master Schedule Cache");
+    if (!sheet) {
+      sheet = ss.insertSheet("Master Schedule Cache");
+    }
+
+    // Clear old data and write new data
+    sheet.clearContents();
+    sheet.getRange(1, 1, scheduleData.length, scheduleData[0].length).setValues(scheduleData);
+
+    Logger.log("Master Schedule Cache sheet updated successfully with " + scheduleData.length + " rows.");
+  } else {
+    Logger.log("Master Schedule fetch returned empty data. Cache sheet not updated.");
+  }
 }
 
 /**
