@@ -467,7 +467,7 @@
 
         modal.classList.remove('opacity-0', 'pointer-events-none');
         overlay.classList.remove('opacity-0', 'pointer-events-none');
-        body.classList.add('modal-active');
+        body.classList.add('overflow-hidden');
 
         setTimeout(captureModalState, 50);
       }
@@ -485,24 +485,13 @@
 
         modal.classList.remove('opacity-0', 'pointer-events-none');
         overlay.classList.remove('opacity-0', 'pointer-events-none');
-        body.classList.add('modal-active');
+        body.classList.add('overflow-hidden');
 
         setTimeout(captureModalState, 50);
       }
 
     </script>
-    <style>
-      .modal { transition: opacity 0.25s ease; }
-      body.modal-active { overflow: hidden; }
-      .spinner { border: 3px solid #f3f3f3; border-top: 3px solid #00843D; border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; }
-      @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-      .tooltip { position: relative; display: inline-block; cursor: help; }
-      .tooltip .tooltiptext { visibility: hidden; width: 140px; background-color: #555; color: #fff; text-align: center; border-radius: 6px; padding: 5px; position: absolute; z-index: 1; bottom: 125%; left: 50%; margin-left: -70px; opacity: 0; transition: opacity 0.3s; font-size: 0.75rem; font-weight: normal; }
-      .tooltip .tooltiptext::after { content: ""; position: absolute; top: 100%; left: 50%; margin-left: -5px; border-width: 5px; border-style: solid; border-color: #555 transparent transparent transparent; }
-      .tooltip:hover .tooltiptext { visibility: visible; opacity: 1; }
-      .grid-rows-0 { grid-template-rows: 0fr; }
-      .grid-rows-1 { grid-template-rows: 1fr; }
-    </style>
+
   </head>
 
   <body class="bg-gray-100 font-sans text-gray-800" onload="initApp()">
@@ -785,7 +774,7 @@
         </table>
         <div id="atAGlanceFooter" class="mt-4 text-sm hidden">
            <br>
-           Please refer to the <a id="atAGlanceFooterUrl" href="#" style="color: #00843D; text-decoration: underline;">Cathedral Sub App</a> for more information.
+           Please refer to the <a id="atAGlanceFooterUrl" href="#" class="text-[#00843D] underline">Cathedral Sub App</a> for more information.
         </div>
       </div>
 
@@ -1462,7 +1451,7 @@
         modal.classList.remove('pointer-events-none');
         overlay.classList.remove('opacity-0');
         overlay.classList.remove('pointer-events-none');
-        body.classList.add('modal-active');
+        body.classList.add('overflow-hidden');
         // Delay slightly to let inputs initialize if needed
         setTimeout(captureModalState, 50);
       }
@@ -1476,7 +1465,7 @@
         modal.classList.add('pointer-events-none');
         overlay.classList.add('opacity-0');
         overlay.classList.add('pointer-events-none');
-        body.classList.remove('modal-active');
+        body.classList.remove('overflow-hidden');
       }
 
       function submitAddRole() {
@@ -1514,7 +1503,7 @@
     </script>
 
     <!-- Add Role Modal -->
-    <div id="addRoleModal" class="modal opacity-0 pointer-events-none fixed w-full h-full top-0 left-0 flex items-center justify-center z-[110]" onclick="if(event.target === this) attemptCloseAllModals()">
+    <div id="addRoleModal" class="modal transition-opacity duration-[250ms] ease-in-out opacity-0 pointer-events-none fixed w-full h-full top-0 left-0 flex items-center justify-center z-[110]" onclick="if(event.target === this) attemptCloseAllModals()">
       <div class="modal-container bg-white w-11/12 md:max-w-md mx-auto rounded-2xl shadow-2xl z-[110] overflow-y-auto max-h-[90vh]">
         <div class="p-6">
           <div class="flex justify-between items-center pb-3 border-b">
@@ -1549,7 +1538,7 @@
 
 
     <!-- Add/Edit Staff Modal -->
-    <div id="staffModal" class="modal opacity-0 pointer-events-none fixed w-full h-full top-0 left-0 flex items-center justify-center z-[110]" onclick="if(event.target === this) attemptCloseAllModals()">
+    <div id="staffModal" class="modal transition-opacity duration-[250ms] ease-in-out opacity-0 pointer-events-none fixed w-full h-full top-0 left-0 flex items-center justify-center z-[110]" onclick="if(event.target === this) attemptCloseAllModals()">
       <div class="modal-container bg-white w-11/12 md:max-w-md mx-auto rounded-2xl shadow-2xl z-[110] overflow-y-auto max-h-[90vh]">
         <div class="py-4 text-left px-6">
           <div class="flex justify-between items-center pb-3 border-b border-gray-200">
@@ -1584,11 +1573,11 @@
     </div>
 
     <!-- Generic Modal overlay -->
-    <div id="genericModalOverlay" class="modal opacity-0 pointer-events-none fixed w-full h-full top-0 left-0 flex items-center justify-center z-[100]">
+    <div id="genericModalOverlay" class="modal transition-opacity duration-[250ms] ease-in-out opacity-0 pointer-events-none fixed w-full h-full top-0 left-0 flex items-center justify-center z-[100]">
       <div class="modal-overlay absolute w-full h-full bg-gray-900 opacity-50" onclick="attemptCloseAllModals()"></div>
     </div>
 
-    <div id="detailsModal" class="modal opacity-0 pointer-events-none fixed w-full h-full top-0 left-0 flex items-center justify-center z-[110]" onclick="if(event.target === this) attemptCloseAllModals()">
+    <div id="detailsModal" class="modal transition-opacity duration-[250ms] ease-in-out opacity-0 pointer-events-none fixed w-full h-full top-0 left-0 flex items-center justify-center z-[110]" onclick="if(event.target === this) attemptCloseAllModals()">
       <div class="modal-container bg-white w-11/12 md:max-w-xl mx-auto rounded-2xl shadow-2xl z-[110] overflow-y-auto max-h-[90vh]">
         <div class="p-6">
           <div class="flex justify-between items-center pb-3 border-b">
@@ -1604,7 +1593,7 @@
       </div>
     </div>
 
-    <div id="modal" class="modal opacity-0 pointer-events-none fixed w-full h-full top-0 left-0 flex items-center justify-center z-[110]" onclick="if(event.target === this) attemptCloseAllModals()">
+    <div id="modal" class="modal transition-opacity duration-[250ms] ease-in-out opacity-0 pointer-events-none fixed w-full h-full top-0 left-0 flex items-center justify-center z-[110]" onclick="if(event.target === this) attemptCloseAllModals()">
       <div class="modal-container bg-white w-11/12 md:max-w-xl mx-auto rounded-2xl shadow-2xl z-[110] overflow-y-auto max-h-[90vh]">
         <div class="p-6">
           <div class="flex justify-between items-center pb-3 border-b">
@@ -1730,7 +1719,7 @@
         const url = URL.createObjectURL(blob);
         link.setAttribute('href', url);
         link.setAttribute('download', filename);
-        link.style.visibility = 'hidden';
+        link.classList.add('invisible');
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -1830,12 +1819,12 @@
         if (isOpen) {
           // Close it
           wrapper.classList.remove('grid-rows-1');
-          wrapper.classList.add('grid-rows-0');
+          wrapper.classList.add('grid-rows-[0fr]');
           icon.classList.add('-rotate-90');
           localStorage.setItem(`toggle_${wrapperId}`, 'closed');
         } else {
           // Open it
-          wrapper.classList.remove('grid-rows-0');
+          wrapper.classList.remove('grid-rows-[0fr]');
           wrapper.classList.add('grid-rows-1');
           icon.classList.remove('-rotate-90');
           localStorage.setItem(`toggle_${wrapperId}`, 'open');
@@ -1858,7 +1847,7 @@
             const icon = document.getElementById(sec.iconId);
             if (wrapper && icon) {
               wrapper.classList.remove('grid-rows-1');
-              wrapper.classList.add('grid-rows-0');
+              wrapper.classList.add('grid-rows-[0fr]');
               icon.classList.add('-rotate-90');
             }
           }
@@ -1921,7 +1910,7 @@
                              const dummyBtn = document.createElement('button');
                              dummyBtn.id = dummyBtnId;
                              dummyBtn.innerText = "Sign Me Up";
-                             dummyBtn.style.display = "none";
+                             dummyBtn.classList.add("hidden");
                              document.body.appendChild(dummyBtn);
                              if (details) {
                                  handleSignMeUp(absenceId, period, dummyBtnId, details.teacherName, details.course);
@@ -1937,7 +1926,7 @@
                              const dummyBtnId = 'dummy-btn-' + Date.now();
                              const dummyBtn = document.createElement('button');
                              dummyBtn.id = dummyBtnId;
-                             dummyBtn.style.display = "none";
+                             dummyBtn.classList.add("hidden");
                              document.body.appendChild(dummyBtn);
                              handleSignMeUp(absenceId, period, dummyBtnId);
                          }, 1500);
@@ -2202,7 +2191,7 @@
           m.classList.add('opacity-0');
           m.classList.add('pointer-events-none');
         });
-        document.querySelector('body').classList.remove('modal-active');
+        document.querySelector('body').classList.remove('overflow-hidden');
       }
 
       function toggleModal(isEdit = false, absId = null) {
@@ -2216,7 +2205,7 @@
           modal.classList.remove('pointer-events-none');
           overlay.classList.remove('opacity-0');
           overlay.classList.remove('pointer-events-none');
-          body.classList.add('modal-active');
+          body.classList.add('overflow-hidden');
 
           if (!isEdit) {
              document.getElementById('requestModalTitle').innerText = "Request Sub";
@@ -2238,7 +2227,7 @@
           modal.classList.add('pointer-events-none');
           overlay.classList.add('opacity-0');
           overlay.classList.add('pointer-events-none');
-          body.classList.remove('modal-active');
+          body.classList.remove('overflow-hidden');
         }
       }
 
@@ -2824,7 +2813,7 @@
                 } else {
                     // Did not request a sub for this period
                     html += `<td class="p-3 text-xs text-center border border-gray-300 bg-gray-200">
-                                <div style="width: 100%; height: 2px; background-color: #9ca3af; margin: 10px 0;"></div>
+                                <div class="w-full h-[2px] bg-[#9ca3af] my-[10px]"></div>
                              </td>`;
                 }
             });
@@ -3095,12 +3084,12 @@
 
             let courseHtml = req.course ? `<span class="inline-block max-w-[150px] sm:max-w-[180px] md:max-w-[240px] truncate align-middle" title="${escapeHtml(req.course)}">${escapeHtml(req.course)}</span>` : '';
             if (req.course === "No Class Assigned" || !req.course) {
-               courseHtml = `<span class="tooltip text-red-500 font-bold px-2 py-1 bg-red-50 rounded cursor-help">--<span class="tooltiptext">No course found</span></span>`;
+               courseHtml = `<span class="group relative inline-block cursor-help text-red-500 font-bold px-2 py-1 bg-red-50 rounded">--<span class="invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-opacity duration-300 w-[140px] bg-[#555] text-white text-center rounded-md p-1.5 absolute z-10 bottom-[125%] left-1/2 -ml-[70px] text-xs font-normal after:content-[\"\"] after:absolute after:top-full after:left-1/2 after:-ml-[5px] after:border-[5px] after:border-solid after:border-[#555_transparent_transparent_transparent]">No course found</span></span>`;
             }
 
             let roomHtml = escapeHtml(req.room);
             if (req.room === "No Class Assigned" || !req.room) {
-               roomHtml = `<span class="tooltip text-red-500 font-bold px-2 py-1 bg-red-50 rounded cursor-help">--<span class="tooltiptext">No room found</span></span>`;
+               roomHtml = `<span class="group relative inline-block cursor-help text-red-500 font-bold px-2 py-1 bg-red-50 rounded">--<span class="invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-opacity duration-300 w-[140px] bg-[#555] text-white text-center rounded-md p-1.5 absolute z-10 bottom-[125%] left-1/2 -ml-[70px] text-xs font-normal after:content-[\"\"] after:absolute after:top-full after:left-1/2 after:-ml-[5px] after:border-[5px] after:border-solid after:border-[#555_transparent_transparent_transparent]">No room found</span></span>`;
             }
 
             let assignIdMobile = `inline-assign-mobile-${req.id}-${req.period}`;
@@ -3273,7 +3262,7 @@
         modal.classList.remove('pointer-events-none');
         overlay.classList.remove('opacity-0');
         overlay.classList.remove('pointer-events-none');
-        body.classList.add('modal-active');
+        body.classList.add('overflow-hidden');
       }
 
       function handleAdminAssign(absenceId, period, selectElementId) {
@@ -3350,8 +3339,8 @@
         }
 
         inputEl.disabled = true;
-        const previousBg = inputEl.style.backgroundColor;
-        inputEl.style.backgroundColor = '#f3f4f6';
+
+        inputEl.classList.add('bg-[#f3f4f6]');
 
         google.script.run
           .withSuccessHandler(result => {
@@ -3359,7 +3348,7 @@
               inputEl.setAttribute('data-original-value', subName);
               inputEl.value = subName;
               inputEl.disabled = false;
-              inputEl.style.backgroundColor = previousBg;
+              inputEl.classList.remove('bg-[#f3f4f6]');
 
               const atAGlanceView = document.getElementById('atAGlanceDashboardView');
               const isAtAGlanceVisible = atAGlanceView && !atAGlanceView.classList.contains('hidden');
@@ -3370,7 +3359,7 @@
               showToast(result ? result.error : "Unknown error", 'error');
               inputEl.value = originalValue;
               inputEl.disabled = false;
-              inputEl.style.backgroundColor = previousBg;
+              inputEl.classList.remove('bg-[#f3f4f6]');
 
               if (result && result.error && (result.error.includes('filled by someone else') || result.error.includes('server is currently busy'))) {
                   loadQuickCover();
@@ -3382,7 +3371,7 @@
             showToast("Error: " + err.message, 'error');
             inputEl.value = originalValue;
             inputEl.disabled = false;
-            inputEl.style.backgroundColor = previousBg;
+            inputEl.classList.remove('bg-[#f3f4f6]');
           })
           .assignSubToPeriod(absenceId, period, subName);
       }
@@ -3441,7 +3430,7 @@
         modal.classList.remove('pointer-events-none');
         overlay.classList.remove('opacity-0');
         overlay.classList.remove('pointer-events-none');
-        body.classList.add('modal-active');
+        body.classList.add('overflow-hidden');
       }
 
       function closeDetailsModal() {
@@ -3453,7 +3442,7 @@
         modal.classList.add('pointer-events-none');
         overlay.classList.add('opacity-0');
         overlay.classList.add('pointer-events-none');
-        body.classList.remove('modal-active');
+        body.classList.remove('overflow-hidden');
       }
 
       function handleAssign(absenceId, period, selectElementId, isFromModal = false) {
@@ -3588,13 +3577,13 @@
         modal.classList.remove('pointer-events-none');
         overlay.classList.remove('opacity-0');
         overlay.classList.remove('pointer-events-none');
-        body.classList.add('modal-active');
+        body.classList.add('overflow-hidden');
       }
 
       function cancelMySubDutyClient(id, period) {
         showConfirm("Are you sure you want to cancel your assigned sub coverage for this period? The sub coordinator will be notified.", () => {
         const container = document.getElementById('mySubDuties');
-        container.innerHTML = '<div class="spinner mx-auto my-4"></div>';
+        container.innerHTML = '<div class="w-6 h-6 rounded-full border-[3px] border-gray-100 border-t-[#00843D] animate-spin mx-auto my-4"></div>';
 
         google.script.run
           .withSuccessHandler(result => {
@@ -3857,7 +3846,7 @@
       function cancelAbsence(id) {
         showConfirm("Are you sure you want to cancel this request? Any assigned substitutes will be automatically notified.", () => {
         const container = document.getElementById('myAbsences');
-        container.innerHTML = '<div class="spinner mx-auto my-4"></div>';
+        container.innerHTML = '<div class="w-6 h-6 rounded-full border-[3px] border-gray-100 border-t-[#00843D] animate-spin mx-auto my-4"></div>';
 
         google.script.run
           .withSuccessHandler(result => {
@@ -3938,7 +3927,7 @@
 
         const btn = document.getElementById('submitBtn');
         btn.disabled = true;
-        btn.innerHTML = '<div class="flex items-center justify-center gap-2"><div class="spinner"></div> Sending...</div>';
+        btn.innerHTML = '<div class="flex items-center justify-center gap-2"><div class="w-6 h-6 rounded-full border-[3px] border-gray-100 border-t-[#00843D] animate-spin"></div> Sending...</div>';
 
         const formData = {
           date: newDateVal,
@@ -4488,7 +4477,7 @@
     </script>
 
     <!-- Duplicate Absence Modal -->
-    <div id="duplicateAbsenceModal" class="modal opacity-0 pointer-events-none fixed w-full h-full top-0 left-0 flex items-center justify-center z-[300]" onclick="if(event.target === this) closeDuplicateWarning()">
+    <div id="duplicateAbsenceModal" class="modal transition-opacity duration-[250ms] ease-in-out opacity-0 pointer-events-none fixed w-full h-full top-0 left-0 flex items-center justify-center z-[300]" onclick="if(event.target === this) closeDuplicateWarning()">
       <div class="modal-overlay absolute w-full h-full bg-gray-900 opacity-50" onclick="closeDuplicateWarning()"></div>
       <div class="modal-container bg-white w-11/12 md:max-w-md mx-auto rounded-2xl shadow-2xl z-[310] overflow-y-auto">
         <div class="p-6">
@@ -4510,7 +4499,7 @@
     </div>
 
     <!-- Custom Confirm Modal -->
-    <div id="customConfirmModal" class="modal opacity-0 pointer-events-none fixed w-full h-full top-0 left-0 flex items-center justify-center z-[250]" onclick="if(event.target === this) closeCustomConfirm()">
+    <div id="customConfirmModal" class="modal transition-opacity duration-[250ms] ease-in-out opacity-0 pointer-events-none fixed w-full h-full top-0 left-0 flex items-center justify-center z-[250]" onclick="if(event.target === this) closeCustomConfirm()">
       <div class="modal-overlay absolute w-full h-full bg-gray-900 opacity-50" onclick="closeCustomConfirm()"></div>
       <div class="modal-container bg-white w-11/12 md:max-w-md mx-auto rounded-2xl shadow-2xl z-[260] overflow-y-auto">
         <div class="p-6">
