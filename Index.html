@@ -2756,7 +2756,7 @@
         const tbody = document.getElementById('atAGlanceTableBody');
 
         if (records.length === 0) {
-            thead.innerHTML = '<tr class="bg-gray-50 border-b border-gray-300 text-sm text-gray-700 uppercase"><th class="p-3 border border-gray-300">Teacher Name</th></tr>';
+            thead.innerHTML = '<tr class="bg-gray-50 border-b border-gray-300 text-sm text-gray-700 uppercase"><th class="p-3 border border-gray-300 sticky left-0 z-20 bg-gray-50">Teacher Name</th></tr>';
             tbody.innerHTML = '<tr><td class="p-8 text-center text-gray-400 italic border border-gray-300">No absence requests found for this date.</td></tr>';
             return;
         }
@@ -2786,7 +2786,7 @@
         const sortedActivePeriods = Array.from(activePeriods).sort((a, b) => a - b);
 
         // 2. Build Header
-        let headerHtml = `<th class="p-3 border border-gray-300 min-w-[150px]">Teacher Name</th>`;
+        let headerHtml = `<th class="p-3 border border-gray-300 min-w-[150px] sticky left-0 z-20 bg-gray-50 shadow-[1px_0_0_0_#d1d5db]">Teacher Name</th>`;
         sortedActivePeriods.forEach(p => {
             headerHtml += `<th class="p-3 border border-gray-300 text-center w-32">Period ${p}</th>`;
         });
@@ -2797,8 +2797,8 @@
         const teachers = Object.values(teacherMap).sort((a, b) => a.name.localeCompare(b.name));
 
         teachers.forEach(t => {
-            html += `<tr class="hover:bg-gray-50 transition-colors">`;
-            html += `<td class="p-3 text-sm text-gray-800 font-bold border border-gray-300">${t.name}</td>`;
+            html += `<tr class="hover:bg-gray-50 transition-colors group">`;
+            html += `<td class="p-3 text-sm text-gray-800 font-bold border border-gray-300 sticky left-0 z-10 bg-white group-hover:bg-gray-50 shadow-[1px_0_0_0_#d1d5db]">${t.name}</td>`;
 
             sortedActivePeriods.forEach(p => {
                 const pData = t.periods[p];
@@ -2839,7 +2839,7 @@
         const tbody = document.getElementById('atAGlanceAssignableTableBody');
 
         if (records.length === 0) {
-            thead.innerHTML = '<tr class="bg-gray-50 border-b border-gray-300 text-sm text-gray-700 uppercase"><th class="p-3 border border-gray-300">Teacher Name</th></tr>';
+            thead.innerHTML = '<tr class="bg-gray-50 border-b border-gray-300 text-sm text-gray-700 uppercase"><th class="p-3 border border-gray-300 sticky left-0 z-20 bg-gray-50">Teacher Name</th></tr>';
             tbody.innerHTML = '<tr><td class="p-8 text-center text-gray-400 italic border border-gray-300">No absence requests found for this date.</td></tr>';
             return;
         }
@@ -2870,7 +2870,7 @@
         const sortedActivePeriods = Array.from(activePeriods).sort((a, b) => a - b);
 
         // 2. Build Header
-        let headerHtml = `<th class="p-3 border border-gray-300 min-w-[150px]">Teacher Name</th>`;
+        let headerHtml = `<th class="p-3 border border-gray-300 min-w-[150px] sticky left-0 z-20 bg-gray-50 shadow-[1px_0_0_0_#d1d5db]">Teacher Name</th>`;
         sortedActivePeriods.forEach(p => {
             headerHtml += `<th class="p-3 border border-gray-300 text-center w-64">Period ${p}</th>`;
         });
@@ -2881,8 +2881,8 @@
         const teachers = Object.values(teacherMap).sort((a, b) => a.name.localeCompare(b.name));
 
         teachers.forEach(t => {
-            html += `<tr class="hover:bg-gray-50 transition-colors">`;
-            html += `<td class="p-3 text-sm text-gray-800 font-bold border border-gray-300">${t.name}</td>`;
+            html += `<tr class="hover:bg-gray-50 transition-colors group">`;
+            html += `<td class="p-3 text-sm text-gray-800 font-bold border border-gray-300 sticky left-0 z-10 bg-white group-hover:bg-gray-50 shadow-[1px_0_0_0_#d1d5db]">${t.name}</td>`;
 
             sortedActivePeriods.forEach(p => {
                 const pData = t.periods[p];
