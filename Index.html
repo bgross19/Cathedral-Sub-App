@@ -2390,7 +2390,11 @@
 
         google.script.run
           .withSuccessHandler(() => {
-            showToast('Sub assigned successfully!', 'success');
+            if (subName) {
+               showToast('Sub assigned successfully!', 'success');
+            } else {
+               showToast('Sub Removed Successfully', 'success');
+            }
             EventBus.publish('refresh_adminData', { renderAtAGlance: true });
           })
           .withFailureHandler((err) => {
@@ -3289,6 +3293,12 @@
             if (result && result.success) {
               closeAllModals();
 
+              if (subName) {
+                 showToast('Sub assigned successfully!', 'success');
+              } else {
+                 showToast('Sub Removed Successfully', 'success');
+              }
+
               // Check if At A Glance dashboard is currently visible
               const atAGlanceView = document.getElementById('atAGlanceDashboardView');
               const isAtAGlanceVisible = atAGlanceView && !atAGlanceView.classList.contains('hidden');
@@ -3345,6 +3355,12 @@
         google.script.run
           .withSuccessHandler(result => {
             if (result && result.success) {
+              if (subName) {
+                 showToast('Sub assigned successfully!', 'success');
+              } else {
+                 showToast('Sub Removed Successfully', 'success');
+              }
+
               inputEl.setAttribute('data-original-value', subName);
               inputEl.value = subName;
               inputEl.disabled = false;
@@ -3449,16 +3465,13 @@
         const selectEl = document.getElementById(selectElementId);
         let subName = selectEl.value;
 
-        if (!subName) {
-          showToast("Please enter a substitute to assign.", 'error');
-          return;
+        // Strip out duty suffix if present: "Name - Duty" -> "Name"
+        if (subName) {
+           subName = subName.replace(/\s+-\s+.*$/, '');
         }
 
-        // Strip out duty suffix if present: "Name - Duty" -> "Name"
-        subName = subName.replace(/\s+-\s+.*$/, '');
-
-        if (!staffList.some(s => s.name === subName)) {
-          showToast("Please enter a valid staff name from the list.", 'error');
+        if (subName && !staffList.some(s => s.name === subName)) {
+          showToast("Please enter a valid staff name from the list, or leave it blank to clear.", 'error');
           return;
         }
 
@@ -3470,6 +3483,12 @@
         google.script.run
           .withSuccessHandler(result => {
             if (result && result.success) {
+              if (subName) {
+                 showToast('Sub assigned successfully!', 'success');
+              } else {
+                 showToast('Sub Removed Successfully', 'success');
+              }
+
               if (isFromModal) {
                  closeDetailsModal();
               }
