@@ -5,6 +5,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
+      // === Mobile Navigation Menu ===
+      function toggleMobileMenu() {
+        const menu = document.getElementById('navMenu');
+        if (menu.classList.contains('hidden')) {
+            menu.classList.remove('hidden');
+            menu.classList.add('flex');
+        } else {
+            menu.classList.add('hidden');
+            menu.classList.remove('flex');
+        }
+      }
+
+      function closeMobileMenu() {
+        const menu = document.getElementById('navMenu');
+        menu.classList.add('hidden');
+        menu.classList.remove('flex');
+      }
+
       // === Settings Dashboard Tab Switching ===
       function switchSettingsTab(tabId) {
         if (tabId === 'staffRosterTab' && typeof loadStaffRosterSettings === 'function') {
@@ -497,7 +515,7 @@
   <body class="bg-gray-100 font-sans text-gray-800" onload="initApp()">
 
     <nav class="bg-[#002147] text-white p-4 shadow-lg sticky top-0 z-50">
-       <div class="max-w-4xl mx-auto flex justify-between items-center">
+       <div class="max-w-4xl mx-auto flex justify-between items-center relative">
            <div class="flex items-center gap-4">
                <h1 class="text-xl font-bold flex items-center gap-2">
                   <span class="bg-white rounded-full h-10 w-10 flex items-center justify-center overflow-hidden">
@@ -505,22 +523,34 @@
                   </span>
                   <span class="hidden sm:inline">Cathedral Sub Coverage</span>
                </h1>
-               <button id="navAdminBtn" onclick="toggleAdminDashboard()" class="hidden ml-4 bg-white/20 hover:bg-white/30 text-white text-sm font-semibold py-1.5 px-4 rounded-full transition-colors flex items-center gap-2">
+           </div>
+
+           <!-- Hamburger Button (Mobile only) -->
+           <button id="mobileMenuBtn" onclick="toggleMobileMenu()" class="lg:hidden p-2 text-white hover:bg-white/20 rounded-md transition-colors focus:outline-none">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+           </button>
+
+           <!-- Navigation Links & User Info -->
+           <div id="navMenu" class="hidden absolute top-full right-0 mt-4 w-48 bg-[#002147] rounded-lg shadow-xl lg:static lg:mt-0 lg:w-auto lg:bg-transparent lg:shadow-none lg:flex lg:flex-row lg:items-center lg:gap-4 flex-col overflow-hidden z-[110]">
+               <button id="navAdminBtn" onclick="toggleAdminDashboard(); closeMobileMenu();" class="hidden w-full lg:w-auto text-left lg:text-center bg-white/5 hover:bg-white/20 lg:bg-white/20 lg:hover:bg-white/30 text-white text-sm font-semibold py-3 px-4 lg:py-1.5 lg:rounded-full transition-colors flex items-center gap-2 border-b border-white/10 lg:border-none">
                    <span>📊</span> Admin Dashboard
                </button>
-               <button id="navHRBtn" onclick="toggleHRDashboard()" class="hidden ml-4 bg-white/20 hover:bg-white/30 text-white text-sm font-semibold py-1.5 px-4 rounded-full transition-colors flex items-center gap-2">
+               <button id="navHRBtn" onclick="toggleHRDashboard(); closeMobileMenu();" class="hidden w-full lg:w-auto text-left lg:text-center bg-white/5 hover:bg-white/20 lg:bg-white/20 lg:hover:bg-white/30 text-white text-sm font-semibold py-3 px-4 lg:py-1.5 lg:rounded-full transition-colors flex items-center gap-2 border-b border-white/10 lg:border-none">
                    <span>👥</span> HR Dashboard
                </button>
-               <button id="navAtAGlanceBtn" onclick="toggleAtAGlanceDashboard()" class="hidden ml-4 bg-white/20 hover:bg-white/30 text-white text-sm font-semibold py-1.5 px-4 rounded-full transition-colors flex items-center gap-2">
+               <button id="navAtAGlanceBtn" onclick="toggleAtAGlanceDashboard(); closeMobileMenu();" class="hidden w-full lg:w-auto text-left lg:text-center bg-white/5 hover:bg-white/20 lg:bg-white/20 lg:hover:bg-white/30 text-white text-sm font-semibold py-3 px-4 lg:py-1.5 lg:rounded-full transition-colors flex items-center gap-2 border-b border-white/10 lg:border-none">
                    <span>📅</span> Today at a Glance
                </button>
-               <button id="navSettingsBtn" onclick="toggleSettingsDashboard()" class="hidden ml-4 bg-white/20 hover:bg-white/30 text-white text-sm font-semibold py-1.5 px-4 rounded-full transition-colors flex items-center gap-2">
+               <button id="navSettingsBtn" onclick="toggleSettingsDashboard(); closeMobileMenu();" class="hidden w-full lg:w-auto text-left lg:text-center bg-white/5 hover:bg-white/20 lg:bg-white/20 lg:hover:bg-white/30 text-white text-sm font-semibold py-3 px-4 lg:py-1.5 lg:rounded-full transition-colors flex items-center gap-2 border-b border-white/10 lg:border-none">
                    <span>⚙️</span> Settings
                </button>
-           </div>
-           <div id="userInfo" class="text-sm opacity-90 text-right">
-               <div id="userName" class="font-bold">Loading...</div>
-               <div id="userEmail" class="text-xs italic"><?= userEmail ?></div>
+
+               <div id="userInfo" class="text-sm opacity-90 p-4 lg:p-0 lg:text-right bg-white/5 lg:bg-transparent text-left w-full lg:w-auto lg:ml-2">
+                   <div id="userName" class="font-bold">Loading...</div>
+                   <div id="userEmail" class="text-xs italic"><?= userEmail ?></div>
+               </div>
            </div>
        </div>
     </nav>
