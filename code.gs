@@ -92,6 +92,8 @@ function getSettings(ss) {
     "PS_CLIENT_ID": "",
     "PS_CLIENT_SECRET": "",
     "PS_URL": "",
+    "Green Day Pay Rate": "10",
+    "Blue/Gold Day Pay Rate": "20",
     "Absence Reasons": JSON.stringify([
       {reason: "Personal", hrRequired: false},
       {reason: "Professional Development", hrRequired: false},
