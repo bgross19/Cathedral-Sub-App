@@ -64,6 +64,7 @@
       }
 
       // === Staff Roster Logic ===
+      let currentAppVersion = "";
       let currentStaffRoster = [];
 
       function loadStaffRosterSettings() {
@@ -1952,8 +1953,44 @@
       let hrDashboardLoaded = false;
       let hrCurrentView = 'absences'; // 'absences' or 'subs'
 
+
+      function checkAppVersion() {
+          if (!currentAppVersion) return; // Don't check if we haven't loaded yet
+          google.script.run
+              .withSuccessHandler(serverVersion => {
+                  if (serverVersion && serverVersion !== currentAppVersion) {
+                      document.getElementById('versionUpdateModal').classList.remove('hidden');
+                  }
+              })
+              .withFailureHandler(err => {
+                  console.error("Failed to check app version", err);
+              })
+              .getAppVersion();
+      }
+
+      function scheduleVersionCheck() {
+          // Calculate ms until next 6:00 AM
+          const now = new Date();
+          let next6AM = new Date();
+          next6AM.setHours(6, 0, 0, 0);
+
+          if (now >= next6AM) {
+              // If it's already past 6 AM today, schedule for 6 AM tomorrow
+              next6AM.setDate(next6AM.getDate() + 1);
+          }
+
+          const msUntilNext6AM = next6AM.getTime() - now.getTime();
+
+          setTimeout(() => {
+              checkAppVersion();
+              // After the first check, check every 24 hours
+              setInterval(checkAppVersion, 24 * 60 * 60 * 1000);
+          }, msUntilNext6AM);
+      }
+
       function initApp() {
         initToggles();
+        scheduleVersionCheck();
 
         // Parse URL parameters for "Sign Me Up" links
         google.script.url.getLocation(function(location) {
@@ -1998,6 +2035,7 @@
         google.script.run
           .withSuccessHandler(payload => {
             const data = payload.userData;
+            currentAppVersion = data.appVersion;
             document.getElementById('userName').innerText = data.name;
             document.getElementById('userName').dataset.role = data.role;
             document.getElementById('welcomeName').innerText = (data.name.split(',')[1] || data.name).trim();
@@ -4647,5 +4685,17 @@
       const oldAttemptCloseAllModals = attemptCloseAllModals.toString();
       // Wait, we need to inject this properly. Let's do it via regex on the actual function body later.
     </script>
-</body>
+
+    <!-- Version Update Modal -->
+    <div id="versionUpdateModal" class="fixed inset-0 bg-gray-900 bg-opacity-75 hidden flex items-center justify-center z-[500] backdrop-blur-sm">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 transform transition-all p-6 text-center">
+            <h2 class="text-2xl font-bold text-[#002147] mb-4">App Update Available</h2>
+            <p class="text-gray-700 mb-6">A new version of this application has been released. Please refresh your browser to apply the update and continue working.</p>
+            <button onclick="window.location.reload(true)" class="w-full bg-[#002147] hover:bg-blue-800 text-white font-bold py-3 px-4 rounded-lg transition-colors">
+                Refresh Now
+            </button>
+        </div>
+    </div>
+
+  </body>
 </html>
