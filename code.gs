@@ -1146,7 +1146,7 @@ function cancelMySubDuty(absenceId, period) {
 
         if (assignedSub.toLowerCase() === targetUserName) {
           var coordinatorEmail = getCoordinatorEmail(ss);
-          var details = getAbsenceDetails(absenceId, period);
+          var details = getAbsenceDetails(absenceId, period, data);
 
           sheet.getRange(i + 1, subColumnIndex).setValue("");
           logAuditAction("SUB_DUTY_CANCELLED", absenceId, "Cancelled coverage for period " + period);
@@ -1479,29 +1479,44 @@ function updateAbsence(absenceId, formData) {
 /**
  * Helper to get full absence details.
  */
-function getAbsenceDetails(absenceId, period) {
+// Global cache for getAbsenceDetails to improve performance
+var _cachedNameLookup = null;
+var _cachedScheduleLookup = null;
+
+function getAbsenceDetails(absenceId, period, optionalData) {
   var ss = getSS();
-  var sheet = getSheetOrThrow(ss, "Absence Requests");
-  var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
+  var data;
 
-  if (!sheet) return null;
-  var data = sheet.getDataRange().getValues();
-
-  var nameLookup = {};
-  if (rosterSheet) {
-    var rosterData = rosterSheet.getDataRange().getValues();
-    nameLookup = buildNameLookup(rosterData);
+  if (optionalData && Array.isArray(optionalData) && optionalData.length > 0) {
+    data = optionalData;
+  } else {
+    var sheet = getSheetOrThrow(ss, "Absence Requests");
+    if (!sheet) return null;
+    data = sheet.getDataRange().getValues();
   }
 
-  var scheduleLookup = {};
-  var scheduleData = getMasterScheduleData();
-  if (scheduleData.length > 0) {
-    scheduleLookup = buildScheduleLookup(scheduleData);
+  if (!_cachedNameLookup) {
+    var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
+    if (rosterSheet) {
+      var rosterData = rosterSheet.getDataRange().getValues();
+      _cachedNameLookup = buildNameLookup(rosterData);
+    } else {
+      _cachedNameLookup = {};
+    }
+  }
+
+  if (!_cachedScheduleLookup) {
+    var scheduleData = getMasterScheduleData();
+    if (scheduleData.length > 0) {
+      _cachedScheduleLookup = buildScheduleLookup(scheduleData);
+    } else {
+      _cachedScheduleLookup = {};
+    }
   }
 
   for (var i = 1; i < data.length; i++) {
     if (String(data[i][0]) === String(absenceId)) {
-      var details = getAbsenceDetailsLocal(data[i], period, scheduleLookup, nameLookup);
+      var details = getAbsenceDetailsLocal(data[i], period, _cachedScheduleLookup, _cachedNameLookup);
       details.rowIndex = i + 1;
       return details;
     }
