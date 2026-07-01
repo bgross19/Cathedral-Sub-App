@@ -388,6 +388,11 @@ function processEmailQueue() {
     var data = sheet.getDataRange().getValues();
     if (data.length <= 1) return; // Only headers
 
+    var statuses = [];
+    for (var i = 0; i < data.length; i++) {
+        statuses.push([data[i][5]]);
+    }
+
     for (var i = 1; i < data.length; i++) {
       if (data[i][5] === "Pending") {
         var to = data[i][1];
@@ -405,22 +410,25 @@ function processEmailQueue() {
         try {
           var result = sendEmailHelper(to, subject, body, options);
           if (result === "SUPPRESSED") {
-            sheet.getRange(i + 1, 6).setValue("Suppressed (Off)");
+            statuses[i][0] = "Suppressed (Off)";
           } else {
-            sheet.getRange(i + 1, 6).setValue("Sent");
+            statuses[i][0] = "Sent";
           }
         } catch (e) {
           console.error("Failed to send queued email to " + to + ": " + e.message);
-          sheet.getRange(i + 1, 6).setValue("Failed: " + e.message);
+          statuses[i][0] = "Failed: " + e.message;
         }
       }
     }
 
+    // Batch update statuses
+    sheet.getRange(1, 6, statuses.length, 1).setValues(statuses);
+
     // Optional: Cleanup old sent/failed emails
     // We could delete rows that are marked "Sent" to keep the sheet small
     var rowsToDelete = [];
-    for (var i = data.length - 1; i >= 1; i--) {
-      var status = String(sheet.getRange(i + 1, 6).getValue() || "");
+    for (var i = statuses.length - 1; i >= 1; i--) {
+      var status = String(statuses[i][0] || "");
       if (status === "Sent" || status.indexOf("Failed") > -1) {
          rowsToDelete.push(i + 1);
       }
@@ -697,14 +705,20 @@ function deleteStaffMemberAdmin(email) {
     var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
     var data = rosterSheet.getDataRange().getValues();
     var targetEmail = String(email).trim().toLowerCase();
+    var targetIndex = -1;
 
     for (var i = 1; i < data.length; i++) {
       if (String(data[i][1]).trim().toLowerCase() === targetEmail) {
-        logAuditAction("STAFF_DELETED", targetEmail, "Deleted staff member");
-        rosterSheet.deleteRow(i + 1);
-        clearRosterCache();
-            return { success: true };
+        targetIndex = i;
+        break;
       }
+    }
+
+    if (targetIndex !== -1) {
+      logAuditAction("STAFF_DELETED", targetEmail, "Deleted staff member");
+      rosterSheet.deleteRow(targetIndex + 1);
+      clearRosterCache();
+      return { success: true };
     }
 
     return { success: false, error: "Staff member not found." };
@@ -833,14 +847,21 @@ function editUserRole(oldEmail, newEmail, role) {
 
     var data = roleSheet.getDataRange().getValues();
     var targetEmail = oldEmail.toLowerCase().trim();
+    var targetIndex = -1;
 
     for (var i = 1; i < data.length; i++) {
       if (String(data[i][0]).toLowerCase().trim() === targetEmail) {
-        logAuditAction("ROLE_UPDATED", oldEmail, "Changed role to: " + role + " (Email: " + newEmail + ")");
-        roleSheet.getRange(i + 1, 1, 1, 2).setValues([[newEmail.toLowerCase().trim(), role.trim()]]);
-            return { success: true };
+        targetIndex = i;
+        break;
       }
     }
+
+    if (targetIndex !== -1) {
+      logAuditAction("ROLE_UPDATED", oldEmail, "Changed role to: " + role + " (Email: " + newEmail + ")");
+      roleSheet.getRange(targetIndex + 1, 1, 1, 2).setValues([[newEmail.toLowerCase().trim(), role.trim()]]);
+      return { success: true };
+    }
+
     throw new Error("User not found.");
   } catch (err) {
     notifyAdminOfError("editUserRole", err);
@@ -861,14 +882,21 @@ function deleteUserRole(email) {
 
     var data = roleSheet.getDataRange().getValues();
     var targetEmail = email.toLowerCase().trim();
+    var targetIndex = -1;
 
     for (var i = 1; i < data.length; i++) {
       if (String(data[i][0]).toLowerCase().trim() === targetEmail) {
-        logAuditAction("ROLE_DELETED", targetEmail, "Removed role");
-        roleSheet.deleteRow(i + 1);
-            return { success: true };
+        targetIndex = i;
+        break;
       }
     }
+
+    if (targetIndex !== -1) {
+      logAuditAction("ROLE_DELETED", targetEmail, "Removed role");
+      roleSheet.deleteRow(targetIndex + 1);
+      return { success: true };
+    }
+
     throw new Error("User not found.");
   } catch (err) {
     notifyAdminOfError("deleteUserRole", err);
@@ -909,13 +937,25 @@ function updateSettings(newSettings) {
       settingsMap[String(data[i][0]).trim()] = i + 1;
     }
 
+    var rowsToAppend = [];
+    var updates = []; // Array of {row, val}
+
     for (var key in newSettings) {
       if (settingsMap[key]) {
-        settingsSheet.getRange(settingsMap[key], 2).setValue(newSettings[key]);
+        updates.push({ row: settingsMap[key], val: newSettings[key] });
       } else {
-        settingsSheet.appendRow([key, newSettings[key]]);
+        rowsToAppend.push([key, newSettings[key]]);
       }
     }
+
+    for (var u = 0; u < updates.length; u++) {
+      settingsSheet.getRange(updates[u].row, 2).setValue(updates[u].val);
+    }
+
+    if (rowsToAppend.length > 0) {
+      settingsSheet.getRange(settingsSheet.getLastRow() + 1, 1, rowsToAppend.length, 2).setValues(rowsToAppend);
+    }
+
     logAuditAction("SETTINGS_UPDATED", "Global", "Updated application settings");
 
     // Clear the cache
@@ -1261,59 +1301,67 @@ function cancelAbsence(absenceId) {
     var nameLookup = buildNameLookup(rosterData);
 
     var data = sheet.getDataRange().getValues();
+    var targetIndex = -1;
     for (var i = 1; i < data.length; i++) {
       if (String(data[i][0]) === String(absenceId)) {
-        var currentUserEmail = Session.getActiveUser().getEmail().toLowerCase();
-        var teacherEmail = String(data[i][2]).toLowerCase();
-
-        if (currentUserEmail !== teacherEmail) {
-          var user = getUserData(ss);
-          assertPermission(user, "Admin Dashboard", "Unauthorized to cancel this absence.");
-        }
-
-        sheet.getRange(i + 1, 18).setValue("Canceled");
-        logAuditAction("ABSENCE_CANCELLED", absenceId, "Cancelled entire absence request");
-
-        for (var p = 1; p <= 8; p++) {
-          var subIndex = 8 + p;
-          var subName = String(data[i][subIndex] || "").trim();
-          if (subName) {
-            var email = subEmailLookup[subName];
-            if (email) {
-              var details = getAbsenceDetailsLocal(data[i], p, scheduleLookup, nameLookup);
-              if (details) sendSubNotification(email, "Canceled", details);
-            }
-          }
-        }
-
-        if (currentUserEmail !== teacherEmail) {
-           var rawDate = data[i][3];
-           var formattedDateForEmail = rawDate;
-           if (rawDate instanceof Date) {
-               formattedDateForEmail = Utilities.formatDate(rawDate, Session.getScriptTimeZone(), "MMM d, yyyy");
-           } else {
-               try {
-                   formattedDateForEmail = Utilities.formatDate(new Date(rawDate), Session.getScriptTimeZone(), "MMM d, yyyy");
-               } catch(e) { console.error("Error formatting date: " + e.message); }
-           }
-
-           var teacherSubject = "Absence Request Canceled by Administrator";
-           var teacherBody = "Your absence request for " + formattedDateForEmail + " has been canceled by an administrator.\n\n" +
-                             "Reason: " + data[i][5] + "\n" +
-                             "Periods: " + data[i][4] + "\n\n" +
-                             "If you have questions, please contact the sub coordinator.";
-
-           var teacherHtml = "<p>Your absence request for <strong>" + formattedDateForEmail + "</strong> has been canceled by an administrator.</p>" +
-                             "<ul><li><strong>Reason:</strong> " + data[i][5] + "</li>" +
-                             "<li><strong>Periods:</strong> " + data[i][4] + "</li></ul>" +
-                             "<p>If you have questions, please contact the sub coordinator.</p>";
-
-           enqueueEmail(teacherEmail, teacherSubject, teacherBody, {htmlBody: teacherHtml});
-        }
-
-            return { success: true };
+        targetIndex = i;
+        break;
       }
     }
+
+    if (targetIndex !== -1) {
+      var i = targetIndex;
+      var currentUserEmail = Session.getActiveUser().getEmail().toLowerCase();
+      var teacherEmail = String(data[i][2]).toLowerCase();
+
+      if (currentUserEmail !== teacherEmail) {
+        var user = getUserData(ss);
+        assertPermission(user, "Admin Dashboard", "Unauthorized to cancel this absence.");
+      }
+
+      sheet.getRange(i + 1, 18).setValue("Canceled");
+      logAuditAction("ABSENCE_CANCELLED", absenceId, "Cancelled entire absence request");
+
+      for (var p = 1; p <= 8; p++) {
+        var subIndex = 8 + p;
+        var subName = String(data[i][subIndex] || "").trim();
+        if (subName) {
+          var email = subEmailLookup[subName];
+          if (email) {
+            var details = getAbsenceDetailsLocal(data[i], p, scheduleLookup, nameLookup);
+            if (details) sendSubNotification(email, "Canceled", details);
+          }
+        }
+      }
+
+      if (currentUserEmail !== teacherEmail) {
+         var rawDate = data[i][3];
+         var formattedDateForEmail = rawDate;
+         if (rawDate instanceof Date) {
+             formattedDateForEmail = Utilities.formatDate(rawDate, Session.getScriptTimeZone(), "MMM d, yyyy");
+         } else {
+             try {
+                 formattedDateForEmail = Utilities.formatDate(new Date(rawDate), Session.getScriptTimeZone(), "MMM d, yyyy");
+             } catch(e) { console.error("Error formatting date: " + e.message); }
+         }
+
+         var teacherSubject = "Absence Request Canceled by Administrator";
+         var teacherBody = "Your absence request for " + formattedDateForEmail + " has been canceled by an administrator.\n\n" +
+                           "Reason: " + data[i][5] + "\n" +
+                           "Periods: " + data[i][4] + "\n\n" +
+                           "If you have questions, please contact the sub coordinator.";
+
+         var teacherHtml = "<p>Your absence request for <strong>" + formattedDateForEmail + "</strong> has been canceled by an administrator.</p>" +
+                           "<ul><li><strong>Reason:</strong> " + data[i][5] + "</li>" +
+                           "<li><strong>Periods:</strong> " + data[i][4] + "</li></ul>" +
+                           "<p>If you have questions, please contact the sub coordinator.</p>";
+
+         enqueueEmail(teacherEmail, teacherSubject, teacherBody, {htmlBody: teacherHtml});
+      }
+
+          return { success: true };
+    }
+
     throw new Error("Absence ID not found.");
   } catch (err) {
     return { success: false, error: err.message };
@@ -1350,120 +1398,134 @@ function updateAbsence(absenceId, formData) {
     var nameLookup = buildNameLookup(rosterData);
 
     var data = sheet.getDataRange().getValues();
+    var targetIndex = -1;
     for (var i = 1; i < data.length; i++) {
       if (String(data[i][0]) === String(absenceId)) {
-        var currentUserEmail = Session.getActiveUser().getEmail().toLowerCase();
-        var teacherEmail = String(data[i][2]).toLowerCase();
-
-        if (currentUserEmail !== teacherEmail) {
-          var user = getUserData(ss);
-          assertPermission(user, "Admin Dashboard", "Unauthorized to modify this absence.");
-        }
-
-        var oldPeriods = String(data[i][4]).split(",").map(function(p){return p.trim()});
-        var newPeriods = String(formData.periods).split(",").map(function(p){return p.trim()});
-        var oldDateRaw = data[i][3];
-        var oldDateFormatted = "";
-        if (oldDateRaw instanceof Date) {
-          oldDateFormatted = Utilities.formatDate(oldDateRaw, Session.getScriptTimeZone(), "yyyy-MM-dd");
-        } else {
-          try {
-             oldDateFormatted = Utilities.formatDate(new Date(oldDateRaw), Session.getScriptTimeZone(), "yyyy-MM-dd");
-          } catch(e) {
-             console.error("Error formatting date: " + e.message);
-             oldDateFormatted = String(oldDateRaw);
-          }
-        }
-        var newDate = String(formData.date);
-
-        var dateChanged = oldDateFormatted !== newDate;
-
-        var urgencyFormatted = formData.urgency === 'Urgent' ? 'Urgent (Less than 24 hr notice)' : 'Standard (Advanced Notice)';
-        var instructions = formData.specialInstructions;
-        if (formData.hrConfirmed) instructions = "[HR Docs Provided] " + instructions;
-
-        // Update basic info
-        sheet.getRange(i + 1, 4, 1, 6).setValues([[
-          formData.date, "'" + formData.periods, formData.reason,
-          formData.duration, urgencyFormatted, instructions
-        ]]);
-        logAuditAction("ABSENCE_UPDATED", absenceId, "Updated absence details (Date: " + formData.date + ", Periods: " + formData.periods + ")");
-
-        // Notify subs
-        for (var p = 1; p <= 8; p++) {
-          var subIndex = 8 + p;
-          var subName = String(data[i][subIndex] || "").trim();
-
-          if (subName) {
-            var email = subEmailLookup[subName];
-            var isPeriodStillNeeded = newPeriods.indexOf(String(p)) !== -1;
-
-            if (email) {
-               if (dateChanged || !isPeriodStillNeeded) {
-                 var cancelDetails = getAbsenceDetailsLocal(data[i], p, scheduleLookup, nameLookup);
-                 if (cancelDetails) {
-                    cancelDetails.date = Utilities.formatDate(new Date(oldDateRaw), Session.getScriptTimeZone(), "MMM d, yyyy");
-                    sendSubNotification(email, "Canceled", cancelDetails);
-                 }
-                 sheet.getRange(i + 1, subIndex + 1).setValue("");
-               } else {
-                 var oldReason = String(data[i][5]);
-                 var oldDuration = String(data[i][6]);
-                 var oldUrgency = String(data[i][7]);
-                 var oldInstructions = String(data[i][8]);
-
-                 var detailsChanged = (oldReason !== formData.reason) ||
-                                      (oldDuration !== formData.duration) ||
-                                      (oldUrgency !== urgencyFormatted) ||
-                                      (oldInstructions !== instructions);
-
-                 if (detailsChanged) {
-                    var modDetails = getAbsenceDetailsLocal(data[i], p, scheduleLookup, nameLookup);
-                    if(modDetails) {
-                      modDetails.instructions = instructions;
-                      sendSubNotification(email, "Modified", modDetails);
-                    }
-                 }
-               }
-            } else if (dateChanged || !isPeriodStillNeeded) {
-               sheet.getRange(i + 1, subIndex + 1).setValue("");
-            }
-          }
-        }
-
-        if (currentUserEmail !== teacherEmail) {
-           var rawDate = data[i][3];
-           var formattedDateForEmail = rawDate;
-           if (rawDate instanceof Date) {
-               formattedDateForEmail = Utilities.formatDate(rawDate, Session.getScriptTimeZone(), "MMM d, yyyy");
-           } else {
-               try {
-                   formattedDateForEmail = Utilities.formatDate(new Date(rawDate), Session.getScriptTimeZone(), "MMM d, yyyy");
-               } catch(e) { console.error("Error formatting date: " + e.message); }
-           }
-
-           var teacherSubject = "Absence Request Updated by Administrator";
-           var teacherBody = "Your absence request for " + formattedDateForEmail + " has been updated by an administrator.\n\n" +
-                             "Updated Details:\n" +
-                             "Date: " + formData.date + "\n" +
-                             "Periods: " + formData.periods + "\n" +
-                             "Reason: " + formData.reason + "\n" +
-                             "Duration: " + formData.duration + "\n\n" +
-                             "If you have questions, please contact the sub coordinator.";
-
-           var teacherHtml = "<p>Your absence request for <strong>" + formattedDateForEmail + "</strong> has been updated by an administrator.</p>" +
-                             "<ul><li><strong>Date:</strong> " + formData.date + "</li>" +
-                             "<li><strong>Periods:</strong> " + formData.periods + "</li>" +
-                             "<li><strong>Reason:</strong> " + formData.reason + "</li>" +
-                             "<li><strong>Duration:</strong> " + formData.duration + "</li></ul>" +
-                             "<p>If you have questions, please contact the sub coordinator.</p>";
-
-           enqueueEmail(teacherEmail, teacherSubject, teacherBody, {htmlBody: teacherHtml});
-        }
-
-            return { success: true };
+        targetIndex = i;
+        break;
       }
     }
+
+    if (targetIndex !== -1) {
+      var i = targetIndex;
+      var currentUserEmail = Session.getActiveUser().getEmail().toLowerCase();
+      var teacherEmail = String(data[i][2]).toLowerCase();
+
+      if (currentUserEmail !== teacherEmail) {
+        var user = getUserData(ss);
+        assertPermission(user, "Admin Dashboard", "Unauthorized to modify this absence.");
+      }
+
+      var oldPeriods = String(data[i][4]).split(",").map(function(p){return p.trim()});
+      var newPeriods = String(formData.periods).split(",").map(function(p){return p.trim()});
+      var oldDateRaw = data[i][3];
+      var oldDateFormatted = "";
+      if (oldDateRaw instanceof Date) {
+        oldDateFormatted = Utilities.formatDate(oldDateRaw, Session.getScriptTimeZone(), "yyyy-MM-dd");
+      } else {
+        try {
+           oldDateFormatted = Utilities.formatDate(new Date(oldDateRaw), Session.getScriptTimeZone(), "yyyy-MM-dd");
+        } catch(e) {
+           console.error("Error formatting date: " + e.message);
+           oldDateFormatted = String(oldDateRaw);
+        }
+      }
+      var newDate = String(formData.date);
+
+      var dateChanged = oldDateFormatted !== newDate;
+
+      var urgencyFormatted = formData.urgency === 'Urgent' ? 'Urgent (Less than 24 hr notice)' : 'Standard (Advanced Notice)';
+      var instructions = formData.specialInstructions;
+      if (formData.hrConfirmed) instructions = "[HR Docs Provided] " + instructions;
+
+      // Update basic info
+      sheet.getRange(i + 1, 4, 1, 6).setValues([[
+        formData.date, "'" + formData.periods, formData.reason,
+        formData.duration, urgencyFormatted, instructions
+      ]]);
+      logAuditAction("ABSENCE_UPDATED", absenceId, "Updated absence details (Date: " + formData.date + ", Periods: " + formData.periods + ")");
+
+      // Notify subs
+      var subClearUpdates = [];
+      for (var p = 1; p <= 8; p++) {
+        var subIndex = 8 + p;
+        var subName = String(data[i][subIndex] || "").trim();
+
+        if (subName) {
+          var email = subEmailLookup[subName];
+          var isPeriodStillNeeded = newPeriods.indexOf(String(p)) !== -1;
+
+          if (email) {
+             if (dateChanged || !isPeriodStillNeeded) {
+               var cancelDetails = getAbsenceDetailsLocal(data[i], p, scheduleLookup, nameLookup);
+               if (cancelDetails) {
+                  cancelDetails.date = Utilities.formatDate(new Date(oldDateRaw), Session.getScriptTimeZone(), "MMM d, yyyy");
+                  sendSubNotification(email, "Canceled", cancelDetails);
+               }
+               subClearUpdates.push({row: i + 1, col: subIndex + 1});
+             } else {
+               var oldReason = String(data[i][5]);
+               var oldDuration = String(data[i][6]);
+               var oldUrgency = String(data[i][7]);
+               var oldInstructions = String(data[i][8]);
+
+               var detailsChanged = (oldReason !== formData.reason) ||
+                                    (oldDuration !== formData.duration) ||
+                                    (oldUrgency !== urgencyFormatted) ||
+                                    (oldInstructions !== instructions);
+
+               if (detailsChanged) {
+                  var modDetails = getAbsenceDetailsLocal(data[i], p, scheduleLookup, nameLookup);
+                  if(modDetails) {
+                    modDetails.instructions = instructions;
+                    sendSubNotification(email, "Modified", modDetails);
+                  }
+               }
+             }
+          } else if (dateChanged || !isPeriodStillNeeded) {
+             subClearUpdates.push({row: i + 1, col: subIndex + 1});
+          }
+        }
+      }
+
+      // Perform batch clears if needed
+      for (var s = 0; s < subClearUpdates.length; s++) {
+        sheet.getRange(subClearUpdates[s].row, subClearUpdates[s].col).setValue("");
+      }
+
+      if (currentUserEmail !== teacherEmail) {
+         var rawDate = data[i][3];
+         var formattedDateForEmail = rawDate;
+         if (rawDate instanceof Date) {
+             formattedDateForEmail = Utilities.formatDate(rawDate, Session.getScriptTimeZone(), "MMM d, yyyy");
+         } else {
+             try {
+                 formattedDateForEmail = Utilities.formatDate(new Date(rawDate), Session.getScriptTimeZone(), "MMM d, yyyy");
+             } catch(e) { console.error("Error formatting date: " + e.message); }
+         }
+
+         var teacherSubject = "Absence Request Updated by Administrator";
+         var teacherBody = "Your absence request for " + formattedDateForEmail + " has been updated by an administrator.\n\n" +
+                           "Updated Details:\n" +
+                           "Date: " + formData.date + "\n" +
+                           "Periods: " + formData.periods + "\n" +
+                           "Reason: " + formData.reason + "\n" +
+                           "Duration: " + formData.duration + "\n\n" +
+                           "If you have questions, please contact the sub coordinator.";
+
+         var teacherHtml = "<p>Your absence request for <strong>" + formattedDateForEmail + "</strong> has been updated by an administrator.</p>" +
+                           "<ul><li><strong>Date:</strong> " + formData.date + "</li>" +
+                           "<li><strong>Periods:</strong> " + formData.periods + "</li>" +
+                           "<li><strong>Reason:</strong> " + formData.reason + "</li>" +
+                           "<li><strong>Duration:</strong> " + formData.duration + "</li></ul>" +
+                           "<p>If you have questions, please contact the sub coordinator.</p>";
+
+         enqueueEmail(teacherEmail, teacherSubject, teacherBody, {htmlBody: teacherHtml});
+      }
+
+          return { success: true };
+    }
+
     throw new Error("Absence ID not found.");
   } catch (err) {
     return { success: false, error: err.message };
@@ -1605,87 +1667,94 @@ function assignSubToPeriod(absenceId, period, subName) {
     // Re-read data under lock
     var data = sheet.getDataRange().getValues();
 
+    var targetIndex = -1;
     for (var i = 1; i < data.length; i++) {
       if (String(data[i][0]) === String(absenceId)) {
-        var periodsRequested = String(data[i][4]).split(",").map(function(p) { return p.trim(); });
+        targetIndex = i;
+        break;
+      }
+    }
 
-        if (periodsRequested.indexOf(String(period)) === -1) {
-            throw new Error("Period " + period + " was not requested for this absence.");
-        }
+    if (targetIndex !== -1) {
+      var i = targetIndex;
+      var periodsRequested = String(data[i][4]).split(",").map(function(p) { return p.trim(); });
 
-        var subColumnIndex = 10 + parseInt(period) - 1; // 1-based index for Apps Script Ranges: Col J is 10 (Period 1 Sub)
+      if (periodsRequested.indexOf(String(period)) === -1) {
+          throw new Error("Period " + period + " was not requested for this absence.");
+      }
 
-        var existingSub = String(data[i][subColumnIndex - 1] || "").trim(); // array is 0-indexed, so subColumnIndex - 1
-        var newSub = String(subName || "").trim();
+      var subColumnIndex = 10 + parseInt(period) - 1; // 1-based index for Apps Script Ranges: Col J is 10 (Period 1 Sub)
 
-        if (existingSub === newSub) {
-               return { success: true }; // No change
-        }
+      var existingSub = String(data[i][subColumnIndex - 1] || "").trim(); // array is 0-indexed, so subColumnIndex - 1
+      var newSub = String(subName || "").trim();
 
-        // Double check for race condition
-        if (existingSub !== "" && newSub !== "") {
-          throw new Error("Sorry, this job was just filled by someone else!");
-        }
+      if (existingSub === newSub) {
+             return { success: true }; // No change
+      }
 
-        // Check if the new sub is absent for a full day on the same date
-        if (newSub !== "") {
-          var targetDateRaw = data[i][3]; // Date object or string
-          var targetDateStr = (targetDateRaw instanceof Date) ? Utilities.formatDate(targetDateRaw, Session.getScriptTimeZone(), "yyyy-MM-dd") : String(targetDateRaw).trim();
-          var newSubEmail = (subEmailLookup[newSub] || "").toLowerCase();
+      // Double check for race condition
+      if (existingSub !== "" && newSub !== "") {
+        throw new Error("Sorry, this job was just filled by someone else!");
+      }
 
-          if (newSubEmail !== "") {
-            for (var j = 1; j < data.length; j++) {
-              var rowEmail = String(data[j][2] || "").toLowerCase();
-              if (rowEmail === "") continue;
+      // Check if the new sub is absent for a full day on the same date
+      if (newSub !== "") {
+        var targetDateRaw = data[i][3]; // Date object or string
+        var targetDateStr = (targetDateRaw instanceof Date) ? Utilities.formatDate(targetDateRaw, Session.getScriptTimeZone(), "yyyy-MM-dd") : String(targetDateRaw).trim();
+        var newSubEmail = (subEmailLookup[newSub] || "").toLowerCase();
 
-              var rowStatus = String(data[j][17] || "Active");
-              var rowDuration = String(data[j][6] || "").trim();
+        if (newSubEmail !== "") {
+          for (var j = 1; j < data.length; j++) {
+            var rowEmail = String(data[j][2] || "").toLowerCase();
+            if (rowEmail === "") continue;
 
-              if (rowEmail === newSubEmail && rowStatus !== "Canceled" && rowDuration === "Full Day") {
-                var rowDateRaw = data[j][3];
-                var rowDateStr = (rowDateRaw instanceof Date) ? Utilities.formatDate(rowDateRaw, Session.getScriptTimeZone(), "yyyy-MM-dd") : String(rowDateRaw).trim();
+            var rowStatus = String(data[j][17] || "Active");
+            var rowDuration = String(data[j][6] || "").trim();
 
-                if (rowDateStr === targetDateStr) {
-                  var currentUserEmail = (Session.getActiveUser().getEmail() || "").toLowerCase();
-                  if (currentUserEmail === newSubEmail) {
-                    throw new Error("Cannot sign up due to your own absence.");
-                  } else {
-                    throw new Error("Cannot assign " + newSub + " as a substitute because they have an absence request on this date.");
-                  }
+            if (rowEmail === newSubEmail && rowStatus !== "Canceled" && rowDuration === "Full Day") {
+              var rowDateRaw = data[j][3];
+              var rowDateStr = (rowDateRaw instanceof Date) ? Utilities.formatDate(rowDateRaw, Session.getScriptTimeZone(), "yyyy-MM-dd") : String(rowDateRaw).trim();
+
+              if (rowDateStr === targetDateStr) {
+                var currentUserEmail = (Session.getActiveUser().getEmail() || "").toLowerCase();
+                if (currentUserEmail === newSubEmail) {
+                  throw new Error("Cannot sign up due to your own absence.");
+                } else {
+                  throw new Error("Cannot assign " + newSub + " as a substitute because they have an absence request on this date.");
                 }
               }
             }
           }
         }
-
-        // Cancel existing sub if there is one (and we are clearing it)
-        if (existingSub) {
-           var existingEmail = subEmailLookup[existingSub];
-           if (existingEmail) {
-              var scheduleData = getMasterScheduleData();
-              var scheduleLookup = buildScheduleLookup(scheduleData);
-              var details = getAbsenceDetailsLocal(data[i], period, scheduleLookup, nameLookup);
-              sendSubNotification(existingEmail, 'Canceled', details);
-           }
-        }
-
-        // Write the subname
-        sheet.getRange(i + 1, subColumnIndex).setValue(newSub);
-        logAuditAction("SUB_ASSIGNED", absenceId, "Assigned " + (newSub || "NO ONE") + " to period " + period);
-
-        // Notify new sub if there is one
-        if (newSub) {
-           var newEmail = subEmailLookup[newSub];
-           if (newEmail) {
-              var scheduleData = getMasterScheduleData();
-              var scheduleLookup = buildScheduleLookup(scheduleData);
-              var details = getAbsenceDetailsLocal(data[i], period, scheduleLookup, nameLookup);
-              sendSubNotification(newEmail, 'Assigned', details);
-           }
-        }
-
-            return { success: true };
       }
+
+      // Cancel existing sub if there is one (and we are clearing it)
+      if (existingSub) {
+         var existingEmail = subEmailLookup[existingSub];
+         if (existingEmail) {
+            var scheduleData = getMasterScheduleData();
+            var scheduleLookup = buildScheduleLookup(scheduleData);
+            var details = getAbsenceDetailsLocal(data[i], period, scheduleLookup, nameLookup);
+            sendSubNotification(existingEmail, 'Canceled', details);
+         }
+      }
+
+      // Write the subname
+      sheet.getRange(i + 1, subColumnIndex).setValue(newSub);
+      logAuditAction("SUB_ASSIGNED", absenceId, "Assigned " + (newSub || "NO ONE") + " to period " + period);
+
+      // Notify new sub if there is one
+      if (newSub) {
+         var newEmail = subEmailLookup[newSub];
+         if (newEmail) {
+            var scheduleData = getMasterScheduleData();
+            var scheduleLookup = buildScheduleLookup(scheduleData);
+            var details = getAbsenceDetailsLocal(data[i], period, scheduleLookup, nameLookup);
+            sendSubNotification(newEmail, 'Assigned', details);
+         }
+      }
+
+          return { success: true };
     }
 
     throw new Error("Absence Request ID not found.");
