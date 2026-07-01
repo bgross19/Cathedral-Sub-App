@@ -556,7 +556,7 @@
 
     <nav class="bg-[#002147] text-white p-4 shadow-lg sticky top-0 z-50">
        <div class="w-full flex justify-between items-center relative">
-           <div class="flex items-center gap-4 cursor-pointer hover:opacity-80 transition-opacity" onclick="location.reload()">
+           <div class="flex items-center gap-4 cursor-pointer hover:opacity-80 transition-opacity" onclick="if(window.globalAppUrl){ window.top.location.href = window.globalAppUrl; } else { window.top.location.href = '<?= ScriptApp.getService().getUrl() ?>'; }">
                <h1 class="text-xl font-bold flex items-center gap-2">
                   <span class="bg-white rounded-full h-10 w-10 flex items-center justify-center overflow-hidden">
                      <img src="https://resources.finalsite.net/images/f_auto,q_auto/v1553625096/cathedralirish/xl1l6hclrbcymjwwyuqi/CHS_CelticCross-large.jpg" alt="Cathedral Logo" class="h-full w-full object-cover">
