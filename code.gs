@@ -1,3 +1,5 @@
+const APP_VERSION = "1.0.0";
+
 
 function notifyAdminOfError(funcName, e) {
   console.error("Global Error in " + funcName + ": " + e.message + "\nStack: " + e.stack);
@@ -263,6 +265,7 @@ function getUserData(ss) {
   var absenceReasons = settings["Absence Reasons"] || defaultAbsenceReasons;
 
   return {
+
     name: String(name),
     role: String(role),
     email: String(email),
@@ -671,7 +674,8 @@ function saveStaffMemberAdmin(staffData) {
     lock.waitLock(10000);
   } catch (e) {
     notifyAdminOfError("saveStaffMemberAdmin_lock", e);
-    return { success: false, error: "The server is currently busy. Please try again." };
+    return {
+      success: false, error: "The server is currently busy. Please try again." };
   }
 
   try {
@@ -688,7 +692,8 @@ function saveStaffMemberAdmin(staffData) {
     var newDuty = String(staffData.duty || "").trim();
 
     if (!newEmail || !newName) {
-       return { success: false, error: "Name and Email are required." };
+       return {
+      success: false, error: "Name and Email are required." };
     }
 
     var rowIndexToUpdate = -1;
@@ -710,7 +715,8 @@ function saveStaffMemberAdmin(staffData) {
        // Check if new email already exists to prevent duplicates
        for (var i = 1; i < data.length; i++) {
          if (String(data[i][1]).trim().toLowerCase() === newEmail.toLowerCase()) {
-            return { success: false, error: "A staff member with this email already exists." };
+            return {
+      success: false, error: "A staff member with this email already exists." };
          }
        }
        // Append new
@@ -720,10 +726,12 @@ function saveStaffMemberAdmin(staffData) {
 
     clearRosterCache();
 
-        return { success: true };
+        return {
+      success: true };
   } catch (err) {
     notifyAdminOfError("saveStaffMemberAdmin", err);
-    return { success: false, error: err.message };
+    return {
+      success: false, error: err.message };
   } finally {
     lock.releaseLock();
   }
@@ -738,7 +746,8 @@ function deleteStaffMemberAdmin(email) {
     lock.waitLock(10000);
   } catch (e) {
     notifyAdminOfError("deleteStaffMemberAdmin_lock", e);
-    return { success: false, error: "The server is currently busy. Please try again." };
+    return {
+      success: false, error: "The server is currently busy. Please try again." };
   }
 
   try {
@@ -762,13 +771,16 @@ function deleteStaffMemberAdmin(email) {
       logAuditAction("STAFF_DELETED", targetEmail, "Deleted staff member");
       rosterSheet.deleteRow(targetIndex + 1);
       clearRosterCache();
-      return { success: true };
+      return {
+      success: true };
     }
 
-    return { success: false, error: "Staff member not found." };
+    return {
+      success: false, error: "Staff member not found." };
   } catch (err) {
     notifyAdminOfError("deleteStaffMemberAdmin", err);
-    return { success: false, error: err.message };
+    return {
+      success: false, error: err.message };
   } finally {
     lock.releaseLock();
   }
@@ -783,7 +795,8 @@ function bulkUpsertStaffRoster(updates) {
     lock.waitLock(10000);
   } catch (e) {
     notifyAdminOfError("bulkUpsertStaffRoster_lock", e);
-    return { success: false, error: "The server is currently busy. Please try again." };
+    return {
+      success: false, error: "The server is currently busy. Please try again." };
   }
 
   try {
@@ -836,10 +849,12 @@ function bulkUpsertStaffRoster(updates) {
 
     logAuditAction("STAFF_BULK_UPLOAD", "Multiple", "Processed " + processedCount + " staff records");
     clearRosterCache();
-    return { success: true, updated: processedCount };
+    return {
+      success: true, updated: processedCount };
   } catch (err) {
     notifyAdminOfError("bulkUpsertStaffRoster", err);
-    return { success: false, error: err.message };
+    return {
+      success: false, error: err.message };
   } finally {
     lock.releaseLock();
   }
@@ -855,10 +870,12 @@ function addUserRole(email, role) {
 
     logAuditAction("ROLE_ADDED", email, "Assigned role: " + role);
     roleSheet.appendRow([email.toLowerCase().trim(), role.trim()]);
-        return { success: true };
+        return {
+      success: true };
   } catch (err) {
     notifyAdminOfError("addUserRole", err);
-    return { success: false, error: err.message };
+    return {
+      success: false, error: err.message };
   }
 }
 
@@ -871,10 +888,12 @@ function refreshMasterScheduleCache() {
     // Warm it immediately
     warmMasterScheduleCache();
 
-    return { success: true };
+    return {
+      success: true };
   } catch (err) {
     notifyAdminOfError("refreshMasterScheduleCache", err);
-    return { success: false, error: err.message };
+    return {
+      success: false, error: err.message };
   }
 }
 
@@ -903,13 +922,15 @@ function editUserRole(oldEmail, newEmail, role) {
     if (targetIndex !== -1) {
       logAuditAction("ROLE_UPDATED", oldEmail, "Changed role to: " + role + " (Email: " + newEmail + ")");
       roleSheet.getRange(targetIndex + 1, 1, 1, 2).setValues([[newEmail.toLowerCase().trim(), role.trim()]]);
-      return { success: true };
+      return {
+      success: true };
     }
 
     throw new Error("User not found.");
   } catch (err) {
     notifyAdminOfError("editUserRole", err);
-    return { success: false, error: err.message };
+    return {
+      success: false, error: err.message };
   }
 }
 
@@ -938,13 +959,15 @@ function deleteUserRole(email) {
     if (targetIndex !== -1) {
       logAuditAction("ROLE_DELETED", targetEmail, "Removed role");
       roleSheet.deleteRow(targetIndex + 1);
-      return { success: true };
+      return {
+      success: true };
     }
 
     throw new Error("User not found.");
   } catch (err) {
     notifyAdminOfError("deleteUserRole", err);
-    return { success: false, error: err.message };
+    return {
+      success: false, error: err.message };
   }
 }
 
@@ -1007,10 +1030,12 @@ function updateSettings(newSettings) {
     var cache = CacheService.getScriptCache();
     cache.remove("app_settings");
 
-        return { success: true };
+        return {
+      success: true };
   } catch (err) {
     notifyAdminOfError("updateSettings", err);
-    return { success: false, error: err.message };
+    return {
+      success: false, error: err.message };
   }
 }
 
@@ -1132,7 +1157,8 @@ function submitAbsence(formData) {
     lock.waitLock(10000);
   } catch (e) {
     notifyAdminOfError("submitAbsence", e);
-    return { success: false, error: "The server is currently busy. Please try again in a few moments." };
+    return {
+      success: false, error: "The server is currently busy. Please try again in a few moments." };
   }
 
   try {
@@ -1193,9 +1219,11 @@ function submitAbsence(formData) {
 
     enqueueEmail(email, confSubject, confBody, { htmlBody: confHtmlBody });
 
-        return { success: true };
+        return {
+      success: true };
   } catch (err) {
-    return { success: false, error: err.message };
+    return {
+      success: false, error: err.message };
   } finally {
     lock.releaseLock();
   }
@@ -1210,7 +1238,8 @@ function cancelMySubDuty(absenceId, period) {
     lock.waitLock(10000);
   } catch (e) {
     notifyAdminOfError("cancelMySubDuty", e);
-    return { success: false, error: "The server is currently busy. Please try again in a few moments." };
+    return {
+      success: false, error: "The server is currently busy. Please try again in a few moments." };
   }
 
   try {
@@ -1265,7 +1294,8 @@ function cancelMySubDuty(absenceId, period) {
             enqueueEmail(coordinatorEmail, subject, body, { cc: userEmail, htmlBody: htmlBody });
           }
 
-              return { success: true };
+              return {
+      success: true };
         } else {
           throw new Error("You are not currently assigned to this period.");
         }
@@ -1273,7 +1303,8 @@ function cancelMySubDuty(absenceId, period) {
     }
     throw new Error("Absence ID not found.");
   } catch (err) {
-    return { success: false, error: err.message };
+    return {
+      success: false, error: err.message };
   } finally {
     lock.releaseLock();
   }
@@ -1321,6 +1352,7 @@ function getAbsenceDetailsLocal(row, period, scheduleLookup, nameLookup) {
   }
 
   return {
+
     teacherName: teacherName,
     date: formattedDate,
     period: period,
@@ -1336,7 +1368,8 @@ function cancelAbsence(absenceId) {
     lock.waitLock(10000);
   } catch (e) {
     notifyAdminOfError("cancelAbsence", e);
-    return { success: false, error: "The server is currently busy. Please try again in a few moments." };
+    return {
+      success: false, error: "The server is currently busy. Please try again in a few moments." };
   }
 
   try {
@@ -1412,12 +1445,14 @@ function cancelAbsence(absenceId) {
          enqueueEmail(teacherEmail, teacherSubject, teacherBody, {htmlBody: teacherHtml});
       }
 
-          return { success: true };
+          return {
+      success: true };
     }
 
     throw new Error("Absence ID not found.");
   } catch (err) {
-    return { success: false, error: err.message };
+    return {
+      success: false, error: err.message };
   } finally {
     lock.releaseLock();
   }
@@ -1432,7 +1467,8 @@ function updateAbsence(absenceId, formData) {
     lock.waitLock(10000);
   } catch (e) {
     notifyAdminOfError("updateAbsence", e);
-    return { success: false, error: "The server is currently busy. Please try again in a few moments." };
+    return {
+      success: false, error: "The server is currently busy. Please try again in a few moments." };
   }
 
   try {
@@ -1575,12 +1611,14 @@ function updateAbsence(absenceId, formData) {
          enqueueEmail(teacherEmail, teacherSubject, teacherBody, {htmlBody: teacherHtml});
       }
 
-          return { success: true };
+          return {
+      success: true };
     }
 
     throw new Error("Absence ID not found.");
   } catch (err) {
-    return { success: false, error: err.message };
+    return {
+      success: false, error: err.message };
   } finally {
     lock.releaseLock();
   }
@@ -1700,7 +1738,8 @@ function assignSubToPeriod(absenceId, period, subName) {
     lock.waitLock(10000);
   } catch (e) {
     notifyAdminOfError("assignSubToPeriod", e);
-    return { success: false, error: "The server is currently busy. Please try again in a few moments." };
+    return {
+      success: false, error: "The server is currently busy. Please try again in a few moments." };
   }
 
   try {
@@ -1741,7 +1780,8 @@ function assignSubToPeriod(absenceId, period, subName) {
       var newSub = String(subName || "").trim();
 
       if (existingSub === newSub) {
-             return { success: true }; // No change
+             return {
+      success: true }; // No change
       }
 
       // Double check for race condition
@@ -1804,12 +1844,14 @@ function assignSubToPeriod(absenceId, period, subName) {
          }
       }
 
-          return { success: true };
+          return {
+      success: true };
     }
 
     throw new Error("Absence Request ID not found.");
   } catch (err) {
-    return { success: false, error: err.message };
+    return {
+      success: false, error: err.message };
   } finally {
     lock.releaseLock();
   }
@@ -1925,6 +1967,7 @@ function getInitialPayload() {
     };
 
     var userData = {
+      appVersion: APP_VERSION,
       name: String(name),
       role: String(role),
       email: String(email),
@@ -2364,10 +2407,12 @@ function clearMasterScheduleCache() {
     // Attempt to warm it immediately
     warmMasterScheduleCache();
 
-    return { success: true };
+    return {
+      success: true };
   } catch (err) {
     notifyAdminOfError("clearMasterScheduleCache", err);
-    return { success: false, error: err.message };
+    return {
+      success: false, error: err.message };
   }
 }
 
@@ -2453,7 +2498,8 @@ function archiveAbsenceRequests(cutoffDateStr) {
     lock.waitLock(10000);
   } catch (e) {
     notifyAdminOfError("archiveAbsenceRequests_lock", e);
-    return { success: false, error: "The server is currently busy. Please try again." };
+    return {
+      success: false, error: "The server is currently busy. Please try again." };
   }
 
   try {
@@ -2471,7 +2517,8 @@ function archiveAbsenceRequests(cutoffDateStr) {
 
     var data = mainSheet.getDataRange().getValues();
     if (data.length <= 1) {
-      return { success: true, count: 0 };
+      return {
+      success: true, count: 0 };
     }
 
     var headers = data[0];
@@ -2502,10 +2549,12 @@ function archiveAbsenceRequests(cutoffDateStr) {
       logAuditAction("ARCHIVE_DATA", "N/A", "Archived " + rowsToArchive.length + " absence requests older than " + cutoffDateStr);
     }
 
-    return { success: true, count: rowsToArchive.length };
+    return {
+      success: true, count: rowsToArchive.length };
   } catch (err) {
     notifyAdminOfError("archiveAbsenceRequests", err);
-    return { success: false, error: err.message };
+    return {
+      success: false, error: err.message };
   } finally {
     lock.releaseLock();
   }
@@ -2557,7 +2606,8 @@ function bulkUpsertPayPeriods(updates) {
     lock.waitLock(10000);
   } catch (e) {
     notifyAdminOfError("bulkUpsertPayPeriods_lock", e);
-    return { success: false, error: "The server is currently busy. Please try again." };
+    return {
+      success: false, error: "The server is currently busy. Please try again." };
   }
 
   try {
@@ -2585,10 +2635,12 @@ function bulkUpsertPayPeriods(updates) {
     // In hrData, pay periods are retrieved directly from the sheet, so it's live
     // but we can clear cache just in case.
 
-    return { success: true, updated: newRows.length };
+    return {
+      success: true, updated: newRows.length };
   } catch (err) {
     notifyAdminOfError("bulkUpsertPayPeriods", err);
-    return { success: false, error: err.message };
+    return {
+      success: false, error: err.message };
   } finally {
     lock.releaseLock();
   }
@@ -2600,7 +2652,8 @@ function deleteAllPayPeriods() {
     lock.waitLock(10000);
   } catch (e) {
     notifyAdminOfError("deleteAllPayPeriods_lock", e);
-    return { success: false, error: "The server is currently busy. Please try again." };
+    return {
+      success: false, error: "The server is currently busy. Please try again." };
   }
 
   try {
@@ -2617,10 +2670,12 @@ function deleteAllPayPeriods() {
 
     logAuditAction("PAY_PERIODS_DELETE_ALL", "All", "Deleted all pay periods");
 
-    return { success: true };
+    return {
+      success: true };
   } catch (err) {
     notifyAdminOfError("deleteAllPayPeriods", err);
-    return { success: false, error: err.message };
+    return {
+      success: false, error: err.message };
   } finally {
     lock.releaseLock();
   }
@@ -2654,4 +2709,12 @@ function loadPayPeriodsSettings() {
   } catch(err) {
     throw new Error("Failed to load pay periods: " + err.message);
   }
+}
+
+/**
+ * Returns the current backend app version for frontend polling.
+ * @returns {string} The APP_VERSION.
+ */
+function getAppVersion() {
+  return APP_VERSION;
 }
