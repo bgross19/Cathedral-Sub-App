@@ -515,7 +515,7 @@
   <body class="bg-gray-100 font-sans text-gray-800" onload="initApp()">
 
     <nav class="bg-[#002147] text-white p-4 shadow-lg sticky top-0 z-50">
-       <div class="max-w-4xl mx-auto flex justify-between items-center relative">
+       <div class="w-full flex justify-between items-center relative">
            <div class="flex items-center gap-4">
                <h1 class="text-xl font-bold flex items-center gap-2">
                   <span class="bg-white rounded-full h-10 w-10 flex items-center justify-center overflow-hidden">
@@ -555,7 +555,7 @@
        </div>
     </nav>
 
-    <main id="mainContent" class="max-w-4xl mx-auto p-4 mt-4">
+    <main id="mainContent" class="w-full mx-auto p-4 mt-4">
       
       <div class="bg-white rounded-2xl shadow-sm p-6 mb-6 border-t-4 border-[#00843D]">
         <h2 class="text-2xl font-bold text-[#002147]">Welcome, <span id="welcomeName">Teacher</span>!</h2>
@@ -792,7 +792,7 @@
 
       <div id="atAGlanceCopyContainer" class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-x-auto p-4">
         <!-- The table and footer will be rendered inside this container so it can be easily copied -->
-        <table id="atAGlanceTable" class="w-full text-left border-collapse min-w-max border border-gray-300">
+        <table id="atAGlanceTable" class="text-left border-collapse min-w-max border border-gray-300">
           <thead id="atAGlanceTableHeader">
              <tr class="bg-gray-50 border-b border-gray-300 text-sm text-gray-700 uppercase">
                 <!-- Columns dynamically injected -->
@@ -811,7 +811,7 @@
       <!-- Assignable Table Container (Only visible to Admin/Sub Coordinator) -->
       <div id="atAGlanceAssignableContainer" class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-x-auto p-4 mt-6 hidden">
         <h3 class="text-lg font-bold text-[#002147] mb-4">Assign Substitutes</h3>
-        <table id="atAGlanceAssignableTable" class="w-full text-left border-collapse min-w-max border border-gray-300">
+        <table id="atAGlanceAssignableTable" class="text-left border-collapse min-w-max border border-gray-300">
           <thead id="atAGlanceAssignableTableHeader">
              <tr class="bg-gray-50 border-b border-gray-300 text-sm text-gray-700 uppercase">
                 <!-- Columns dynamically injected -->
@@ -2838,7 +2838,7 @@
         const sortedActivePeriods = Array.from(activePeriods).sort((a, b) => a - b);
 
         // 2. Build Header
-        let headerHtml = `<th class="p-3 border border-gray-300 min-w-[150px] sticky left-0 z-20 bg-gray-50 shadow-[1px_0_0_0_#d1d5db]">Teacher Name</th>`;
+        let headerHtml = `<th class="p-3 border border-gray-300 min-w-[200px] sticky left-0 z-20 bg-gray-50 shadow-[1px_0_0_0_#d1d5db]">Teacher Name</th>`;
         sortedActivePeriods.forEach(p => {
             headerHtml += `<th class="p-3 border border-gray-300 text-center w-32">Period ${p}</th>`;
         });
@@ -2922,7 +2922,7 @@
         const sortedActivePeriods = Array.from(activePeriods).sort((a, b) => a - b);
 
         // 2. Build Header
-        let headerHtml = `<th class="p-3 border border-gray-300 min-w-[150px] sticky left-0 z-20 bg-gray-50 shadow-[1px_0_0_0_#d1d5db]">Teacher Name</th>`;
+        let headerHtml = `<th class="p-3 border border-gray-300 min-w-[200px] sticky left-0 z-20 bg-gray-50 shadow-[1px_0_0_0_#d1d5db]">Teacher Name</th>`;
         sortedActivePeriods.forEach(p => {
             headerHtml += `<th class="p-3 border border-gray-300 text-center w-64">Period ${p}</th>`;
         });
