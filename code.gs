@@ -389,8 +389,45 @@ function processEmailQueue() {
     if (data.length <= 1) return; // Only headers
 
     var statuses = [];
+    var needsScheduleLookup = false;
+
+    // Check if any pending emails need schedule lookups
+    for (var i = 1; i < data.length; i++) {
+      if (data[i][5] === "Pending") {
+        var body = String(data[i][3]);
+        var optionsStr = String(data[i][4]);
+        if (body.indexOf("{{ROOM|") !== -1 || body.indexOf("{{COURSE|") !== -1 ||
+            optionsStr.indexOf("{{ROOM|") !== -1 || optionsStr.indexOf("{{COURSE|") !== -1) {
+          needsScheduleLookup = true;
+          break;
+        }
+      }
+    }
+
+    var scheduleLookup = null;
+    if (needsScheduleLookup) {
+      try {
+        var scheduleData = getMasterScheduleData();
+        scheduleLookup = buildScheduleLookup(scheduleData);
+      } catch (err) {
+        console.error("Failed to load master schedule for email queue processing: " + err.message);
+      }
+    }
+
     for (var i = 0; i < data.length; i++) {
         statuses.push([data[i][5]]);
+    }
+
+    // Helper to replace placeholders using regex
+    function replacePlaceholders(text) {
+      if (!text || typeof text !== 'string') return text;
+      return text.replace(/\{\{(ROOM|COURSE)\|([^}]+)\}\}/g, function(match, type, joinKey) {
+        var val = "No Class Assigned";
+        if (scheduleLookup && scheduleLookup[joinKey]) {
+           val = type === 'ROOM' ? (scheduleLookup[joinKey].room || val) : (scheduleLookup[joinKey].course || val);
+        }
+        return val;
+      });
     }
 
     for (var i = 1; i < data.length; i++) {
@@ -405,6 +442,13 @@ function processEmailQueue() {
           options = JSON.parse(optionsStr);
         } catch (e) {
           console.error("Failed to parse options for queued email: " + e.message);
+        }
+
+        if (needsScheduleLookup) {
+          body = replacePlaceholders(String(body));
+          if (options.htmlBody) {
+            options.htmlBody = replacePlaceholders(String(options.htmlBody));
+          }
         }
 
         try {
@@ -1186,7 +1230,11 @@ function cancelMySubDuty(absenceId, period) {
 
         if (assignedSub.toLowerCase() === targetUserName) {
           var coordinatorEmail = getCoordinatorEmail(ss);
-          var details = getAbsenceDetails(absenceId, period, data);
+
+          var rosterData = getRosterDataCached(ss);
+          var nameLookup = buildNameLookup(rosterData);
+          var scheduleLookup = null; // Deferred to email queue to save time
+          var details = getAbsenceDetailsLocal(data[i], period, scheduleLookup, nameLookup);
 
           sheet.getRange(i + 1, subColumnIndex).setValue("");
           logAuditAction("SUB_DUTY_CANCELLED", absenceId, "Cancelled coverage for period " + period);
@@ -1259,10 +1307,16 @@ function getAbsenceDetailsLocal(row, period, scheduleLookup, nameLookup) {
 
   if (period) {
     var joinKey = teacherEmail.toLowerCase() + "-" + period;
-    var scheduleInfo = scheduleLookup[joinKey];
-    if (scheduleInfo) {
-      roomStr = scheduleInfo.room || roomStr;
-      courseStr = scheduleInfo.course || courseStr;
+    if (scheduleLookup) {
+      var scheduleInfo = scheduleLookup[joinKey];
+      if (scheduleInfo) {
+        roomStr = scheduleInfo.room || roomStr;
+        courseStr = scheduleInfo.course || courseStr;
+      }
+    } else {
+      // Defer to background process to save execution time
+      roomStr = "{{ROOM|" + joinKey + "}}";
+      courseStr = "{{COURSE|" + joinKey + "}}";
     }
   }
 
@@ -1290,14 +1344,13 @@ function cancelAbsence(absenceId) {
     var sheet = getSheetOrThrow(ss, "Absence Requests");
 
     var rosterData = getRosterDataCached(ss);
-    var scheduleData = getMasterScheduleData();
 
     var subEmailLookup = {};
     for (var r = 1; r < rosterData.length; r++) {
       subEmailLookup[String(rosterData[r][0]).trim()] = String(rosterData[r][1]).trim();
     }
 
-    var scheduleLookup = buildScheduleLookup(scheduleData);
+    var scheduleLookup = null; // Deferred to email queue to save time
     var nameLookup = buildNameLookup(rosterData);
 
     var data = sheet.getDataRange().getValues();
@@ -1387,14 +1440,13 @@ function updateAbsence(absenceId, formData) {
     var sheet = getSheetOrThrow(ss, "Absence Requests");
 
     var rosterData = getRosterDataCached(ss);
-    var scheduleData = getMasterScheduleData();
 
     var subEmailLookup = {};
     for (var r = 1; r < rosterData.length; r++) {
       subEmailLookup[String(rosterData[r][0]).trim()] = String(rosterData[r][1]).trim();
     }
 
-    var scheduleLookup = buildScheduleLookup(scheduleData);
+    var scheduleLookup = null; // Deferred to email queue to save time
     var nameLookup = buildNameLookup(rosterData);
 
     var data = sheet.getDataRange().getValues();
@@ -1732,8 +1784,7 @@ function assignSubToPeriod(absenceId, period, subName) {
       if (existingSub) {
          var existingEmail = subEmailLookup[existingSub];
          if (existingEmail) {
-            var scheduleData = getMasterScheduleData();
-            var scheduleLookup = buildScheduleLookup(scheduleData);
+            var scheduleLookup = null; // Deferred to email queue to save time
             var details = getAbsenceDetailsLocal(data[i], period, scheduleLookup, nameLookup);
             sendSubNotification(existingEmail, 'Canceled', details);
          }
@@ -1747,8 +1798,7 @@ function assignSubToPeriod(absenceId, period, subName) {
       if (newSub) {
          var newEmail = subEmailLookup[newSub];
          if (newEmail) {
-            var scheduleData = getMasterScheduleData();
-            var scheduleLookup = buildScheduleLookup(scheduleData);
+            var scheduleLookup = null; // Deferred to email queue to save time
             var details = getAbsenceDetailsLocal(data[i], period, scheduleLookup, nameLookup);
             sendSubNotification(newEmail, 'Assigned', details);
          }
