@@ -76,7 +76,7 @@
             renderStaffRosterTable();
           })
           .withFailureHandler(err => {
-            tbody.innerHTML = `<tr><td colspan="4" class="p-8 text-center text-red-600 font-bold">Failed to load roster: ${escapeHtml(err.message)}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="4" class="p-8 text-center text-red-600 font-bold">Failed to load roster: ${err.message}</td></tr>`;
           })
           .getStaffRosterForAdmin();
       }
@@ -370,7 +370,7 @@
             renderPayPeriodsTable();
           })
           .withFailureHandler(err => {
-            tbody.innerHTML = `<tr><td colspan="3" class="p-8 text-center text-red-600 font-bold">Failed to load pay periods: ${escapeHtml(err.message)}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="3" class="p-8 text-center text-red-600 font-bold">Failed to load pay periods: ${err.message}</td></tr>`;
           })
           .loadPayPeriodsSettings();
       }
@@ -596,11 +596,11 @@
     </nav>
 
     <main id="mainContent" class="w-full max-w-6xl mx-auto p-4 mt-4">
-      
+
       <div class="bg-white rounded-2xl shadow-sm p-6 mb-6 border-t-4 border-[#00843D]">
         <h2 class="text-2xl font-bold text-[#002147]">Welcome, <span id="welcomeName">Teacher</span>!</h2>
         <p class="text-gray-600 mt-1 mb-6">Need coverage for a class? Submit your request below.</p>
-        
+
         <button onclick="toggleModal()" class="w-full sm:w-auto bg-[#00843D] hover:bg-green-700 text-white font-bold py-3 px-8 rounded-xl transition-all transform hover:scale-105 shadow-md flex items-center justify-center gap-2">
           <span>➕</span> New Absence Request
         </button>
@@ -1251,7 +1251,7 @@
             }
           })
           .withFailureHandler(err => {
-            document.getElementById('generalSettingsContainer').innerHTML = `<p class="text-red-600 font-bold">Failed to load settings: ${escapeHtml(err.message)}</p>`;
+            document.getElementById('generalSettingsContainer').innerHTML = `<p class="text-red-600 font-bold">Failed to load settings: ${err.message}</p>`;
           })
           .getSettingsForFrontend();
       }
@@ -1466,7 +1466,7 @@
             renderRolesTable();
           })
           .withFailureHandler(err => {
-            document.getElementById('roleManagementTableBody').innerHTML = `<tr><td colspan="3" class="p-8 text-center text-red-600 font-bold">Failed to load roles: ${escapeHtml(err.message)}</td></tr>`;
+            document.getElementById('roleManagementTableBody').innerHTML = `<tr><td colspan="3" class="p-8 text-center text-red-600 font-bold">Failed to load roles: ${err.message}</td></tr>`;
           })
           .getUserRoles();
       }
@@ -1725,7 +1725,7 @@
 
           <form id="absenceForm" class="space-y-4 mt-4">
             <input type="hidden" id="editAbsenceId" value="">
-            
+
             <div class="grid grid-cols-2 gap-4">
               <div>
                 <label class="block text-sm font-bold mb-1">Date of Absence</label>
@@ -1808,13 +1808,7 @@
 
         // Get headers
         const headers = Array.from(table.querySelectorAll('thead tr.sm\\:table-row th, thead tr:not(.sm\\:table-row) th'))
-                             .map(th => {
-                                 let text = th.innerText;
-                                 if (/^[=+\-@\t\r]/.test(text)) {
-                                     text = "'" + text;
-                                 }
-                                 return `"${text.replace(/"/g, '""')}"`;
-                             });
+                             .map(th => `"${th.innerText.replace(/"/g, '""')}"`);
         if(headers.length > 0) csv += headers.join(',') + '\n';
 
         // Get rows
@@ -1826,9 +1820,6 @@
 
             const rowData = Array.from(cols).map(td => {
                 let text = td.innerText.replace(/(\r\n|\n|\r)/gm, ' ');
-                if (/^[=+\-@\t\r]/.test(text)) {
-                    text = "'" + text;
-                }
                 text = text.replace(/"/g, '""');
                 return `"${text}"`;
             });
@@ -1904,7 +1895,7 @@
           .withFailureHandler(err => {
              btn.disabled = false;
              btn.innerText = originalText;
-             tbody.innerHTML = `<tr><td colspan="5" class="p-8 text-center text-red-600 font-bold">Failed to load logs: ${escapeHtml(err.message)}</td></tr>`;
+             tbody.innerHTML = `<tr><td colspan="5" class="p-8 text-center text-red-600 font-bold">Failed to load logs: ${err.message}</td></tr>`;
              showToast("Connection Error: " + err.message, "error");
           })
           .getAuditLogs(startDate, endDate);
@@ -2105,7 +2096,7 @@
             document.getElementById('userName').innerText = data.name;
             document.getElementById('userName').dataset.role = data.role;
             document.getElementById('welcomeName').innerText = (data.name.split(',')[1] || data.name).trim();
-            
+
             if (data.appUrl) {
                 window.globalAppUrl = data.appUrl;
                 const footerLink = document.getElementById('atAGlanceFooterUrl');
@@ -2199,9 +2190,9 @@
             document.getElementById('userName').innerText = "Authentication Error";
 
             // Also notify parts that failed to load
-            document.getElementById('myAbsences').innerHTML = `<div class="text-red-600 font-bold">Failed to load absences: ${escapeHtml(err.message)}</div>`;
-            document.getElementById('mySubDuties').innerHTML = `<div class="p-8 text-center text-red-600 font-bold">Failed to load sub-duties: ${escapeHtml(err.message)}</div>`;
-            document.getElementById('todaysOpenJobs').innerHTML = `<div class="text-red-600 font-bold">Failed to load open jobs: ${escapeHtml(err.message)}</div>`;
+            document.getElementById('myAbsences').innerHTML = `<div class="text-red-600 font-bold">Failed to load absences: ${err.message}</div>`;
+            document.getElementById('mySubDuties').innerHTML = `<div class="p-8 text-center text-red-600 font-bold">Failed to load sub-duties: ${err.message}</div>`;
+            document.getElementById('todaysOpenJobs').innerHTML = `<div class="text-red-600 font-bold">Failed to load open jobs: ${err.message}</div>`;
           })
           .getInitialPayload();
       }
@@ -2472,7 +2463,7 @@
         google.script.run
           .withSuccessHandler(res => { if (res.todaysOpenJobs) renderTodaysOpenJobs(res.todaysOpenJobs); })
           .withFailureHandler(err => {
-            document.getElementById('todaysOpenJobs').innerHTML = `<div class="text-red-600 font-bold">Failed to load open jobs: ${escapeHtml(err.message)}</div>`;
+            document.getElementById('todaysOpenJobs').innerHTML = `<div class="text-red-600 font-bold">Failed to load open jobs: ${err.message}</div>`;
           })
           .refreshData(['todaysOpenJobs']);
       }
@@ -2595,7 +2586,7 @@
 
       function renderQuickCover(unfilled) {
             const container = document.getElementById('quickCoverContainer');
-            
+
             if (unfilled.length === 0) {
               container.innerHTML = '<div class="p-8 text-center text-gray-500 font-medium flex flex-col items-center gap-2"><span class="text-3xl">🎉</span> All classes are covered for the next 2 days!</div>';
               return;
@@ -2639,7 +2630,7 @@
               `;
             });
             html += '</div>';
-            
+
             container.innerHTML = html;
           }
 
@@ -2647,7 +2638,7 @@
         google.script.run
           .withSuccessHandler(res => { if (res.quickCover) renderQuickCover(res.quickCover); })
           .withFailureHandler(err => {
-            document.getElementById('quickCoverContainer').innerHTML = `<div class="p-8 text-center text-red-600 font-bold">Failed to load data: ${escapeHtml(err.message)}</div>`;
+            document.getElementById('quickCoverContainer').innerHTML = `<div class="p-8 text-center text-red-600 font-bold">Failed to load data: ${err.message}</div>`;
           })
           .refreshData(['quickCover']);
       }
@@ -2681,11 +2672,6 @@
                             strVal = tryDate.toISOString().split('T')[0];
                         }
                     }
-
-                    if (/^[=+\-@\t\r]/.test(strVal)) {
-                        strVal = "'" + strVal;
-                    }
-
                     strVal = strVal.replace(/"/g, '""');
                     if (strVal.search(/("|,|\n)/g) >= 0) {
                         strVal = `"${strVal}"`;
@@ -3115,9 +3101,9 @@
         google.script.run
           .withSuccessHandler(res => { if (res.adminData) renderAdminDashboardData(res.adminData, renderAtAGlance); })
           .withFailureHandler(err => {
-            document.getElementById('adminDashboardTableBody').innerHTML = `<tr><td colspan="7" class="p-8 text-center text-red-600 font-bold">Failed to load: ${escapeHtml(err.message)}</td></tr>`;
+            document.getElementById('adminDashboardTableBody').innerHTML = `<tr><td colspan="7" class="p-8 text-center text-red-600 font-bold">Failed to load: ${err.message}</td></tr>`;
             if (renderAtAGlance) {
-                document.getElementById('atAGlanceTableBody').innerHTML = `<tr><td class="p-8 text-center text-red-600 font-bold">Failed to load: ${escapeHtml(err.message)}</td></tr>`;
+                document.getElementById('atAGlanceTableBody').innerHTML = `<tr><td class="p-8 text-center text-red-600 font-bold">Failed to load: ${err.message}</td></tr>`;
             }
           })
           .refreshData(['adminData']);
@@ -3725,7 +3711,7 @@
         google.script.run
           .withSuccessHandler(res => { if (res.mySubDuties) renderMySubDuties(res.mySubDuties); })
           .withFailureHandler(err => {
-            document.getElementById('mySubDuties').innerHTML = `<div class="p-8 text-center text-red-600 font-bold">Failed to load sub-duties: ${escapeHtml(err.message)}</div>`;
+            document.getElementById('mySubDuties').innerHTML = `<div class="p-8 text-center text-red-600 font-bold">Failed to load sub-duties: ${err.message}</div>`;
           })
           .refreshData(['mySubDuties']);
       }
@@ -3806,7 +3792,7 @@
             absences.forEach((abs, index) => {
               let bgClass = abs.urgency === 'Urgent' ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200';
               let textClass = abs.urgency === 'Urgent' ? 'text-red-700' : 'text-[#002147]';
-              
+
               html += `
                 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 border rounded-xl shadow-sm ${bgClass} gap-4">
                   <div>
@@ -3829,7 +3815,7 @@
               `;
             });
             html += '</div>';
-            
+
             container.innerHTML = html;
             container.classList.remove('text-gray-400');
           }
@@ -3838,7 +3824,7 @@
         google.script.run
           .withSuccessHandler(res => { if (res.myAbsences) renderMyAbsences(res.myAbsences); })
           .withFailureHandler(err => {
-            document.getElementById('myAbsences').innerHTML = `<div class="text-red-600 font-bold">Failed to load absences: ${escapeHtml(err.message)}</div>`;
+            document.getElementById('myAbsences').innerHTML = `<div class="text-red-600 font-bold">Failed to load absences: ${err.message}</div>`;
           })
           .refreshData(['myAbsences']);
       }
@@ -3884,7 +3870,7 @@
           .withSuccessHandler(res => { if (res.myPastAbsences) renderMyPastAbsences(res.myPastAbsences); })
           .withFailureHandler(err => {
             console.error(err);
-            document.getElementById('myPastAbsences').innerHTML = `<div class="text-red-600 font-bold">Failed to load past absences: ${escapeHtml(err.message)}</div>`;
+            document.getElementById('myPastAbsences').innerHTML = `<div class="text-red-600 font-bold">Failed to load past absences: ${err.message}</div>`;
           })
           .refreshData(['myPastAbsences']);
       }
@@ -4059,7 +4045,7 @@
 
       document.getElementById('absenceForm').onsubmit = function(e) {
         e.preventDefault();
-        
+
         const selectedPeriods = Array.from(document.querySelectorAll('.period-cb:checked'))
                                      .map(cb => cb.value).join(', ');
 
@@ -4265,7 +4251,7 @@
 
                  html += `<option value="${idx}" ${isSelected}>Pay Period ${pp.periodNumber} (${displayStart} - ${displayEnd})</option>`;
               });
-              
+
               ppSelect.innerHTML = html;
 
               if (selectedIdx !== -1) {
@@ -4300,7 +4286,7 @@
         google.script.run
           .withSuccessHandler(res => { if (res.hrData) renderHRDashboardData(res.hrData); })
           .withFailureHandler(err => {
-            document.getElementById('hrDashboardTableBody').innerHTML = `<tr><td colspan="2" class="p-8 text-center text-red-600 font-bold">Failed to load: ${escapeHtml(err.message)}</td></tr>`;
+            document.getElementById('hrDashboardTableBody').innerHTML = `<tr><td colspan="2" class="p-8 text-center text-red-600 font-bold">Failed to load: ${err.message}</td></tr>`;
           })
           .refreshData(['hrData']);
       }
@@ -4552,13 +4538,7 @@
         let tsv = '';
 
         // Get headers
-        const headers = Array.from(table.querySelectorAll('thead th')).map(th => {
-            let text = th.innerText;
-            if (/^[=+\-@\t\r]/.test(text)) {
-                text = "'" + text;
-            }
-            return text;
-        });
+        const headers = Array.from(table.querySelectorAll('thead th')).map(th => th.innerText);
         tsv += headers.join('\t') + '\n';
 
         // Get rows
@@ -4568,13 +4548,7 @@
             const cols = tr.querySelectorAll('td');
             if (cols.length === 1 && cols[0].hasAttribute('colspan')) return;
 
-            const rowData = Array.from(cols).map(td => {
-                let text = td.innerText;
-                if (/^[=+\-@\t\r]/.test(text)) {
-                    text = "'" + text;
-                }
-                return text;
-            });
+            const rowData = Array.from(cols).map(td => td.innerText);
             tsv += rowData.join('\t') + '\n';
         });
 
