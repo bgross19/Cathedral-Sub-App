@@ -1,241 +1,137 @@
 const fs = require('fs');
+const { performance } = require('perf_hooks');
 
-// Mock Google Apps Script environment
-let apiCallCount = 0;
-let apiWaitTime = 0; // ms
+// Mocks
+let getSS = () => ({
+  getSheetByName: () => mockSheet
+});
+let getUserData = () => ({});
+let assertPermission = () => {};
+let getSheetOrThrow = () => mockSheet;
+let logAuditAction = () => {};
+const CacheService = {
+  getScriptCache: () => ({ remove: () => {} })
+};
+let _globalSettingsCache = null;
 
-function sleep(ms) {
-    // In a real script we would sleep, but here we just add to a counter
-    apiWaitTime += ms;
-}
-
-class MockRange {
-    constructor(row, col, numRows, numCols, sheet) {
-        this.row = row;
-        this.col = col;
-        this.numRows = numRows || 1;
-        this.numCols = numCols || 1;
-        this.sheet = sheet;
-    }
-    getValue() {
-        apiCallCount++;
-        apiWaitTime += 100;
-        return this.sheet.data[this.row - 1][this.col - 1];
-    }
-    setValue(val) {
-        apiCallCount++;
-        apiWaitTime += 100;
-        this.sheet.data[this.row - 1][this.col - 1] = val;
-        return this;
-    }
-    getValues() {
-        apiCallCount++;
-        apiWaitTime += 100;
-        let res = [];
-        for (let i = 0; i < this.numRows; i++) {
-            let r = [];
-            for (let j = 0; j < this.numCols; j++) {
-                r.push(this.sheet.data[this.row - 1 + i][this.col - 1 + j]);
-            }
-            res.push(r);
-        }
-        return res;
-    }
-    setValues(vals) {
-        apiCallCount++;
-        apiWaitTime += 100;
-        for (let i = 0; i < this.numRows; i++) {
-            for (let j = 0; j < this.numCols; j++) {
-                this.sheet.data[this.row - 1 + i][this.col - 1 + j] = vals[i][j];
-            }
-        }
-        return this;
-    }
-    clearContent() {
-        apiCallCount++;
-        apiWaitTime += 100;
-        return this;
-    }
-}
-
-class MockSheet {
-    constructor(name, data) {
-        this.name = name;
-        this.data = JSON.parse(JSON.stringify(data)); // deep copy
-    }
-    getDataRange() {
-        return new MockRange(1, 1, this.data.length, this.data[0].length, this);
-    }
-    getRange(row, col, numRows, numCols) {
-        return new MockRange(row, col, numRows, numCols, this);
-    }
-    appendRow(row) {
-        apiCallCount++;
-        apiWaitTime += 100;
-        this.data.push(row);
-        return this;
-    }
-    deleteRow(rowPos) {
-        apiCallCount++;
-        apiWaitTime += 100;
-        this.data.splice(rowPos - 1, 1);
-        return this;
-    }
-    getLastRow() {
-        return this.data.length;
-    }
-    getLastColumn() {
-        return this.data[0].length;
-    }
-}
-
-function runBenchmark(name, fn) {
-    apiCallCount = 0;
-    apiWaitTime = 0;
-    const start = Date.now();
-    fn();
-    const duration = Date.now() - start;
-    console.log(`--- ${name} ---`);
-    console.log(`Wall time: ${duration}ms`);
-    console.log(`API Call Count: ${apiCallCount}`);
-    console.log(`Simulated API Wait Time: ${apiWaitTime}ms\n`);
-    return { name, apiCallCount, apiWaitTime };
-}
-
-// -------------------------------------------------------------
-// Benchmarks for processEmailQueue
-// -------------------------------------------------------------
-function processEmailQueueOld(sheet) {
-    let data = sheet.getDataRange().getValues();
-    if (data.length <= 1) return;
-
-    for (let i = 1; i < data.length; i++) {
-        if (data[i][5] === "Pending") {
-            // simulate sending email
-            sheet.getRange(i + 1, 6).setValue("Sent");
-        }
-    }
-
-    let rowsToDelete = [];
-    for (let i = data.length - 1; i >= 1; i--) {
-        let status = String(sheet.getRange(i + 1, 6).getValue() || "");
-        if (status === "Sent" || status.indexOf("Failed") > -1) {
-            rowsToDelete.push(i + 1);
-        }
-    }
-
-    for (let j = 0; j < rowsToDelete.length; j++) {
-        sheet.deleteRow(rowsToDelete[j]);
-    }
-}
-
-function processEmailQueueNew(sheet) {
-    let data = sheet.getDataRange().getValues();
-    if (data.length <= 1) return;
-
-    let updates = [];
-    let statuses = [];
-    for (let i = 0; i < data.length; i++) {
-        statuses.push([data[i][5]]);
-    }
-
-    for (let i = 1; i < data.length; i++) {
-        if (data[i][5] === "Pending") {
-            // simulate sending email
-            statuses[i][0] = "Sent";
-        }
-    }
-
-    // batch update statuses
-    sheet.getRange(1, 6, statuses.length, 1).setValues(statuses);
-
-    let rowsToDelete = [];
-    for (let i = statuses.length - 1; i >= 1; i--) {
-        let status = String(statuses[i][0] || "");
-        if (status === "Sent" || status.indexOf("Failed") > -1) {
-            rowsToDelete.push(i + 1);
-        }
-    }
-
-    for (let j = 0; j < rowsToDelete.length; j++) {
-        sheet.deleteRow(rowsToDelete[j]);
-    }
-}
-
-// Data generator
-let emailQueueData = [
-    ["Timestamp", "To", "Subject", "Body", "Options", "Status"]
+let mockData = [
+  ['Key', 'Value'],
+  ['Setting1', 'Val1'],
+  ['Setting2', 'Val2'],
+  ['Setting3', 'Val3'],
+  ['Setting4', 'Val4'],
+  ['Setting5', 'Val5'],
+  ['Setting6', 'Val6'],
+  ['Setting7', 'Val7'],
+  ['Setting8', 'Val8'],
+  ['Setting9', 'Val9'],
+  ['Setting10', 'Val10'],
 ];
-for(let i = 0; i < 50; i++) {
-    emailQueueData.push([new Date(), "test@test.com", "Test", "Body", "{}", i % 2 === 0 ? "Pending" : "Sent"]);
-}
 
-let oldSheet = new MockSheet("Email Queue", emailQueueData);
-runBenchmark("processEmailQueue (Original)", () => {
-    processEmailQueueOld(oldSheet);
-});
+let setValueCount = 0;
+let setValuesCount = 0;
 
-let newSheet = new MockSheet("Email Queue", emailQueueData);
-runBenchmark("processEmailQueue (Optimized)", () => {
-    processEmailQueueNew(newSheet);
-});
+let mockSheet = {
+  getDataRange: () => ({
+    getValues: () => JSON.parse(JSON.stringify(mockData))
+  }),
+  getRange: (row, col, numRows, numCols) => {
+    return {
+      setValue: (val) => {
+        setValueCount++;
+        // Simulate delay
+        let start = performance.now();
+        while(performance.now() - start < 10) {}
+      },
+      setValues: (vals) => {
+        setValuesCount++;
+        // Simulate delay for setValues
+        let start = performance.now();
+        while(performance.now() - start < 20) {}
+      }
+    };
+  },
+  getLastRow: () => mockData.length
+};
 
-// -------------------------------------------------------------
-// Benchmarks for cancelMySubDuty
-// -------------------------------------------------------------
-function cancelMySubDutyOld(sheet, absenceId, period, userName) {
-    let data = sheet.getDataRange().getValues();
-    let targetUserName = userName.toLowerCase();
-    for (let i = 1; i < data.length; i++) {
-        if (String(data[i][0]) === String(absenceId)) {
-            let subColumnIndex = 10 + parseInt(period) - 1;
-            let assignedSub = String(sheet.getRange(i + 1, subColumnIndex).getValue() || "").trim();
-            if (assignedSub.toLowerCase() === targetUserName) {
-                sheet.getRange(i + 1, subColumnIndex).setValue("");
-                return { success: true };
-            }
-        }
+const newSettings = {
+  'Setting1': 'NewVal1',
+  'Setting2': 'NewVal2',
+  'Setting3': 'NewVal3',
+  'Setting4': 'NewVal4',
+  'Setting5': 'NewVal5',
+  'Setting6': 'NewVal6',
+  'Setting7': 'NewVal7',
+  'Setting8': 'NewVal8',
+  'Setting9': 'NewVal9',
+  'Setting10': 'NewVal10',
+  'NewSetting1': 'NewVal11',
+};
+
+// 1. Original code simulation
+function originalUpdateSettings(newSettings) {
+  var data = mockSheet.getDataRange().getValues();
+  var settingsMap = {};
+  for (var i = 1; i < data.length; i++) {
+    settingsMap[String(data[i][0]).trim()] = i + 1;
+  }
+  var rowsToAppend = [];
+  var updates = [];
+  for (var key in newSettings) {
+    if (settingsMap[key]) {
+      updates.push({ row: settingsMap[key], val: newSettings[key] });
+    } else {
+      rowsToAppend.push([key, newSettings[key]]);
     }
+  }
+  for (var u = 0; u < updates.length; u++) {
+    mockSheet.getRange(updates[u].row, 2).setValue(updates[u].val);
+  }
+  if (rowsToAppend.length > 0) {
+    mockSheet.getRange(mockSheet.getLastRow() + 1, 1, rowsToAppend.length, 2).setValues(rowsToAppend);
+  }
 }
 
-function cancelMySubDutyNew(sheet, absenceId, period, userName) {
-    let data = sheet.getDataRange().getValues();
-    let targetUserName = userName.toLowerCase();
-    let targetRow = -1;
-    let targetCol = -1;
-
-    for (let i = 1; i < data.length; i++) {
-        if (String(data[i][0]) === String(absenceId)) {
-            let subColumnIndex = 10 + parseInt(period) - 1;
-            let assignedSub = String(data[i][subColumnIndex - 1] || "").trim();
-            if (assignedSub.toLowerCase() === targetUserName) {
-                targetRow = i + 1;
-                targetCol = subColumnIndex;
-                break;
-            }
-        }
+// 2. Optimized code simulation
+function optimizedUpdateSettings(newSettings) {
+  var data = mockSheet.getDataRange().getValues();
+  var settingsMap = {};
+  for (var i = 1; i < data.length; i++) {
+    settingsMap[String(data[i][0]).trim()] = i;
+  }
+  var rowsToAppend = [];
+  var dataChanged = false;
+  for (var key in newSettings) {
+    if (settingsMap[key] !== undefined) {
+      if (data[settingsMap[key]][1] !== newSettings[key]) {
+        data[settingsMap[key]][1] = newSettings[key];
+        dataChanged = true;
+      }
+    } else {
+      rowsToAppend.push([key, newSettings[key]]);
     }
-
-    if (targetRow !== -1) {
-        sheet.getRange(targetRow, targetCol).setValue("");
-        return { success: true };
-    }
+  }
+  if (dataChanged) {
+    mockSheet.getRange(1, 1, data.length, data[0].length).setValues(data);
+  }
+  if (rowsToAppend.length > 0) {
+    mockSheet.getRange(mockSheet.getLastRow() + 1, 1, rowsToAppend.length, 2).setValues(rowsToAppend);
+  }
 }
 
-let absenceData = [
-    ["ID", "Timestamp", "Email", "Date", "Periods", "Reason", "Duration", "Urgency", "Instructions", "Sub1", "Sub2", "Sub3", "Sub4", "Sub5", "Sub6", "Sub7", "Sub8", "Status"]
-];
-for(let i = 0; i < 50; i++) {
-    let row = [`ID_${i}`, new Date(), "teacher@test.com", "2023-01-01", "1", "Personal", "Full Day", "Standard", "", "sub_user", "", "", "", "", "", "", "", "Active"];
-    absenceData.push(row);
-}
+console.log("Running baseline (original)...");
+setValueCount = 0;
+setValuesCount = 0;
+let t0 = performance.now();
+originalUpdateSettings(newSettings);
+let t1 = performance.now();
+console.log(`Original Time: ${(t1 - t0).toFixed(2)} ms (setValue calls: ${setValueCount}, setValues calls: ${setValuesCount})`);
 
-let oldAbsenceSheet = new MockSheet("Absence Requests", absenceData);
-runBenchmark("cancelMySubDuty (Original)", () => {
-    cancelMySubDutyOld(oldAbsenceSheet, "ID_49", 2, "sub_user"); // period 2 -> index 10 + 2 - 1 = 11, data idx 10
-});
+console.log("Running optimized...");
+setValueCount = 0;
+setValuesCount = 0;
+t0 = performance.now();
+optimizedUpdateSettings(newSettings);
+t1 = performance.now();
+console.log(`Optimized Time: ${(t1 - t0).toFixed(2)} ms (setValue calls: ${setValueCount}, setValues calls: ${setValuesCount})`);
 
-let newAbsenceSheet = new MockSheet("Absence Requests", absenceData);
-runBenchmark("cancelMySubDuty (Optimized)", () => {
-    cancelMySubDutyNew(newAbsenceSheet, "ID_49", 2, "sub_user");
-});
