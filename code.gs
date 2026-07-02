@@ -1260,7 +1260,7 @@ function cancelMySubDuty(absenceId, period) {
     for (var i = 1; i < data.length; i++) {
       if (String(data[i][0]) === String(absenceId)) {
         var subColumnIndex = 10 + parseInt(period) - 1;
-        var assignedSub = String(sheet.getRange(i + 1, subColumnIndex).getValue() || "").trim();
+        var assignedSub = String(data[i][subColumnIndex - 1] || "").trim();
 
         if (assignedSub.toLowerCase() === targetUserName) {
           var coordinatorEmail = getCoordinatorEmail(ss);
