@@ -1808,7 +1808,13 @@
 
         // Get headers
         const headers = Array.from(table.querySelectorAll('thead tr.sm\\:table-row th, thead tr:not(.sm\\:table-row) th'))
-                             .map(th => `"${th.innerText.replace(/"/g, '""')}"`);
+                             .map(th => {
+                                 let text = th.innerText;
+                                 if (/^[=+\-@\t\r]/.test(text)) {
+                                     text = "'" + text;
+                                 }
+                                 return `"${text.replace(/"/g, '""')}"`;
+                             });
         if(headers.length > 0) csv += headers.join(',') + '\n';
 
         // Get rows
@@ -1820,6 +1826,9 @@
 
             const rowData = Array.from(cols).map(td => {
                 let text = td.innerText.replace(/(\r\n|\n|\r)/gm, ' ');
+                if (/^[=+\-@\t\r]/.test(text)) {
+                    text = "'" + text;
+                }
                 text = text.replace(/"/g, '""');
                 return `"${text}"`;
             });
@@ -2672,6 +2681,11 @@
                             strVal = tryDate.toISOString().split('T')[0];
                         }
                     }
+
+                    if (/^[=+\-@\t\r]/.test(strVal)) {
+                        strVal = "'" + strVal;
+                    }
+
                     strVal = strVal.replace(/"/g, '""');
                     if (strVal.search(/("|,|\n)/g) >= 0) {
                         strVal = `"${strVal}"`;
