@@ -1001,24 +1001,27 @@ function updateSettings(newSettings) {
     var data = settingsSheet.getDataRange().getValues();
     var settingsMap = {};
 
-    // Map existing rows
+    // Map existing rows (0-based index)
     for (var i = 1; i < data.length; i++) {
-      settingsMap[String(data[i][0]).trim()] = i + 1;
+      settingsMap[String(data[i][0]).trim()] = i;
     }
 
     var rowsToAppend = [];
-    var updates = []; // Array of {row, val}
+    var dataChanged = false;
 
     for (var key in newSettings) {
-      if (settingsMap[key]) {
-        updates.push({ row: settingsMap[key], val: newSettings[key] });
+      if (settingsMap[key] !== undefined) {
+        if (data[settingsMap[key]][1] !== newSettings[key]) {
+          data[settingsMap[key]][1] = newSettings[key];
+          dataChanged = true;
+        }
       } else {
         rowsToAppend.push([key, newSettings[key]]);
       }
     }
 
-    for (var u = 0; u < updates.length; u++) {
-      settingsSheet.getRange(updates[u].row, 2).setValue(updates[u].val);
+    if (dataChanged) {
+      settingsSheet.getRange(1, 1, data.length, data[0].length).setValues(data);
     }
 
     if (rowsToAppend.length > 0) {
