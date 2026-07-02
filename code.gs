@@ -483,9 +483,21 @@ function processEmailQueue() {
       }
     }
 
-    // Delete from bottom up
-    for (var j = 0; j < rowsToDelete.length; j++) {
-       sheet.deleteRow(rowsToDelete[j]);
+    // Delete from bottom up in contiguous batches
+    if (rowsToDelete.length > 0) {
+      var startRow = rowsToDelete[0];
+      var numRows = 1;
+
+      for (var j = 1; j < rowsToDelete.length; j++) {
+        if (rowsToDelete[j] === startRow - numRows) {
+          numRows++;
+        } else {
+          sheet.deleteRows(startRow - numRows + 1, numRows);
+          startRow = rowsToDelete[j];
+          numRows = 1;
+        }
+      }
+      sheet.deleteRows(startRow - numRows + 1, numRows);
     }
 
   } catch (e) {
