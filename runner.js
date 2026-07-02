@@ -30,7 +30,8 @@ global.SpreadsheetApp = {
       getDataRange: () => ({ getValues: () => [] }),
       appendRow: (row) => null,
       clearContents: () => null,
-      getRange: () => ({ setValues: () => null })
+      getRange: () => ({ setValues: () => null }),
+      deleteRows: (startRow, numRows) => null
     })
   })
 };
