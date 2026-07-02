@@ -76,7 +76,7 @@
             renderStaffRosterTable();
           })
           .withFailureHandler(err => {
-            tbody.innerHTML = `<tr><td colspan="4" class="p-8 text-center text-red-600 font-bold">Failed to load roster: ${err.message}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="4" class="p-8 text-center text-red-600 font-bold">Failed to load roster: ${escapeHtml(err.message)}</td></tr>`;
           })
           .getStaffRosterForAdmin();
       }
@@ -370,7 +370,7 @@
             renderPayPeriodsTable();
           })
           .withFailureHandler(err => {
-            tbody.innerHTML = `<tr><td colspan="3" class="p-8 text-center text-red-600 font-bold">Failed to load pay periods: ${err.message}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="3" class="p-8 text-center text-red-600 font-bold">Failed to load pay periods: ${escapeHtml(err.message)}</td></tr>`;
           })
           .loadPayPeriodsSettings();
       }
@@ -1251,7 +1251,7 @@
             }
           })
           .withFailureHandler(err => {
-            document.getElementById('generalSettingsContainer').innerHTML = `<p class="text-red-600 font-bold">Failed to load settings: ${err.message}</p>`;
+            document.getElementById('generalSettingsContainer').innerHTML = `<p class="text-red-600 font-bold">Failed to load settings: ${escapeHtml(err.message)}</p>`;
           })
           .getSettingsForFrontend();
       }
@@ -1466,7 +1466,7 @@
             renderRolesTable();
           })
           .withFailureHandler(err => {
-            document.getElementById('roleManagementTableBody').innerHTML = `<tr><td colspan="3" class="p-8 text-center text-red-600 font-bold">Failed to load roles: ${err.message}</td></tr>`;
+            document.getElementById('roleManagementTableBody').innerHTML = `<tr><td colspan="3" class="p-8 text-center text-red-600 font-bold">Failed to load roles: ${escapeHtml(err.message)}</td></tr>`;
           })
           .getUserRoles();
       }
@@ -1904,7 +1904,7 @@
           .withFailureHandler(err => {
              btn.disabled = false;
              btn.innerText = originalText;
-             tbody.innerHTML = `<tr><td colspan="5" class="p-8 text-center text-red-600 font-bold">Failed to load logs: ${err.message}</td></tr>`;
+             tbody.innerHTML = `<tr><td colspan="5" class="p-8 text-center text-red-600 font-bold">Failed to load logs: ${escapeHtml(err.message)}</td></tr>`;
              showToast("Connection Error: " + err.message, "error");
           })
           .getAuditLogs(startDate, endDate);
@@ -2199,9 +2199,9 @@
             document.getElementById('userName').innerText = "Authentication Error";
 
             // Also notify parts that failed to load
-            document.getElementById('myAbsences').innerHTML = `<div class="text-red-600 font-bold">Failed to load absences: ${err.message}</div>`;
-            document.getElementById('mySubDuties').innerHTML = `<div class="p-8 text-center text-red-600 font-bold">Failed to load sub-duties: ${err.message}</div>`;
-            document.getElementById('todaysOpenJobs').innerHTML = `<div class="text-red-600 font-bold">Failed to load open jobs: ${err.message}</div>`;
+            document.getElementById('myAbsences').innerHTML = `<div class="text-red-600 font-bold">Failed to load absences: ${escapeHtml(err.message)}</div>`;
+            document.getElementById('mySubDuties').innerHTML = `<div class="p-8 text-center text-red-600 font-bold">Failed to load sub-duties: ${escapeHtml(err.message)}</div>`;
+            document.getElementById('todaysOpenJobs').innerHTML = `<div class="text-red-600 font-bold">Failed to load open jobs: ${escapeHtml(err.message)}</div>`;
           })
           .getInitialPayload();
       }
@@ -2472,7 +2472,7 @@
         google.script.run
           .withSuccessHandler(res => { if (res.todaysOpenJobs) renderTodaysOpenJobs(res.todaysOpenJobs); })
           .withFailureHandler(err => {
-            document.getElementById('todaysOpenJobs').innerHTML = `<div class="text-red-600 font-bold">Failed to load open jobs: ${err.message}</div>`;
+            document.getElementById('todaysOpenJobs').innerHTML = `<div class="text-red-600 font-bold">Failed to load open jobs: ${escapeHtml(err.message)}</div>`;
           })
           .refreshData(['todaysOpenJobs']);
       }
@@ -2647,7 +2647,7 @@
         google.script.run
           .withSuccessHandler(res => { if (res.quickCover) renderQuickCover(res.quickCover); })
           .withFailureHandler(err => {
-            document.getElementById('quickCoverContainer').innerHTML = `<div class="p-8 text-center text-red-600 font-bold">Failed to load data: ${err.message}</div>`;
+            document.getElementById('quickCoverContainer').innerHTML = `<div class="p-8 text-center text-red-600 font-bold">Failed to load data: ${escapeHtml(err.message)}</div>`;
           })
           .refreshData(['quickCover']);
       }
@@ -3115,9 +3115,9 @@
         google.script.run
           .withSuccessHandler(res => { if (res.adminData) renderAdminDashboardData(res.adminData, renderAtAGlance); })
           .withFailureHandler(err => {
-            document.getElementById('adminDashboardTableBody').innerHTML = `<tr><td colspan="7" class="p-8 text-center text-red-600 font-bold">Failed to load: ${err.message}</td></tr>`;
+            document.getElementById('adminDashboardTableBody').innerHTML = `<tr><td colspan="7" class="p-8 text-center text-red-600 font-bold">Failed to load: ${escapeHtml(err.message)}</td></tr>`;
             if (renderAtAGlance) {
-                document.getElementById('atAGlanceTableBody').innerHTML = `<tr><td class="p-8 text-center text-red-600 font-bold">Failed to load: ${err.message}</td></tr>`;
+                document.getElementById('atAGlanceTableBody').innerHTML = `<tr><td class="p-8 text-center text-red-600 font-bold">Failed to load: ${escapeHtml(err.message)}</td></tr>`;
             }
           })
           .refreshData(['adminData']);
@@ -3725,7 +3725,7 @@
         google.script.run
           .withSuccessHandler(res => { if (res.mySubDuties) renderMySubDuties(res.mySubDuties); })
           .withFailureHandler(err => {
-            document.getElementById('mySubDuties').innerHTML = `<div class="p-8 text-center text-red-600 font-bold">Failed to load sub-duties: ${err.message}</div>`;
+            document.getElementById('mySubDuties').innerHTML = `<div class="p-8 text-center text-red-600 font-bold">Failed to load sub-duties: ${escapeHtml(err.message)}</div>`;
           })
           .refreshData(['mySubDuties']);
       }
@@ -3838,7 +3838,7 @@
         google.script.run
           .withSuccessHandler(res => { if (res.myAbsences) renderMyAbsences(res.myAbsences); })
           .withFailureHandler(err => {
-            document.getElementById('myAbsences').innerHTML = `<div class="text-red-600 font-bold">Failed to load absences: ${err.message}</div>`;
+            document.getElementById('myAbsences').innerHTML = `<div class="text-red-600 font-bold">Failed to load absences: ${escapeHtml(err.message)}</div>`;
           })
           .refreshData(['myAbsences']);
       }
@@ -3884,7 +3884,7 @@
           .withSuccessHandler(res => { if (res.myPastAbsences) renderMyPastAbsences(res.myPastAbsences); })
           .withFailureHandler(err => {
             console.error(err);
-            document.getElementById('myPastAbsences').innerHTML = `<div class="text-red-600 font-bold">Failed to load past absences: ${err.message}</div>`;
+            document.getElementById('myPastAbsences').innerHTML = `<div class="text-red-600 font-bold">Failed to load past absences: ${escapeHtml(err.message)}</div>`;
           })
           .refreshData(['myPastAbsences']);
       }
@@ -4300,7 +4300,7 @@
         google.script.run
           .withSuccessHandler(res => { if (res.hrData) renderHRDashboardData(res.hrData); })
           .withFailureHandler(err => {
-            document.getElementById('hrDashboardTableBody').innerHTML = `<tr><td colspan="2" class="p-8 text-center text-red-600 font-bold">Failed to load: ${err.message}</td></tr>`;
+            document.getElementById('hrDashboardTableBody').innerHTML = `<tr><td colspan="2" class="p-8 text-center text-red-600 font-bold">Failed to load: ${escapeHtml(err.message)}</td></tr>`;
           })
           .refreshData(['hrData']);
       }
