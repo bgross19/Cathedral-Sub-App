@@ -1594,8 +1594,21 @@ function updateAbsence(absenceId, formData) {
       }
 
       // Perform batch clears if needed
-      for (var s = 0; s < subClearUpdates.length; s++) {
-        sheet.getRange(subClearUpdates[s].row, subClearUpdates[s].col).setValue("");
+      if (subClearUpdates.length > 0) {
+        var colLetters = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"];
+        var rangesA1 = [];
+        for (var s = 0; s < subClearUpdates.length; s++) {
+          var r = subClearUpdates[s].row;
+          var c = subClearUpdates[s].col;
+          var colA1 = "";
+          if (c <= 26) {
+            colA1 = colLetters[c - 1];
+          } else {
+             colA1 = colLetters[Math.floor((c - 1) / 26) - 1] + colLetters[(c - 1) % 26];
+          }
+          rangesA1.push(colA1 + r);
+        }
+        sheet.getRangeList(rangesA1).setValue("");
       }
 
       if (currentUserEmail !== teacherEmail) {
