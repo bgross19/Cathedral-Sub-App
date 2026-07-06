@@ -1930,7 +1930,7 @@
         // Get headers
         const headers = Array.from(table.querySelectorAll('thead tr.sm\\:table-row th, thead tr:not(.sm\\:table-row) th'))
                              .map(th => {
-                                 let text = th.innerText;
+                                 let text = th.textContent.trim();
                                  if (/^[=+\-@\t\r]/.test(text)) {
                                      text = "'" + text;
                                  }
@@ -1946,7 +1946,7 @@
             if (cols.length === 1 && cols[0].hasAttribute('colspan')) return;
 
             const rowData = Array.from(cols).map(td => {
-                let text = td.innerText.replace(/(\r\n|\n|\r)/gm, ' ');
+                let text = td.textContent.trim().replace(/(\r\n|\n|\r)/gm, ' ');
                 if (/^[=+\-@\t\r]/.test(text)) {
                     text = "'" + text;
                 }
@@ -4673,24 +4673,28 @@
         let tsv = '';
 
         // Get headers
-        const headers = Array.from(table.querySelectorAll('thead th')).map(th => {
-            let text = th.innerText;
-            if (/^[=+\-@\t\r]/.test(text)) {
-                text = "'" + text;
-            }
-            return text;
-        });
+        const headers = Array.from(table.querySelectorAll('thead th'))
+            .filter(th => !th.classList.contains('sm:hidden'))
+            .map(th => {
+                let text = th.textContent.trim();
+                if (/^[=+\-@\t\r]/.test(text)) {
+                    text = "'" + text;
+                }
+                return text;
+            });
         tsv += headers.join('\t') + '\n';
 
         // Get rows
         const rows = Array.from(table.querySelectorAll('tbody tr'));
         rows.forEach(tr => {
             // Check if this is the "Loading" or "No data" row
-            const cols = tr.querySelectorAll('td');
-            if (cols.length === 1 && cols[0].hasAttribute('colspan')) return;
+            const allCols = tr.querySelectorAll('td');
+            if (allCols.length === 1 && allCols[0].hasAttribute('colspan')) return;
 
-            const rowData = Array.from(cols).map(td => {
-                let text = td.innerText;
+            const cols = Array.from(allCols).filter(td => !td.classList.contains('sm:hidden'));
+
+            const rowData = cols.map(td => {
+                let text = td.textContent.trim();
                 if (/^[=+\-@\t\r]/.test(text)) {
                     text = "'" + text;
                 }
