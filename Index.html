@@ -90,13 +90,30 @@
 
         let html = '';
         currentStaffRoster.forEach((staff, idx) => {
+          const specialRoles = ["admin", "hr", "principal", "sub coordinator"];
+          let roleHtml = "";
+          let role = staff.role ? staff.role.trim() : "Teacher";
+
+          if (specialRoles.includes(role.toLowerCase())) {
+              roleHtml = `<span class="text-gray-500 font-medium">${escapeHtml(role)}</span>`;
+          } else {
+              let isTeacher = (role.toLowerCase() !== "substitute");
+              roleHtml = `
+                  <select onchange="updateStaffRoleInline('${escapeJs(staff.email)}', this.value)" class="p-1 border rounded focus:ring-1 focus:ring-[#00843D] outline-none text-sm bg-white">
+                      <option value="Teacher" ${isTeacher ? 'selected' : ''}>Teacher</option>
+                      <option value="Substitute" ${!isTeacher ? 'selected' : ''}>Substitute</option>
+                  </select>
+              `;
+          }
+
           html += `
             <tr class="hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0">
               <td class="p-3 text-sm text-gray-800 font-medium">${escapeHtml(staff.name)}</td>
               <td class="p-3 text-sm text-gray-600">${escapeHtml(staff.email)}</td>
+              <td class="p-3 text-sm text-gray-600">${roleHtml}</td>
               <td class="p-3 text-sm text-gray-600">${escapeHtml(staff.duty || '')}</td>
               <td class="p-3 text-right space-x-2">
-                <button onclick="openEditStaffModal('${escapeJs(staff.name)}', '${escapeJs(staff.email)}', '${escapeJs(staff.duty || '')}')" class="text-blue-600 hover:text-blue-800 font-semibold text-sm">Edit</button>
+                <button onclick="openEditStaffModal('${escapeJs(staff.name)}', '${escapeJs(staff.email)}', '${escapeJs(staff.role || '')}', '${escapeJs(staff.duty || '')}')" class="text-blue-600 hover:text-blue-800 font-semibold text-sm">Edit</button>
                 <button onclick="deleteStaffMember('${escapeJs(staff.email)}')" class="text-red-600 hover:text-red-800 font-semibold text-sm">Delete</button>
               </td>
             </tr>
@@ -105,14 +122,33 @@
         tbody.innerHTML = html;
       }
 
+      function updateStaffRoleInline(email, newRole) {
+          google.script.run
+              .withSuccessHandler(result => {
+                  if (result && result.success) {
+                      showToast("Role updated successfully.", "success");
+                      loadStaffRosterSettings();
+                      loadRolesData(); // refresh roles table as well
+                  } else {
+                      showToast("Failed to update role: " + (result ? result.error : "Unknown error"), "error");
+                      loadStaffRosterSettings(); // revert
+                  }
+              })
+              .withFailureHandler(err => {
+                  showToast("Connection Error: " + err.message, 'error');
+                  loadStaffRosterSettings(); // revert
+              })
+              .updateStaffRoleInlineAdmin(email, newRole);
+      }
+
       function copyStaffRosterData() {
         if (!currentStaffRoster || currentStaffRoster.length === 0) {
            showToast("No data to copy.", 'info');
            return;
         }
-        let tsvText = "LASTFIRST\tEMAIL_ADDR\tDuty\n";
+        let tsvText = "LASTFIRST\tEMAIL_ADDR\tRole\tDuty\n";
         currentStaffRoster.forEach(staff => {
-           tsvText += `${staff.name}\t${staff.email}\t${staff.duty || ''}\n`;
+           tsvText += `${staff.name}\t${staff.email}\t${staff.role || 'Teacher'}\t${staff.duty || ''}\n`;
         });
         navigator.clipboard.writeText(tsvText).then(() => {
            showToast("Staff roster copied to clipboard as TSV!", 'info');
@@ -125,6 +161,7 @@
         const originalEmail = document.getElementById('staffOriginalEmail').value;
         const name = document.getElementById('staffNameInput').value;
         const email = document.getElementById('staffEmailInput').value;
+        const role = document.getElementById('staffRoleInput').value;
         const duty = document.getElementById('staffDutyInput').value;
 
         if (!name || !email) {
@@ -141,6 +178,7 @@
            originalEmail: originalEmail,
            name: name,
            email: email,
+           role: role,
            duty: duty
         };
 
@@ -254,6 +292,7 @@
 
             let email = "";
             let name = "";
+            let role = "Teacher";
             let duty = "";
 
             let emailColIdx = -1;
@@ -267,11 +306,30 @@
             if (emailColIdx !== -1) {
                 email = row[emailColIdx];
                 name = row.slice(0, emailColIdx).join(', ');
-                if (emailColIdx + 1 < row.length) {
-                    duty = row[emailColIdx + 1];
+
+                // If there are two columns after email, assume Role then Duty
+                if (emailColIdx + 2 < row.length) {
+                    role = row[emailColIdx + 1] || "Teacher";
+                    duty = row[emailColIdx + 2];
+                }
+                // If there is only one column after email, backwards compatibility: it could be role or duty
+                else if (emailColIdx + 1 < row.length) {
+                    let val = row[emailColIdx + 1].trim();
+                    if (val.toLowerCase() === "teacher" || val.toLowerCase() === "substitute") {
+                        role = val;
+                        duty = "";
+                    } else {
+                        role = "Teacher";
+                        duty = val;
+                    }
                 }
             } else {
-                if (row.length >= 2) {
+                if (row.length >= 3) {
+                    email = row[row.length - 3];
+                    role = row[row.length - 2];
+                    duty = row[row.length - 1];
+                    name = row.slice(0, row.length - 3).join(', ');
+                } else if (row.length === 2) {
                     email = row[row.length - 2];
                     duty = row[row.length - 1];
                     name = row.slice(0, row.length - 2).join(', ');
@@ -289,10 +347,11 @@
             }
 
             email = email.replace(/^"|"$/g, '').trim();
+            role = role.replace(/^"|"$/g, '').trim() || "Teacher";
             duty = duty.replace(/^"|"$/g, '').trim();
 
             if (name && email) {
-                updates.push({name: name, email: email, duty: duty});
+                updates.push({name: name, email: email, role: role, duty: duty});
             }
          }
 
@@ -517,6 +576,8 @@
         document.getElementById('staffOriginalEmail').value = "";
         document.getElementById('staffNameInput').value = "";
         document.getElementById('staffEmailInput').value = "";
+        document.getElementById('staffRoleInput').value = "Teacher";
+        document.getElementById('staffRoleInput').disabled = false;
         document.getElementById('staffDutyInput').value = "";
 
         const modal = document.querySelector('#staffModal');
@@ -530,11 +591,29 @@
         setTimeout(captureModalState, 50);
       }
 
-      function openEditStaffModal(name, email, duty) {
+      function openEditStaffModal(name, email, role, duty) {
         document.getElementById('staffModalTitle').innerText = "Edit Staff Member";
         document.getElementById('staffOriginalEmail').value = email;
         document.getElementById('staffNameInput').value = name;
         document.getElementById('staffEmailInput').value = email;
+        const roleInput = document.getElementById('staffRoleInput');
+
+        let normalizedRole = role ? role.trim() : "Teacher";
+        // Check if the current user role allows changing
+        const specialRoles = ["admin", "hr", "principal", "sub coordinator"];
+        if (specialRoles.includes(normalizedRole.toLowerCase())) {
+            // Select the disabled option (or temporarily enable to set value, then disable)
+            Array.from(roleInput.options).forEach(opt => {
+                if (opt.value.toLowerCase() === normalizedRole.toLowerCase()) {
+                    roleInput.value = opt.value;
+                }
+            });
+            roleInput.disabled = true;
+        } else {
+            roleInput.value = (normalizedRole.toLowerCase() === "substitute") ? "Substitute" : "Teacher";
+            roleInput.disabled = false;
+        }
+
         document.getElementById('staffDutyInput').value = duty || "";
 
         const modal = document.querySelector('#staffModal');
@@ -985,7 +1064,7 @@
                <div class="text-center text-gray-500 font-semibold text-sm">OR</div>
                <div>
                  <label class="block text-sm text-gray-600 mb-1">...Paste CSV / Tab-Delimited data directly</label>
-                 <textarea id="staffCsvTextarea" rows="4" placeholder="LASTFIRST&#9;EMAIL_ADDR&#9;Duty&#10;Ford, Lisa&#9;lford@gocathedral.com&#9;1&#10;Smith John&#9;jsmith@gocathedral.com&#9;2" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none text-sm font-mono"></textarea>
+                 <textarea id="staffCsvTextarea" rows="4" placeholder="LASTFIRST&#9;EMAIL_ADDR&#9;Role&#9;Duty&#10;Ford, Lisa&#9;lford@gocathedral.com&#9;Teacher&#9;1&#10;Smith John&#9;jsmith@gocathedral.com&#9;Teacher&#9;2" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none text-sm font-mono"></textarea>
                </div>
                <div class="flex justify-end">
                   <button onclick="processStaffCsvUpload()" class="bg-[#002147] hover:bg-blue-900 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-md text-sm">
@@ -1001,12 +1080,13 @@
               <tr class="bg-gray-50 border-b border-gray-200 text-sm text-gray-700 uppercase hidden sm:table-row">
                 <th class="p-3">Name</th>
                 <th class="p-3">Email</th>
+                <th class="p-3">Role</th>
                 <th class="p-3">Duty</th>
                 <th class="p-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody id="staffRosterTableBody" class="divide-y divide-gray-100">
-               <tr><td colspan="4" class="p-8 text-center text-gray-400 italic">Loading staff roster...</td></tr>
+               <tr><td colspan="5" class="p-8 text-center text-gray-400 italic">Loading staff roster...</td></tr>
             </tbody>
           </table>
         </div>
@@ -1400,7 +1480,7 @@
 
       function renderRolePermissionsMatrix() {
         const tbody = document.getElementById('rolePermissionsTableBody');
-        const roles = ["admin", "hr", "sub coordinator", "principal", "user", "substitute"];
+        const roles = ["admin", "hr", "sub coordinator", "principal", "teacher", "substitute"];
         const views = ["Admin Dashboard", "HR Dashboard", "Today at a Glance", "My Upcoming Sub Duties", "Today's Open Jobs", "My Past Absences", "Settings"];
 
         let html = '';
@@ -1675,6 +1755,17 @@
             <div class="mb-4">
               <label class="block text-sm font-bold mb-1">Email Address</label>
               <input type="email" id="staffEmailInput" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none" placeholder="e.g. jsmith@gocathedral.com" required>
+            </div>
+            <div class="mb-4">
+              <label class="block text-sm font-bold mb-1">Role</label>
+              <select id="staffRoleInput" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none">
+                <option value="Teacher">Teacher</option>
+                <option value="Substitute">Substitute</option>
+                <option value="Admin" disabled>Admin</option>
+                <option value="HR" disabled>HR</option>
+                <option value="Principal" disabled>Principal</option>
+                <option value="Sub Coordinator" disabled>Sub Coordinator</option>
+              </select>
             </div>
             <div class="mb-4">
               <label class="block text-sm font-bold mb-1">Duty Number (Optional)</label>
@@ -2752,7 +2843,7 @@
 
       function toggleSettingsDashboard() {
         const mainContent = document.getElementById('mainContent');
-        const userRole = (document.getElementById('userName').dataset.role || 'user').toLowerCase();
+        const userRole = (document.getElementById('userName').dataset.role || 'teacher').toLowerCase();
 
         if (userRole === 'hr') {
             const adminTabs = ['btn-generalSettingsTab', 'btn-roleManagementTab', 'btn-staffRosterTab', 'btn-auditLogsTab', 'btn-dataManagementTab'];

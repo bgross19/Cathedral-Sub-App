@@ -69,7 +69,7 @@ function setupDatabase() {
   if (!rosterSheet) {
     rosterSheet = ss.insertSheet("Staff Roster");
   }
-  var rosterHeaders = ["Name", "Email", "Duty"];
+  var rosterHeaders = ["Name", "Email", "Role", "Duty"];
   rosterSheet.getRange(1, 1, 1, rosterHeaders.length).setValues([rosterHeaders]);
   rosterSheet.getRange(1, 1, 1, rosterHeaders.length).setFontWeight("bold");
 
