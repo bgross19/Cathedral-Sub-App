@@ -106,12 +106,24 @@
               `;
           }
 
+          let dutyOptionsHtml = '<option value=""></option>';
+          for (let i = 1; i <= 8; i++) {
+              let isSelected = (staff.duty == i) ? 'selected' : '';
+              dutyOptionsHtml += `<option value="${i}" ${isSelected}>${i}</option>`;
+          }
+
+          let dutyHtml = `
+              <select onchange="updateStaffDutyInline('${escapeJs(staff.email)}', this.value)" class="p-1 border rounded focus:ring-1 focus:ring-[#00843D] outline-none text-sm bg-white">
+                  ${dutyOptionsHtml}
+              </select>
+          `;
+
           html += `
             <tr class="hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0">
               <td class="p-3 text-sm text-gray-800 font-medium">${escapeHtml(staff.name)}</td>
               <td class="p-3 text-sm text-gray-600">${escapeHtml(staff.email)}</td>
               <td class="p-3 text-sm text-gray-600">${roleHtml}</td>
-              <td class="p-3 text-sm text-gray-600">${escapeHtml(staff.duty || '')}</td>
+              <td class="p-3 text-sm text-gray-600">${dutyHtml}</td>
               <td class="p-3 text-right space-x-2">
                 <button onclick="openEditStaffModal('${escapeJs(staff.name)}', '${escapeJs(staff.email)}', '${escapeJs(staff.role || '')}', '${escapeJs(staff.duty || '')}')" class="text-blue-600 hover:text-blue-800 font-semibold text-sm">Edit</button>
                 <button onclick="deleteStaffMember('${escapeJs(staff.email)}')" class="text-red-600 hover:text-red-800 font-semibold text-sm">Delete</button>
@@ -139,6 +151,24 @@
                   loadStaffRosterSettings(); // revert
               })
               .updateStaffRoleInlineAdmin(email, newRole);
+      }
+
+      function updateStaffDutyInline(email, newDuty) {
+          google.script.run
+              .withSuccessHandler(result => {
+                  if (result && result.success) {
+                      showToast("Duty updated successfully.", "success");
+                      loadStaffRosterSettings();
+                  } else {
+                      showToast("Failed to update duty: " + (result ? result.error : "Unknown error"), "error");
+                      loadStaffRosterSettings(); // revert
+                  }
+              })
+              .withFailureHandler(err => {
+                  showToast("Connection Error: " + err.message, 'error');
+                  loadStaffRosterSettings(); // revert
+              })
+              .updateStaffDutyInlineAdmin(email, newDuty);
       }
 
       function copyStaffRosterData() {

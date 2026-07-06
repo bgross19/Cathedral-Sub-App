@@ -731,6 +731,55 @@ function updateStaffRoleInlineAdmin(email, newRole) {
 }
 
 /**
+ * Updates a staff member's duty inline from the admin settings dashboard.
+ */
+function updateStaffDutyInlineAdmin(email, newDuty) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+  } catch (e) {
+    notifyAdminOfError("updateStaffDutyInlineAdmin_lock", e);
+    return { success: false, error: "The server is currently busy. Please try again." };
+  }
+
+  try {
+    var ss = getSS();
+    var user = getUserData(ss);
+    assertPermission(user, "Settings");
+
+    var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
+    var data = rosterSheet.getDataRange().getValues();
+    var targetEmail = String(email).trim().toLowerCase();
+
+    var rowIndexToUpdate = -1;
+    var currentName = "";
+    var currentRole = "";
+
+    for (var i = 1; i < data.length; i++) {
+        if (String(data[i][1]).trim().toLowerCase() === targetEmail) {
+            rowIndexToUpdate = i + 1;
+            currentName = String(data[i][0]).trim();
+            currentRole = String(data[i][2]).trim();
+            break;
+        }
+    }
+
+    if (rowIndexToUpdate !== -1) {
+       rosterSheet.getRange(rowIndexToUpdate, 1, 1, 4).setValues([[currentName, targetEmail, currentRole, newDuty]]);
+       logAuditAction("STAFF_UPDATED", targetEmail, "Updated staff duty inline: " + currentName + " to " + newDuty);
+       clearRosterCache();
+       return { success: true };
+    }
+    return { success: false, error: "Staff member not found." };
+  } catch (err) {
+    notifyAdminOfError("updateStaffDutyInlineAdmin", err);
+    return { success: false, error: err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
  * Saves a staff member (creates or updates) for the Admin Settings dashboard.
  */
 function saveStaffMemberAdmin(staffData) {
