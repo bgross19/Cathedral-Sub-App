@@ -107,7 +107,7 @@ function getSettings(ss) {
         "hr": { "Admin Dashboard": false, "HR Dashboard": true, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Open Jobs": false, "My Past Absences": true, "Settings": true },
         "sub coordinator": { "Admin Dashboard": true, "HR Dashboard": false, "Today at a Glance": true, "My Upcoming Sub Duties": true, "Today's Open Jobs": true, "My Past Absences": true, "Settings": false },
         "principal": { "Admin Dashboard": true, "HR Dashboard": true, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Open Jobs": false, "My Past Absences": true, "Settings": false },
-        "user": { "Admin Dashboard": false, "HR Dashboard": false, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Open Jobs": true, "My Past Absences": true, "Settings": false },
+        "teacher": { "Admin Dashboard": false, "HR Dashboard": false, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Open Jobs": true, "My Past Absences": true, "Settings": false },
         "substitute": { "Admin Dashboard": false, "HR Dashboard": false, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Open Jobs": true, "My Past Absences": true, "Settings": false }
       })
   };
@@ -244,7 +244,7 @@ function getUserData(ss) {
   
   var roleSheet = getSheetOrThrow(ss, "User Roles");
   var roleData = roleSheet ? roleSheet.getDataRange().getValues() : [];
-  var role = "User"; 
+  var role = "Teacher";
   
   for (var j = 1; j < roleData.length; j++) {
     if (String(roleData[j][0]).toLowerCase() === targetEmail) {
@@ -612,14 +612,15 @@ function getStaffRosterForAdmin() {
     var data = rosterSheet.getDataRange().getValues();
     var roster = [];
 
-    // Assuming row 0 is header: Name, Email, Duty
+    // Assuming row 0 is header: Name, Email, Role, Duty
     for (var i = 1; i < data.length; i++) {
       var name = String(data[i][0] || "").trim();
       var email = String(data[i][1] || "").trim();
-      var duty = String(data[i][2] || "").trim();
+      var role = String(data[i][2] || "").trim();
+      var duty = String(data[i][3] || "").trim();
 
       if (name || email) {
-        roster.push({ name: name, email: email, duty: duty });
+        roster.push({ name: name, email: email, role: role, duty: duty });
       }
     }
 
@@ -680,6 +681,56 @@ function clearRosterCache() {
 }
 
 /**
+ * Updates a staff member's role inline from the admin settings dashboard.
+ */
+function updateStaffRoleInlineAdmin(email, newRole) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+  } catch (e) {
+    notifyAdminOfError("updateStaffRoleInlineAdmin_lock", e);
+    return { success: false, error: "The server is currently busy. Please try again." };
+  }
+
+  try {
+    var ss = getSS();
+    var user = getUserData(ss);
+    assertPermission(user, "Settings");
+
+    var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
+    var data = rosterSheet.getDataRange().getValues();
+    var targetEmail = String(email).trim().toLowerCase();
+
+    var rowIndexToUpdate = -1;
+    var currentName = "";
+    var currentDuty = "";
+
+    for (var i = 1; i < data.length; i++) {
+        if (String(data[i][1]).trim().toLowerCase() === targetEmail) {
+            rowIndexToUpdate = i + 1;
+            currentName = String(data[i][0]).trim();
+            currentDuty = String(data[i][3]).trim();
+            break;
+        }
+    }
+
+    if (rowIndexToUpdate !== -1) {
+       rosterSheet.getRange(rowIndexToUpdate, 1, 1, 4).setValues([[currentName, targetEmail, newRole, currentDuty]]);
+       logAuditAction("STAFF_UPDATED", targetEmail, "Updated staff role inline: " + currentName + " to " + newRole);
+       upsertUserRoleInternal(ss, targetEmail, newRole);
+       clearRosterCache();
+       return { success: true };
+    }
+    return { success: false, error: "Staff member not found." };
+  } catch (err) {
+    notifyAdminOfError("updateStaffRoleInlineAdmin", err);
+    return { success: false, error: err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
  * Saves a staff member (creates or updates) for the Admin Settings dashboard.
  */
 function saveStaffMemberAdmin(staffData) {
@@ -703,6 +754,7 @@ function saveStaffMemberAdmin(staffData) {
     var originalEmail = staffData.originalEmail ? String(staffData.originalEmail).trim().toLowerCase() : "";
     var newEmail = String(staffData.email).trim();
     var newName = String(staffData.name).trim();
+    var newRole = String(staffData.role || "Teacher").trim();
     var newDuty = String(staffData.duty || "").trim();
 
     if (!newEmail || !newName) {
@@ -723,8 +775,8 @@ function saveStaffMemberAdmin(staffData) {
 
     if (rowIndexToUpdate !== -1) {
        // Update existing
-       rosterSheet.getRange(rowIndexToUpdate, 1, 1, 3).setValues([[newName, newEmail, newDuty]]);
-       logAuditAction("STAFF_UPDATED", newEmail, "Updated staff member: " + newName + " (" + newDuty + ")");
+       rosterSheet.getRange(rowIndexToUpdate, 1, 1, 4).setValues([[newName, newEmail, newRole, newDuty]]);
+       logAuditAction("STAFF_UPDATED", newEmail, "Updated staff member: " + newName + " (" + newRole + ", " + newDuty + ")");
     } else {
        // Check if new email already exists to prevent duplicates
        for (var i = 1; i < data.length; i++) {
@@ -734,9 +786,17 @@ function saveStaffMemberAdmin(staffData) {
          }
        }
        // Append new
-       rosterSheet.appendRow([newName, newEmail, newDuty]);
-       logAuditAction("STAFF_ADDED", newEmail, "Added staff member: " + newName + " (" + newDuty + ")");
+       rosterSheet.appendRow([newName, newEmail, newRole, newDuty]);
+       logAuditAction("STAFF_ADDED", newEmail, "Added staff member: " + newName + " (" + newRole + ", " + newDuty + ")");
     }
+
+    // Keep user roles in sync if the role changed
+    if (originalEmail && originalEmail !== newEmail.toLowerCase()) {
+        try { deleteUserRoleInternal(ss, originalEmail); } catch(e) {}
+    }
+
+    // Always upsert the role if it's Teacher or Substitute, or if we need to explicitly assign it
+    upsertUserRoleInternal(ss, newEmail.toLowerCase(), newRole);
 
     clearRosterCache();
 
@@ -837,6 +897,7 @@ function bulkUpsertStaffRoster(updates) {
        var update = updates[j];
        var email = String(update.email || "").trim();
        var name = String(update.name || "").trim();
+       var role = String(update.role || "Teacher").trim();
        var duty = String(update.duty || "").trim();
 
        if (!email || !name) continue;
@@ -845,20 +906,24 @@ function bulkUpsertStaffRoster(updates) {
        if (existingEmailsMap[lowerEmail] && existingEmailsMap[lowerEmail] > 0) {
           // Update existing row directly
           var rowIndex = existingEmailsMap[lowerEmail];
-          rosterSheet.getRange(rowIndex, 1, 1, 3).setValues([[name, email, duty]]);
+          rosterSheet.getRange(rowIndex, 1, 1, 4).setValues([[name, email, role, duty]]);
        } else {
           // Track for batch append
-          newRows.push([name, email, duty]);
+          newRows.push([name, email, role, duty]);
           // To handle duplicates within the upload batch itself
           existingEmailsMap[lowerEmail] = -1;
        }
+
+       // Update User Roles sheet
+       upsertUserRoleInternal(ss, lowerEmail, role);
+
        processedCount++;
     }
 
     if (newRows.length > 0) {
        // Append new rows at the end
        var startRow = rosterSheet.getLastRow() + 1;
-       rosterSheet.getRange(startRow, 1, newRows.length, 3).setValues(newRows);
+       rosterSheet.getRange(startRow, 1, newRows.length, 4).setValues(newRows);
     }
 
     logAuditAction("STAFF_BULK_UPLOAD", "Multiple", "Processed " + processedCount + " staff records");
@@ -951,6 +1016,49 @@ function editUserRole(oldEmail, newEmail, role) {
 /**
  * Deletes a user role.
  */
+function deleteUserRoleInternal(ss, email) {
+    var roleSheet = getSheetOrThrow(ss, "User Roles");
+    var data = roleSheet.getDataRange().getValues();
+    var targetEmail = email.toLowerCase().trim();
+    var targetIndex = -1;
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][0]).toLowerCase().trim() === targetEmail) {
+        targetIndex = i;
+        break;
+      }
+    }
+    if (targetIndex !== -1) {
+      logAuditAction("ROLE_DELETED", targetEmail, "Removed role (Internal sync)");
+      roleSheet.deleteRow(targetIndex + 1);
+    }
+}
+
+function upsertUserRoleInternal(ss, email, role) {
+    var roleSheet = getSheetOrThrow(ss, "User Roles");
+    var data = roleSheet.getDataRange().getValues();
+    var targetEmail = email.toLowerCase().trim();
+    var targetIndex = -1;
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][0]).toLowerCase().trim() === targetEmail) {
+        targetIndex = i;
+        break;
+      }
+    }
+
+    // Some roles like Admin should not be overwritten by roster sync
+    var specialRoles = ["admin", "hr", "principal", "sub coordinator"];
+    if (targetIndex !== -1) {
+        var currentRole = String(data[targetIndex][1]).toLowerCase().trim();
+        if (specialRoles.indexOf(currentRole) === -1) {
+             roleSheet.getRange(targetIndex + 1, 1, 1, 2).setValues([[targetEmail, role.trim()]]);
+             logAuditAction("ROLE_UPDATED", targetEmail, "Updated role via roster sync: " + role);
+        }
+    } else {
+        roleSheet.appendRow([targetEmail, role.trim()]);
+        logAuditAction("ROLE_ADDED", targetEmail, "Assigned role via roster sync: " + role);
+    }
+}
+
 function deleteUserRole(email) {
   try {
     var ss = getSS();
@@ -1963,7 +2071,7 @@ function getInitialPayload() {
     }
     var userName = String(name).trim().toLowerCase();
 
-    var role = "User";
+    var role = "Teacher";
     for (var j = 1; j < roleData.length; j++) {
       if (String(roleData[j][0]).toLowerCase() === targetEmail) {
         role = roleData[j][1];
