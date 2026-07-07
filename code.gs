@@ -2321,7 +2321,7 @@ function getInitialPayload() {
       var staffList = [];
       for (var i = 1; i < rosterData.length; i++) {
         var staffName = String(rosterData[i][0]).trim();
-        var duty = String(rosterData[i][2] || "").trim();
+        var duty = String(rosterData[i][3] || "").trim();
         if (staffName) {
           var display = staffName;
           if (duty) display = staffName + " - " + duty;
