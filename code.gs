@@ -1702,14 +1702,7 @@ function updateAbsence(absenceId, formData) {
       var instructions = formData.specialInstructions;
       if (formData.hrConfirmed) instructions = "[HR Docs Provided] " + instructions;
 
-      // Update basic info
-      sheet.getRange(i + 1, 4, 1, 6).setValues([[
-        formData.date, "'" + formData.periods, formData.reason,
-        formData.duration, urgencyFormatted, instructions
-      ]]);
-      logAuditAction("ABSENCE_UPDATED", absenceId, "Updated absence details (Date: " + formData.date + ", Periods: " + formData.periods + ")");
-
-      // Notify subs
+      // Identify sub clears
       var subClearUpdates = [];
       for (var p = 1; p <= 8; p++) {
         var subIndex = 8 + p;
@@ -1726,7 +1719,7 @@ function updateAbsence(absenceId, formData) {
                   cancelDetails.date = Utilities.formatDate(new Date(oldDateRaw), Session.getScriptTimeZone(), "MMM d, yyyy");
                   sendSubNotification(email, "Canceled", cancelDetails);
                }
-               subClearUpdates.push({row: i + 1, col: subIndex + 1});
+               subClearUpdates.push(subIndex);
              } else {
                var oldReason = String(data[i][5]);
                var oldDuration = String(data[i][6]);
@@ -1747,28 +1740,36 @@ function updateAbsence(absenceId, formData) {
                }
              }
           } else if (dateChanged || !isPeriodStillNeeded) {
-             subClearUpdates.push({row: i + 1, col: subIndex + 1});
+             subClearUpdates.push(subIndex);
           }
         }
       }
 
-      // Perform batch clears if needed
-      if (subClearUpdates.length > 0) {
-        var colLetters = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"];
-        var rangesA1 = [];
-        for (var s = 0; s < subClearUpdates.length; s++) {
-          var r = subClearUpdates[s].row;
-          var c = subClearUpdates[s].col;
-          var colA1 = "";
-          if (c <= 26) {
-            colA1 = colLetters[c - 1];
-          } else {
-             colA1 = colLetters[Math.floor((c - 1) / 26) - 1] + colLetters[(c - 1) % 26];
-          }
-          rangesA1.push(colA1 + r);
-        }
-        sheet.getRangeList(rangesA1).setValue("");
+      // Build a contiguous array for columns 4 through 17 (index 3 to 16)
+      // D is 4 (Date), E is 5 (Periods), F is 6 (Reason), G is 7 (Duration), H is 8 (Urgency), I is 9 (Instructions)
+      // J to Q are 10 to 17 (Sub 1 to Sub 8)
+      var updatedRowBlock = [
+        formData.date, "'" + formData.periods, formData.reason,
+        formData.duration, urgencyFormatted, instructions
+      ];
+
+      // Append the existing sub data to the block
+      for (var sIdx = 9; sIdx <= 16; sIdx++) {
+         updatedRowBlock.push(data[i][sIdx]);
       }
+
+      // Clear the necessary sub periods in the block
+      for (var s = 0; s < subClearUpdates.length; s++) {
+         // subIndex is between 9 and 16.
+         // updatedRowBlock[0] maps to column 4.
+         // updatedRowBlock[subIndex - 3] maps to column subIndex + 1.
+         updatedRowBlock[subClearUpdates[s] - 3] = "";
+      }
+
+      // Single API call to update both the basic info and all sub clearing at once
+      sheet.getRange(i + 1, 4, 1, 14).setValues([updatedRowBlock]);
+      logAuditAction("ABSENCE_UPDATED", absenceId, "Updated absence details (Date: " + formData.date + ", Periods: " + formData.periods + ")");
+
 
       if (currentUserEmail !== teacherEmail) {
          var rawDate = data[i][3];
