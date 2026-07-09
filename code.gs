@@ -509,6 +509,8 @@ function processEmailQueue() {
 
 /**
  * Sets up a time-driven trigger to process the email queue every 1 minute.
+ * Note: This function is meant to be run manually from the Apps Script editor
+ * exactly once during the initial setup of the application.
  */
 function setupEmailQueueTrigger() {
   // First, remove any existing triggers for this function to avoid duplicates
