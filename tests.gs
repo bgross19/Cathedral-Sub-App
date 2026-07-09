@@ -73,6 +73,151 @@ var describe = TestRunner.describe;
 var it = TestRunner.it;
 var assert = TestRunner.assert;
 
+/**
+ * Test function to fetch the master schedule from PowerSchool and dump it into a temporary sheet.
+ *
+ * NOTE FOR POWERSCHOOL ADMIN:
+ * Because PowerSchool's default API doesn't expose a clean, single endpoint for this,
+ * you will need to create a "PowerQuery" plugin in PowerSchool with the endpoint path:
+ * /ws/schema/query/com.cathedral.subapp.masterschedule
+ *
+ * You can base the PowerQuery on this provided SQL:
+ * WITH DistinctClasses AS (
+ *     -- Step 1: Get a clean list with only ONE row per teacher, per period, per course, per room
+ *     SELECT DISTINCT
+ *         t.LASTFIRST,
+ *         t.EMAIL_Addr,
+ *         REPLACE(cc.expression, '(A)', '') AS period,
+ *         t.EMAIL_Addr || '-' || REPLACE(cc.expression, '(A)', '') AS email_period_join,
+ *         c.course_name,
+ *         s.room,  -- Added Room Number here
+ *         t.id AS teacher_id
+ *     FROM cc cc
+ *     JOIN courses c
+ *         ON c.course_number = cc.course_number
+ *     JOIN teachers t
+ *         ON cc.TEACHERID = t.id
+ *     JOIN sections s                     -- New JOIN for the Sections table
+ *         ON cc.sectionid = s.id          -- Linking the enrollment to the specific section
+ *     WHERE cc.termid = :target_term      -- Use a parameterized term ID
+ * )
+ * -- Step 2: Combine the co-seated courses from that clean list
+ * SELECT
+ *     LASTFIRST,
+ *     EMAIL_Addr,
+ *     period,
+ *     email_period_join,
+ *     room,  -- Pulling the Room Number through to the final result
+ *     LISTAGG(course_name, ' / ') WITHIN GROUP (ORDER BY course_name) AS course_names,
+ *     MAX(teacher_id) AS teacher_id
+ * FROM DistinctClasses
+ * GROUP BY
+ *     LASTFIRST,
+ *     EMAIL_Addr,
+ *     period,
+ *     email_period_join,
+ *     room   -- Grouping by Room Number as well
+ * ORDER BY LASTFIRST
+ */
+function testPowerSchoolMasterScheduleFetch() {
+  const token = getPowerSchoolToken();
+  if (!token) {
+    Logger.log("Failed to get PowerSchool token.");
+    return;
+  }
+
+  const settings = typeof getSettings === "function" ? getSettings() : {};
+  const rawUrl = settings['PS_URL'];
+  const POWERSCHOOL_URL = rawUrl ? rawUrl.trim().replace(/\/$/, '') : null;
+
+  if (!POWERSCHOOL_URL) {
+    Logger.log("Missing PS_URL property.");
+    return;
+  }
+
+  // The placeholder PowerQuery endpoint.
+  // Update this if you name your PowerQuery differently.
+  // By default, PowerSchool PowerQueries limit results to 100 records.
+  // Appending ?pagesize=0 instructs it to return all records at once.
+  const endpoint = "/ws/schema/query/com.cathedral.subapp.masterschedule?pagesize=0";
+
+  const options = {
+    method: "POST", // PowerQueries require POST, even for retrieving data
+    headers: {
+      "Authorization": "Bearer " + token,
+      "Content-Type": "application/json",
+      "Accept": "application/json"
+    },
+    // PowerQueries require a JSON payload, even if empty, when using POST.
+    payload: JSON.stringify({}),
+    muteHttpExceptions: true
+  };
+
+  let responseText;
+  let statusCode;
+  try {
+    let url = POWERSCHOOL_URL + endpoint;
+    Logger.log('Fetching URL: ' + url);
+    const response = UrlFetchApp.fetch(url, options);
+    statusCode = response.getResponseCode();
+    responseText = response.getContentText();
+  } catch (error) {
+    Logger.log("API Fetch Error: " + error.toString());
+    responseText = error.toString();
+    statusCode = "ERROR";
+  }
+
+  // Now write to Google Sheets
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheetName = "PS Master Schedule Test";
+  let sheet = ss.getSheetByName(sheetName);
+
+  if (!sheet) {
+    sheet = ss.insertSheet(sheetName);
+  } else {
+    sheet.clear();
+  }
+
+  // Set Headers
+  sheet.appendRow(["LASTFIRST", "EMAIL_ADDR", "PERIOD", "ROOM", "COURSE_NAMES", "TERM"]);
+
+  // If we have an error code (like 404 because the query doesn't exist yet)
+  if (statusCode !== 200) {
+    sheet.appendRow(["API ERROR", "Status Code: " + statusCode, responseText, "", "", ""]);
+    Logger.log("API returned status: " + statusCode);
+    return;
+  }
+
+  try {
+    const json = JSON.parse(responseText);
+    // PowerQueries usually return data in a `record` array.
+    const records = json.record || [];
+
+    if (records.length === 0) {
+      sheet.appendRow(["NO DATA RETURNED", JSON.stringify(json), "", "", "", ""]);
+    } else {
+      const rows = records.map(r => {
+        let periodRaw = String(r.period || r.PERIOD || "");
+        let periodMatch = periodRaw.match(/\d+/);
+        let periodClean = periodMatch ? periodMatch[0] : periodRaw.trim();
+
+        return [
+          r.lastfirst || r.LASTFIRST || "",
+          r.email_addr || r.EMAIL_ADDR || "",
+          periodClean,
+          r.room || r.ROOM || r.room_number || r.ROOM_NUMBER || "",
+          r.course_names || r.COURSE_NAMES || r.course_name || r.COURSE_NAME || "",
+          "Target Term" // The actual term ID should be mapped if returned by the API
+        ];
+      });
+      sheet.getRange(2, 1, rows.length, 6).setValues(rows);
+    }
+  } catch (parseError) {
+    sheet.appendRow(["JSON PARSE ERROR", parseError.toString(), responseText, "", "", ""]);
+    Logger.log("Failed to parse JSON: " + parseError.toString());
+  }
+}
+
 function runTests() {
   TestRunner.resetCounts();
 
