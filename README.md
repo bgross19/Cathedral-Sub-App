@@ -54,6 +54,12 @@ To optimize performance, the app caches the PowerSchool Master Schedule.
 2. Select the `setupCacheWarmingTrigger` function.
 3. Click the **Run** button to create a time-driven trigger that refreshes the cache daily between 1 AM and 2 AM.
 
+### 5. Email Queue Trigger
+To enable the application to process and send automated email notifications in the background:
+1. Open `code.gs` in the editor.
+2. Select the `setupEmailQueueTrigger` function.
+3. Click the **Run** button to create a time-driven trigger that processes the 'Email Queue' sheet every minute.
+
 ## Architecture & Code Structure
 The application is structured into the following key files:
 *   **`Index.html`**: The frontend UI of the web application. It handles routing, rendering dashboards, modals, and user interactions using vanilla JavaScript and Tailwind CSS.
