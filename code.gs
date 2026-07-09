@@ -2093,15 +2093,7 @@ function getInitialPayload() {
 
     var scheduleData = getMasterScheduleData();
 
-    // Look for Payperiods sheet case-insensitively
-    var allSheets = ss.getSheets();
-    var payPeriodsSheet = null;
-    for (var s = 0; s < allSheets.length; s++) {
-      if (allSheets[s].getName().toLowerCase() === "payperiods") {
-        payPeriodsSheet = allSheets[s];
-        break;
-      }
-    }
+    var payPeriodsSheet = ss.getSheetByName("PayPeriods");
     var payPeriodsData = payPeriodsSheet ? payPeriodsSheet.getDataRange().getValues() : [];
 
 
