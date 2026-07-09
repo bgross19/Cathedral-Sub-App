@@ -2532,47 +2532,6 @@ function getInitialPayload() {
 
 
 /**
- * Executes a function and catches any unhandled exceptions to notify the admin.
- * @param {Function} func - The function to execute.
- * @param {string} funcName - The name of the function for logging.
- * @returns {any} The result of the function.
- */
-function withGlobalExceptionHandler(funcName, func) {
-  return function() {
-    try {
-      return func.apply(this, arguments);
-    } catch (e) {
-      console.error("Global Error in " + funcName + ": " + e.message + "\nStack: " + e.stack);
-
-      try {
-        var settings = getSettings();
-        var adminEmail = settings["Redirect Email"];
-        if (adminEmail && adminEmail.trim() !== "") {
-          var subject = "Critical App Error: " + funcName;
-          var body = "An error occurred in the Cathedral Sub App.\n\n" +
-                     "Function: " + funcName + "\n" +
-                     "User: " + Session.getActiveUser().getEmail() + "\n" +
-                     "Error Message: " + e.message + "\n\n" +
-                     "Stack Trace:\n" + e.stack;
-
-          MailApp.sendEmail({
-            to: adminEmail,
-            subject: subject,
-            body: body
-          });
-        }
-      } catch (mailError) {
-        console.error("Failed to send admin error email: " + mailError.message);
-      }
-
-      throw e; // Re-throw so frontend still sees an error
-    }
-  };
-}
-
-
-
-/**
  * Clears the Master Schedule cache from the Script Cache.
  * Returns a success object.
  */
