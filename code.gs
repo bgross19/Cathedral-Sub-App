@@ -1,4 +1,5 @@
 const APP_VERSION = "1.0.0";
+const DEFAULT_APP_URL = "https://script.google.com/a/macros/gocathedral.com/s/AKfycbwKZrBo4R-9O97aVNCjOHk9PddWCb6XNKviDS1lj4nNc49khl3T9OL8pGUDa7E1XE0/exec";
 
 
 function notifyAdminOfError(funcName, e) {
@@ -86,7 +87,7 @@ function getSettings(ss) {
   var defaults = {
     "Email Mode": "Live",
     "Redirect Email": "Bgross@gocathedral.com",
-    "App URL": "https://script.google.com/a/macros/gocathedral.com/s/AKfycbwKZrBo4R-9O97aVNCjOHk9PddWCb6XNKviDS1lj4nNc49khl3T9OL8pGUDa7E1XE0/exec",
+    "App URL": DEFAULT_APP_URL,
     "Urgency Cutoff Time": "15",
     "Term ID": "3503",
     "PS_CLIENT_ID": "",
@@ -254,7 +255,7 @@ function getUserData(ss) {
   }
   
   var settings = getSettings(ss);
-  var appUrl = settings["App URL"] || "https://script.google.com/a/macros/gocathedral.com/s/AKfycbwKZrBo4R-9O97aVNCjOHk9PddWCb6XNKviDS1lj4nNc49khl3T9OL8pGUDa7E1XE0/exec";
+  var appUrl = settings["App URL"] || DEFAULT_APP_URL;
   var urgencyCutoffTime = settings["Urgency Cutoff Time"] || "15";
   var defaultAbsenceReasons = JSON.stringify([
       {reason: "Personal", hrRequired: false},
@@ -1303,7 +1304,7 @@ function sendUrgentCoverageEmail(ss, teacherName, formData, instructions) {
   if (coordinatorEmail) {
     var subject = "URGENT COVERAGE NEEDED: " + teacherName;
     var settings = getSettings();
-    var appUrl = settings["App URL"] || "https://script.google.com/a/macros/gocathedral.com/s/AKfycbwKZrBo4R-9O97aVNCjOHk9PddWCb6XNKviDS1lj4nNc49khl3T9OL8pGUDa7E1XE0/exec";
+    var appUrl = settings["App URL"] || DEFAULT_APP_URL;
 
     var body = "An urgent absence request has been submitted requiring immediate attention.\n\n" +
                "Teacher: " + teacherName + "\n" +
@@ -1370,7 +1371,7 @@ function submitAbsence(formData) {
     logAuditAction("ABSENCE_SUBMITTED", uniqueId, "Requested coverage for " + formData.date + " (Periods: " + formData.periods + ")");
     // SEND CONFIRMATION EMAIL TO SUBMITTER
     var settings = getSettings();
-    var appUrl = settings["App URL"] || "https://script.google.com/a/macros/gocathedral.com/s/AKfycbwKZrBo4R-9O97aVNCjOHk9PddWCb6XNKviDS1lj4nNc49khl3T9OL8pGUDa7E1XE0/exec";
+    var appUrl = settings["App URL"] || DEFAULT_APP_URL;
 
     var confSubject = "New Absence Request Confirmation";
     var confBody = "Your absence request has been successfully submitted.\n\n" +
@@ -1447,7 +1448,7 @@ function cancelMySubDuty(absenceId, period) {
           if (coordinatorEmail && details) {
             var subject = "SUB CANCELLATION: " + userName + " cancelled coverage";
             var settings = getSettings();
-            var appUrl = settings["App URL"] || "https://script.google.com/a/macros/gocathedral.com/s/AKfycbwKZrBo4R-9O97aVNCjOHk9PddWCb6XNKviDS1lj4nNc49khl3T9OL8pGUDa7E1XE0/exec";
+            var appUrl = settings["App URL"] || DEFAULT_APP_URL;
 
             var body = userName + " has cancelled their assigned coverage.\n\n" +
                        "Date: " + details.date + "\n" +
@@ -1878,7 +1879,7 @@ function sendSubNotification(subEmail, type, details) {
   var htmlBody = "";
 
   var settings = getSettings();
-  var appUrl = settings["App URL"] || "https://script.google.com/a/macros/gocathedral.com/s/AKfycbwKZrBo4R-9O97aVNCjOHk9PddWCb6XNKviDS1lj4nNc49khl3T9OL8pGUDa7E1XE0/exec";
+  var appUrl = settings["App URL"] || DEFAULT_APP_URL;
 
   var detailsText = "Date: " + details.date + "\n";
   if (details.period) detailsText += "Period: " + details.period + "\n";
@@ -2124,7 +2125,7 @@ function getInitialPayload() {
     }
     var lowerRole = String(role).toLowerCase();
 
-    var appUrl = settings["App URL"] || "https://script.google.com/a/macros/gocathedral.com/s/AKfycbwKZrBo4R-9O97aVNCjOHk9PddWCb6XNKviDS1lj4nNc49khl3T9OL8pGUDa7E1XE0/exec";
+    var appUrl = settings["App URL"] || DEFAULT_APP_URL;
     var urgencyCutoffTime = settings["Urgency Cutoff Time"] || "15";
     var defaultAbsenceReasons = JSON.stringify([
         {reason: "Personal", hrRequired: false},

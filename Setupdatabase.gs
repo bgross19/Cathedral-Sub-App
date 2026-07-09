@@ -42,7 +42,7 @@ function setupDatabase() {
     var defaultSettings = [
       ["Email Mode", "Live"],
       ["Redirect Email", "Bgross@gocathedral.com"],
-      ["App URL", "https://script.google.com/a/macros/gocathedral.com/s/AKfycbwKZrBo4R-9O97aVNCjOHk9PddWCb6XNKviDS1lj4nNc49khl3T9OL8pGUDa7E1XE0/exec"],
+      ["App URL", DEFAULT_APP_URL],
       ["Urgency Cutoff Time", "15"],
       ["Term ID", "3503"],
       ["PS_CLIENT_ID", ""],
