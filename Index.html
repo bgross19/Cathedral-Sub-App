@@ -3080,7 +3080,7 @@
 
         teachers.forEach(t => {
             html += `<tr class="hover:bg-gray-50 transition-colors group">`;
-            html += `<td class="p-3 text-sm text-gray-800 font-bold border border-gray-300 sticky left-0 z-10 bg-white group-hover:bg-gray-50 shadow-[1px_0_0_0_#d1d5db]">${t.name}</td>`;
+            html += `<td class="p-3 text-sm text-gray-800 font-bold border border-gray-300 sticky left-0 z-10 bg-white group-hover:bg-gray-50 shadow-[1px_0_0_0_#d1d5db]">${escapeHtml(t.name)}</td>`;
 
             sortedActivePeriods.forEach(p => {
                 const pData = t.periods[p];
@@ -3164,7 +3164,7 @@
 
         teachers.forEach(t => {
             html += `<tr class="hover:bg-gray-50 transition-colors group">`;
-            html += `<td class="p-3 text-sm text-gray-800 font-bold border border-gray-300 sticky left-0 z-10 bg-white group-hover:bg-gray-50 shadow-[1px_0_0_0_#d1d5db]">${t.name}</td>`;
+            html += `<td class="p-3 text-sm text-gray-800 font-bold border border-gray-300 sticky left-0 z-10 bg-white group-hover:bg-gray-50 shadow-[1px_0_0_0_#d1d5db]">${escapeHtml(t.name)}</td>`;
 
             sortedActivePeriods.forEach(p => {
                 const pData = t.periods[p];
