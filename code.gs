@@ -1037,31 +1037,24 @@ function editUserRole(oldEmail, newEmail, role) {
     var user = getUserData(ss);
     assertPermission(user, "Settings");
 
-    var roleSheet = getSheetOrThrow(ss, "User Roles");
+    var oldEmailClean = oldEmail.toLowerCase().trim();
+    var newEmailClean = newEmail.toLowerCase().trim();
 
-    var data = roleSheet.getDataRange().getValues();
-    var targetEmail = oldEmail.toLowerCase().trim();
-    var targetIndex = -1;
-
-    for (var i = 1; i < data.length; i++) {
-      if (String(data[i][0]).toLowerCase().trim() === targetEmail) {
-        targetIndex = i;
-        break;
-      }
+    if (oldEmailClean !== newEmailClean) {
+      deleteUserRoleInternal(ss, oldEmailClean);
     }
 
-    if (targetIndex !== -1) {
-      logAuditAction("ROLE_UPDATED", oldEmail, "Changed role to: " + role + " (Email: " + newEmail + ")");
-      roleSheet.getRange(targetIndex + 1, 1, 1, 2).setValues([[newEmail.toLowerCase().trim(), role.trim()]]);
-      return {
-      success: true };
-    }
+    upsertUserRoleInternal(ss, newEmailClean, role, true);
 
-    throw new Error("User not found.");
+    // Additional logging to override the generic internal sync logs for admin actions
+    if (oldEmailClean !== newEmailClean) {
+        logAuditAction("ROLE_UPDATED", oldEmail, "Changed role to: " + role + " (Email: " + newEmail + ")");
+    }
+    return { success: true };
+
   } catch (err) {
     notifyAdminOfError("editUserRole", err);
-    return {
-      success: false, error: err.message };
+    return { success: false, error: err.message };
   }
 }
 
@@ -1085,7 +1078,7 @@ function deleteUserRoleInternal(ss, email) {
     }
 }
 
-function upsertUserRoleInternal(ss, email, role) {
+function upsertUserRoleInternal(ss, email, role, forceUpdate) {
     var roleSheet = getSheetOrThrow(ss, "User Roles");
     var data = roleSheet.getDataRange().getValues();
     var targetEmail = email.toLowerCase().trim();
@@ -1101,7 +1094,7 @@ function upsertUserRoleInternal(ss, email, role) {
     var specialRoles = ["admin", "hr", "principal", "sub coordinator"];
     if (targetIndex !== -1) {
         var currentRole = String(data[targetIndex][1]).toLowerCase().trim();
-        if (specialRoles.indexOf(currentRole) === -1) {
+        if (forceUpdate || specialRoles.indexOf(currentRole) === -1) {
              roleSheet.getRange(targetIndex + 1, 1, 1, 2).setValues([[targetEmail, role.trim()]]);
              logAuditAction("ROLE_UPDATED", targetEmail, "Updated role via roster sync: " + role);
         }
