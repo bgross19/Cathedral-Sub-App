@@ -217,7 +217,12 @@
              btn.disabled = false;
              btn.innerText = originalText;
              if (result && result.success) {
-                attemptCloseAllModals();
+                originalModalData = {};
+                closeAllModals();
+                document.getElementById('staffNameInput').value = '';
+                document.getElementById('staffEmailInput').value = '';
+                document.getElementById('staffRoleInput').value = 'Teacher';
+                document.getElementById('staffDutyInput').value = '';
                 loadStaffRosterSettings();
              } else {
                 showToast("Failed to save staff member: " + (result ? result.error : "Unknown error"), "error");
@@ -1712,7 +1717,10 @@
         google.script.run
           .withSuccessHandler(result => {
             if (result && result.success) {
+              originalModalData = {};
               closeAddRoleModal();
+              document.getElementById('addRoleEmail').value = '';
+              document.getElementById('addRoleSelect').value = 'Admin';
               loadRolesData();
             } else {
               showToast("Failed to add role: " + (result ? result.error : "Unknown error"), "error");
@@ -4254,6 +4262,7 @@
                 showToast("Request Updated Successfully!", 'success');
                 btn.disabled = false;
                 btn.innerHTML = 'Save Changes';
+                originalModalData = {};
                 toggleModal();
                 loadMyAbsences();
                 if (!document.getElementById('adminSection').classList.contains('hidden')) {
@@ -4282,6 +4291,7 @@
                 document.getElementById('hrSection').classList.add('hidden');
                 btn.disabled = false;
                 btn.innerHTML = 'Submit Request';
+                originalModalData = {};
                 toggleModal();
                 EventBus.publish('refresh_myAbsences');
 
