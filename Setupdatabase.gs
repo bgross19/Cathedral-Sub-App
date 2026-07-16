@@ -18,12 +18,6 @@ function setupDatabase() {
   absenceSheet.getRange(1, 1, 1, absenceHeaders.length).setValues([absenceHeaders]);
   absenceSheet.getRange(1, 1, 1, absenceHeaders.length).setFontWeight("bold");
 
-  // Optionally delete Split Responses sheet as it's no longer used
-  var splitSheet = ss.getSheetByName("Split Responses");
-  if (splitSheet) {
-    // ss.deleteSheet(splitSheet); // Uncomment to delete automatically, or delete manually.
-  }
-
   // 2. Audit Log Sheet
   var auditSheet = ss.getSheetByName("Audit Log");
   if (!auditSheet) {
