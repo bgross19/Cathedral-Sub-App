@@ -909,6 +909,46 @@ function deleteStaffMemberAdmin(email) {
 }
 
 /**
+ * Clears all duties from the Staff Roster.
+ */
+function clearAllStaffDuties() {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+  } catch (e) {
+    notifyAdminOfError("clearAllStaffDuties_lock", e);
+    return {
+      success: false, error: "The server is currently busy. Please try again." };
+  }
+
+  try {
+    var ss = getSS();
+    var user = getUserData(ss);
+    assertPermission(user, "Settings");
+
+    var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
+    var lastRow = rosterSheet.getLastRow();
+
+    if (lastRow > 1) {
+      // Clear only the 4th column (Duty) from row 2 down to the last row
+      rosterSheet.getRange(2, 4, lastRow - 1, 1).clearContent();
+    }
+
+    logAuditAction("STAFF_DUTIES_CLEARED", "All", "Admin cleared all staff duties");
+    clearRosterCache();
+
+    return {
+      success: true };
+  } catch (err) {
+    notifyAdminOfError("clearAllStaffDuties", err);
+    return {
+      success: false, error: err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
  * Processes a bulk upload/update of staff roster records.
  */
 function bulkUpsertStaffRoster(updates) {
