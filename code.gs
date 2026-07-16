@@ -15,11 +15,7 @@ function notifyAdminOfError(funcName, e) {
                  "Error Message: " + e.message + "\n\n" +
                  "Stack Trace:\n" + e.stack;
 
-      MailApp.sendEmail({
-        to: adminEmail,
-        subject: subject,
-        body: body
-      });
+      GmailApp.sendEmail(adminEmail, subject, body);
     }
   } catch (mailError) {
     console.error("Failed to send admin error email: " + mailError.message);
