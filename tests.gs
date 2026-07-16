@@ -315,6 +315,65 @@ function runTests() {
     });
   });
 
+  describe("notifyAdminOfError", function() {
+    it("should send email to admin using GmailApp", function() {
+      resetMocks();
+
+      // Mock global dependencies
+      var originalSession = typeof Session !== 'undefined' ? Session : null;
+      var mockEmail = "user@example.com";
+      if (typeof global !== 'undefined') {
+        global.Session = {
+          getActiveUser: function() {
+            return {
+              getEmail: function() {
+                return mockEmail;
+              }
+            };
+          }
+        };
+      }
+
+      getSettings = function() {
+        return { "Redirect Email": "admin@example.com" };
+      };
+
+      var error = new Error("Test error message");
+      error.stack = "Test stack trace";
+
+      notifyAdminOfError("TestFunction", error);
+
+      assert(mockSendEmailCalls.length === 1, "Expected sendEmail to be called once");
+      var call = mockSendEmailCalls[0];
+      assert(call.to === "admin@example.com", "Expected admin email");
+      assert(call.subject === "Critical App Error: TestFunction", "Expected error subject");
+      assert(call.body.indexOf("Function: TestFunction") !== -1, "Expected function name in body");
+      assert(call.body.indexOf("User: user@example.com") !== -1, "Expected user email in body");
+      assert(call.body.indexOf("Error Message: Test error message") !== -1, "Expected error message in body");
+      assert(call.body.indexOf("Stack Trace:\nTest stack trace") !== -1, "Expected stack trace in body");
+      assert(call.options === undefined, "Expected no options passed to GmailApp.sendEmail for this function");
+
+      // Restore session
+      if (typeof global !== 'undefined') {
+        global.Session = originalSession;
+      }
+    });
+
+    it("should not send email if admin email is missing", function() {
+      resetMocks();
+
+      getSettings = function() {
+        return { "Redirect Email": "" };
+      };
+
+      var error = new Error("Test error message");
+
+      notifyAdminOfError("TestFunction", error);
+
+      assert(mockSendEmailCalls.length === 0, "Expected no email to be sent");
+    });
+  });
+
   describe("Lookup Builders", function() {
     it("buildNameLookup - Empty array", function() {
       var result = buildNameLookup([]);
