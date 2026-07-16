@@ -106,16 +106,35 @@
               `;
           }
 
-          let dutyOptionsHtml = '<option value=""></option>';
+          let dutyArr = staff.duty ? String(staff.duty).split(',').map(d => d.trim()) : [];
+          let dutyDisplay = dutyArr.length > 0 ? dutyArr.join(', ') : 'None';
+
+          let dutyOptionsHtml = '';
           for (let i = 1; i <= 8; i++) {
-              let isSelected = (staff.duty == i) ? 'selected' : '';
-              dutyOptionsHtml += `<option value="${i}" ${isSelected}>${i}</option>`;
+              let isChecked = dutyArr.includes(String(i)) ? 'checked' : '';
+              dutyOptionsHtml += `
+                  <label class="flex items-center space-x-2 p-1 hover:bg-gray-100 cursor-pointer text-sm">
+                      <input type="checkbox" value="${i}" ${isChecked} onchange="handleDutyCheckboxChange('${escapeJs(staff.email)}', this)" class="form-checkbox h-4 w-4 text-[#00843D]">
+                      <span>Period ${i}</span>
+                  </label>
+              `;
           }
 
+          let dutyDropdownId = 'duty-dropdown-' + staff.email.replace(/[^a-zA-Z0-9]/g, '-');
           let dutyHtml = `
-              <select onchange="updateStaffDutyInline('${escapeJs(staff.email)}', this.value)" class="p-1 border rounded focus:ring-1 focus:ring-[#00843D] outline-none text-sm bg-white">
-                  ${dutyOptionsHtml}
-              </select>
+              <div class="relative inline-block text-left duty-dropdown-container">
+                  <button type="button" onclick="toggleDutyDropdown('${dutyDropdownId}')" class="inline-flex justify-between w-full p-1 border rounded focus:ring-1 focus:ring-[#00843D] outline-none text-sm bg-white text-gray-700 hover:bg-gray-50">
+                      <span id="duty-display-${dutyDropdownId}">${dutyDisplay}</span>
+                      <svg class="-mr-1 ml-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                          <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
+                      </svg>
+                  </button>
+                  <div id="${dutyDropdownId}" class="hidden origin-top-right absolute right-0 mt-1 w-32 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-10">
+                      <div class="py-1" role="menu" aria-orientation="vertical">
+                          ${dutyOptionsHtml}
+                      </div>
+                  </div>
+              </div>
           `;
 
           html += `
@@ -171,6 +190,50 @@
               .updateStaffDutyInlineAdmin(email, newDuty);
       }
 
+      function toggleDutyDropdown(dropdownId) {
+          const dropdown = document.getElementById(dropdownId);
+          if (dropdown.classList.contains('hidden')) {
+              // Close all other dropdowns
+              document.querySelectorAll('.duty-dropdown-container > div:not(.hidden)').forEach(el => {
+                  el.classList.add('hidden');
+              });
+              dropdown.classList.remove('hidden');
+          } else {
+              dropdown.classList.add('hidden');
+          }
+      }
+
+      function handleDutyCheckboxChange(email, checkbox) {
+          // Find the container for this dropdown
+          const dropdownContainer = checkbox.closest('.duty-dropdown-container');
+          const checkboxes = dropdownContainer.querySelectorAll('input[type="checkbox"]');
+
+          let selectedDuties = [];
+          checkboxes.forEach(cb => {
+              if (cb.checked) {
+                  selectedDuties.push(cb.value);
+              }
+          });
+
+          const newDutyStr = selectedDuties.join(', ');
+
+          // Update display
+          const dropdownId = dropdownContainer.querySelector('div[id^="duty-dropdown-"]').id;
+          const displaySpan = document.getElementById('duty-display-' + dropdownId);
+          displaySpan.innerText = newDutyStr || 'None';
+
+          updateStaffDutyInline(email, newDutyStr);
+      }
+
+      // Close duty dropdowns when clicking outside
+      document.addEventListener('click', function(event) {
+          if (!event.target.closest('.duty-dropdown-container')) {
+              document.querySelectorAll('.duty-dropdown-container > div:not(.hidden)').forEach(el => {
+                  el.classList.add('hidden');
+              });
+          }
+      });
+
       function copyStaffRosterData() {
         if (!currentStaffRoster || currentStaffRoster.length === 0) {
            showToast("No data to copy.", 'info');
@@ -192,7 +255,13 @@
         const name = document.getElementById('staffNameInput').value;
         const email = document.getElementById('staffEmailInput').value;
         const role = document.getElementById('staffRoleInput').value;
-        const duty = document.getElementById('staffDutyInput').value;
+
+        let selectedDuties = [];
+        document.querySelectorAll('.staff-duty-cb:checked').forEach(cb => selectedDuties.push(cb.value));
+        const duty = selectedDuties.join(', ');
+
+        // Keep hidden input in sync (optional, but good for captureModalState)
+        document.getElementById('staffDutyInput').value = duty;
 
         if (!name || !email) {
           showToast("Name and Email are required.", 'info');
@@ -633,6 +702,12 @@
       }
 
       // === Staff Roster Modals ===
+      function updateHiddenDutyInput() {
+        let selectedDuties = [];
+        document.querySelectorAll('.staff-duty-cb:checked').forEach(cb => selectedDuties.push(cb.value));
+        document.getElementById('staffDutyInput').value = selectedDuties.join(', ');
+      }
+
       function openAddStaffModal() {
         document.getElementById('staffModalTitle').innerText = "Add Staff Member";
         document.getElementById('staffOriginalEmail').value = "";
@@ -641,6 +716,7 @@
         document.getElementById('staffRoleInput').value = "Teacher";
         document.getElementById('staffRoleInput').disabled = false;
         document.getElementById('staffDutyInput').value = "";
+        document.querySelectorAll('.staff-duty-cb').forEach(cb => cb.checked = false);
 
         const modal = document.querySelector('#staffModal');
         const overlay = document.querySelector('#genericModalOverlay');
@@ -676,7 +752,12 @@
             roleInput.disabled = false;
         }
 
-        document.getElementById('staffDutyInput').value = duty || "";
+        const dutyStr = duty || "";
+        document.getElementById('staffDutyInput').value = dutyStr;
+        const dutyArr = dutyStr.split(',').map(d => d.trim());
+        document.querySelectorAll('.staff-duty-cb').forEach(cb => {
+            cb.checked = dutyArr.includes(cb.value);
+        });
 
         const modal = document.querySelector('#staffModal');
         const overlay = document.querySelector('#genericModalOverlay');
@@ -1836,8 +1917,19 @@
               </select>
             </div>
             <div class="mb-4">
-              <label class="block text-sm font-bold mb-1">Duty Number (Optional)</label>
-              <input type="number" id="staffDutyInput" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none" placeholder="e.g. 1">
+              <label class="block text-sm font-bold mb-1">Duty Periods (Optional)</label>
+              <input type="hidden" id="staffDutyInput" value="">
+              <div class="grid grid-cols-4 gap-2 mt-2" id="staffDutyCheckboxes">
+                <!-- Checkboxes will be dynamically generated or hardcoded here -->
+                <label class="flex items-center space-x-2"><input type="checkbox" value="1" class="form-checkbox h-4 w-4 text-[#00843D] staff-duty-cb" onchange="updateHiddenDutyInput()"> <span class="text-sm">Period 1</span></label>
+                <label class="flex items-center space-x-2"><input type="checkbox" value="2" class="form-checkbox h-4 w-4 text-[#00843D] staff-duty-cb" onchange="updateHiddenDutyInput()"> <span class="text-sm">Period 2</span></label>
+                <label class="flex items-center space-x-2"><input type="checkbox" value="3" class="form-checkbox h-4 w-4 text-[#00843D] staff-duty-cb" onchange="updateHiddenDutyInput()"> <span class="text-sm">Period 3</span></label>
+                <label class="flex items-center space-x-2"><input type="checkbox" value="4" class="form-checkbox h-4 w-4 text-[#00843D] staff-duty-cb" onchange="updateHiddenDutyInput()"> <span class="text-sm">Period 4</span></label>
+                <label class="flex items-center space-x-2"><input type="checkbox" value="5" class="form-checkbox h-4 w-4 text-[#00843D] staff-duty-cb" onchange="updateHiddenDutyInput()"> <span class="text-sm">Period 5</span></label>
+                <label class="flex items-center space-x-2"><input type="checkbox" value="6" class="form-checkbox h-4 w-4 text-[#00843D] staff-duty-cb" onchange="updateHiddenDutyInput()"> <span class="text-sm">Period 6</span></label>
+                <label class="flex items-center space-x-2"><input type="checkbox" value="7" class="form-checkbox h-4 w-4 text-[#00843D] staff-duty-cb" onchange="updateHiddenDutyInput()"> <span class="text-sm">Period 7</span></label>
+                <label class="flex items-center space-x-2"><input type="checkbox" value="8" class="form-checkbox h-4 w-4 text-[#00843D] staff-duty-cb" onchange="updateHiddenDutyInput()"> <span class="text-sm">Period 8</span></label>
+              </div>
             </div>
           </div>
           <div class="flex justify-end pt-2 mt-4 space-x-2 border-t border-gray-200 pt-4">
@@ -4580,7 +4672,8 @@
                     }
 
                     let teacherDuty = dutyLookup[subName];
-                    if (teacherDuty && teacherDuty === coveredPeriod) {
+                    let teacherDutyArr = teacherDuty ? String(teacherDuty).split(',').map(d => d.trim()) : [];
+                    if (teacherDutyArr.includes(String(coveredPeriod))) {
                         aggregated[subName].duties += 1;
                     } else {
                         aggregated[subName].extras += 1;
