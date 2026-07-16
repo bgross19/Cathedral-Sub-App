@@ -253,6 +253,33 @@
       });
       }
 
+      function clearAllDutiesClient() {
+        showConfirm("Are you sure you want to clear the assigned duties? This action cannot be easily undone", () => {
+          const btn = document.getElementById('clearDutiesBtn');
+          const originalText = btn.innerHTML;
+          btn.disabled = true;
+          btn.innerHTML = '<span>⏳</span> Clearing...';
+
+          google.script.run
+            .withSuccessHandler(result => {
+              btn.disabled = false;
+              btn.innerHTML = originalText;
+              if (result && result.success) {
+                showToast("All duties have been successfully cleared.", "success");
+                loadStaffRosterSettings();
+              } else {
+                showToast("Failed to clear duties: " + (result ? result.error : "Unknown error"), "error");
+              }
+            })
+            .withFailureHandler(err => {
+              btn.disabled = false;
+              btn.innerHTML = originalText;
+              showToast("Error: " + err.message, "error");
+            })
+            .clearAllStaffDuties();
+        });
+      }
+
       function processStaffCsvUpload() {
          const fileInput = document.getElementById('staffCsvFileInput');
          const textarea = document.getElementById('staffCsvTextarea');
@@ -1080,6 +1107,9 @@
         <div class="flex justify-between items-center mb-4 border-b pb-2">
            <h3 class="text-xl font-bold text-[#002147]">Staff Roster</h3>
            <div class="flex gap-2">
+               <button id="clearDutiesBtn" onclick="clearAllDutiesClient()" class="bg-red-600 hover:bg-red-700 text-white font-bold py-1.5 px-4 rounded-lg transition-colors text-sm flex items-center gap-2">
+                   <span>🧹</span> Clear Duties
+               </button>
                <button onclick="copyStaffRosterData()" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-1.5 px-4 rounded-lg transition-colors text-sm flex items-center gap-2">
                    <span>📋</span> Copy Data
                </button>
