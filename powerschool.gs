@@ -224,8 +224,98 @@ function warmMasterScheduleCache() {
     sheet.getRange(1, 1, scheduleData.length, scheduleData[0].length).setValues(scheduleData);
 
     Logger.log("Master Schedule Cache sheet updated successfully with " + scheduleData.length + " rows.");
+
+    // Sync to Staff Roster
+    try {
+      syncMasterScheduleToStaffRoster(scheduleData, ss);
+    } catch (e) {
+      Logger.log("Error syncing master schedule to staff roster: " + e.toString());
+    }
   } else {
     Logger.log("Master Schedule fetch returned empty data. Cache sheet not updated.");
+  }
+}
+
+/**
+ * Synchronizes the Master Schedule teachers to the Staff Roster.
+ * Adds any missing teachers with default role "Teacher" and blank duty.
+ */
+function syncMasterScheduleToStaffRoster(scheduleData, ss) {
+  if (!scheduleData || scheduleData.length <= 1) return;
+
+  const rosterSheet = ss.getSheetByName("Staff Roster");
+  if (!rosterSheet) return;
+
+  const rosterData = rosterSheet.getDataRange().getValues();
+  const existingEmails = {};
+
+  // Roster format: Name, Email, Role, Duty
+  for (let i = 1; i < rosterData.length; i++) {
+    const email = String(rosterData[i][1]).toLowerCase().trim();
+    if (email) {
+      existingEmails[email] = true;
+    }
+  }
+
+  const newTeachers = {};
+  const headers = scheduleData[0];
+  const nameIdx = headers.indexOf("LASTFIRST");
+  const emailIdx = headers.indexOf("EMAIL_ADDR");
+
+  if (nameIdx === -1 || emailIdx === -1) return;
+
+  for (let s = 1; s < scheduleData.length; s++) {
+    const row = scheduleData[s];
+    const teacherName = String(row[nameIdx]).trim();
+    // Maintain the exact casing for the email in the sheet, but lower-case for comparison
+    const rawEmail = String(row[emailIdx]).trim();
+    const teacherEmail = rawEmail.toLowerCase();
+
+    if (teacherEmail && teacherName && !existingEmails[teacherEmail] && !newTeachers[teacherEmail]) {
+      newTeachers[teacherEmail] = {
+        name: teacherName,
+        email: rawEmail
+      };
+    }
+  }
+
+  const newRows = [];
+  let addedCount = 0;
+  for (const key in newTeachers) {
+    const teacher = newTeachers[key];
+    newRows.push([teacher.name, teacher.email, "Teacher", ""]);
+
+    // Also add to User Roles
+    try {
+      if (typeof upsertUserRoleInternal === 'function') {
+        upsertUserRoleInternal(ss, teacher.email, "Teacher");
+      }
+    } catch (e) {
+      Logger.log("Failed to add user role for " + teacher.email + ": " + e.message);
+    }
+
+    // Log the action
+    try {
+      if (typeof logAuditAction === 'function') {
+        logAuditAction("STAFF_ADDED_SYNC", teacher.email, "Added staff member from Master Schedule: " + teacher.name + " (Teacher)");
+      }
+    } catch (e) {
+      Logger.log("Failed to log audit action for " + teacher.email + ": " + e.message);
+    }
+    addedCount++;
+  }
+
+  if (newRows.length > 0) {
+    const startRow = rosterSheet.getLastRow() + 1;
+    rosterSheet.getRange(startRow, 1, newRows.length, 4).setValues(newRows);
+    Logger.log("Successfully synced " + addedCount + " new teachers to Staff Roster.");
+
+    // Invalidate roster cache
+    try {
+      if (typeof clearRosterCache === 'function') {
+        clearRosterCache();
+      }
+    } catch (e) {}
   }
 }
 
