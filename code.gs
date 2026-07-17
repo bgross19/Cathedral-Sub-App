@@ -801,13 +801,6 @@ function saveStaffMemberAdmin(staffData) {
        logAuditAction("STAFF_ADDED", newEmail, "Added staff member: " + newName + " (" + newRole + ", " + newDuty + ")");
     }
 
-    // Keep user roles in sync if the role changed
-    if (originalEmail && originalEmail !== newEmail.toLowerCase()) {
-        try { deleteUserRoleInternal(ss, originalEmail); } catch(e) {}
-    }
-
-    // Always upsert the role if it's Teacher or Substitute, or if we need to explicitly assign it
-
     clearRosterCache();
 
         return {
@@ -1978,21 +1971,15 @@ function getInitialPayload() {
 
     // --- 2. Extract User Data ---
     var name = "Teacher";
+    var role = "Teacher";
     for (var i = 1; i < rosterData.length; i++) {
       if (String(rosterData[i][1]).toLowerCase() === targetEmail) {
         name = rosterData[i][0];
+        role = rosterData[i][2] ? String(rosterData[i][2]).trim() : "Teacher";
         break;
       }
     }
     var userName = String(name).trim().toLowerCase();
-
-    var role = "Teacher";
-    for (var j = 1; j < roleData.length; j++) {
-      if (String(roleData[j][0]).toLowerCase() === targetEmail) {
-        role = roleData[j][1];
-        break;
-      }
-    }
     var lowerRole = String(role).toLowerCase();
 
     var appUrl = settings["App URL"] || DEFAULT_APP_URL;
