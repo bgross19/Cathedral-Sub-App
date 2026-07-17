@@ -157,7 +157,6 @@
                   if (result && result.success) {
                       showToast("Role updated successfully.", "success");
                       loadStaffRosterSettings();
-                      loadRolesData(); // refresh roles table as well
                   } else {
                       showToast("Failed to update role: " + (result ? result.error : "Unknown error"), "error");
                       loadStaffRosterSettings(); // revert
@@ -2758,7 +2757,6 @@
           // load Settings Data
           if (userRole === 'admin') {
              loadSettingsData();
-             loadRolesData();
           }
           if (userRole === 'admin' || userRole === 'hr') {
              if (typeof loadPayPeriodsSettings === 'function') {
