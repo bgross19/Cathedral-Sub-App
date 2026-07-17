@@ -1,0 +1,24 @@
+{
+  "name": "app",
+  "version": "1.0.0",
+  "description": "The Cathedral Sub App is a custom Google Apps Script web application designed to manage substitute teacher requests, coverage assignments, and HR dashboard reporting. It integrates directly with a Google Sheet as its primary database and interfaces with the PowerSchool API to pull live Master Schedule data.",
+  "main": "benchmark.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bgross19/Cathedral-Sub-App.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/bgross19/Cathedral-Sub-App/issues"
+  },
+  "homepage": "https://github.com/bgross19/Cathedral-Sub-App#readme",
+  "dependencies": {
+    "puppeteer": "^25.3.0"
+  }
+}
