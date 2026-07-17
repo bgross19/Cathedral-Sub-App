@@ -67,15 +67,6 @@ function setupDatabase() {
   rosterSheet.getRange(1, 1, 1, rosterHeaders.length).setValues([rosterHeaders]);
   rosterSheet.getRange(1, 1, 1, rosterHeaders.length).setFontWeight("bold");
 
-  // 5. User Roles Sheet
-  var rolesSheet = ss.getSheetByName("User Roles");
-  if (!rolesSheet) {
-    rolesSheet = ss.insertSheet("User Roles");
-  }
-  var rolesHeaders = ["Email", "Role"];
-  rolesSheet.getRange(1, 1, 1, rolesHeaders.length).setValues([rolesHeaders]);
-  rolesSheet.getRange(1, 1, 1, rolesHeaders.length).setFontWeight("bold");
-
   // 6. PayPeriods Sheet
   var payPeriodsSheet = ss.getSheetByName("PayPeriods");
   if (!payPeriodsSheet) {
