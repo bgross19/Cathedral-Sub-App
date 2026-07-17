@@ -1627,6 +1627,7 @@
           })
           .updateSettings(settingsToUpdate);
       }
+    </script>
 
     <!-- Add/Edit Staff Modal -->
     <div id="staffModal" class="modal transition-opacity duration-[250ms] ease-in-out opacity-0 pointer-events-none fixed w-full h-full top-0 left-0 flex items-center justify-center z-[110]" onclick="if(event.target === this) attemptCloseAllModals()">
@@ -2409,7 +2410,7 @@
       function renderTodaysOpenJobs(unfilled) {
             const container = document.getElementById('todaysOpenJobs');
 
-            if (unfilled.length === 0) {
+            if (!unfilled || !Array.isArray(unfilled) || unfilled.length === 0) {
               container.innerHTML = 'There are no open jobs available for today.';
               container.classList.add('text-gray-400');
               return;
@@ -2577,7 +2578,7 @@
       function renderQuickCover(unfilled) {
             const container = document.getElementById('quickCoverContainer');
             
-            if (unfilled.length === 0) {
+            if (!unfilled || !Array.isArray(unfilled) || unfilled.length === 0) {
               container.innerHTML = '<div class="p-8 text-center text-gray-500 font-medium flex flex-col items-center gap-2"><span class="text-3xl">🎉</span> All classes are covered for the next 2 days!</div>';
               return;
             }
@@ -3664,7 +3665,7 @@
             mySubDutiesData = duties;
             const container = document.getElementById('mySubDuties');
 
-            if (duties.length === 0) {
+            if (!duties || !Array.isArray(duties) || duties.length === 0) {
               container.innerHTML = 'You have no assigned sub-duties over the next week.';
               return;
             }
@@ -3777,7 +3778,7 @@
       function renderMyAbsences(absences) {
             myAbsencesData = absences;
             const container = document.getElementById('myAbsences');
-            if (absences.length === 0) {
+            if (!absences || !Array.isArray(absences) || absences.length === 0) {
               container.innerHTML = 'No active requests found. You are doing great!';
               return;
             }
@@ -3826,7 +3827,7 @@
       function renderMyPastAbsences(absences) {
             myPastAbsencesData = absences;
             const container = document.getElementById('myPastAbsences');
-            if (!absences || absences.length === 0) {
+            if (!absences || !Array.isArray(absences) || absences.length === 0) {
               container.innerHTML = 'No past requests found.';
               return;
             }
