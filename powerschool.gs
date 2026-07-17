@@ -285,15 +285,6 @@ function syncMasterScheduleToStaffRoster(scheduleData, ss) {
     const teacher = newTeachers[key];
     newRows.push([teacher.name, teacher.email, "Teacher", ""]);
 
-    // Also add to User Roles
-    try {
-      if (typeof upsertUserRoleInternal === 'function') {
-        upsertUserRoleInternal(ss, teacher.email, "Teacher");
-      }
-    } catch (e) {
-      Logger.log("Failed to add user role for " + teacher.email + ": " + e.message);
-    }
-
     // Log the action
     try {
       if (typeof logAuditAction === 'function') {

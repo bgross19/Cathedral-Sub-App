@@ -39,7 +39,7 @@
         });
 
         // Reset all tab buttons
-        const tabBtns = ['generalSettingsTab', 'roleManagementTab', 'staffRosterTab', 'auditLogsTab', 'hrSettingsTab', 'dataManagementTab'];
+        const tabBtns = ['generalSettingsTab', 'staffRosterTab', 'auditLogsTab', 'hrSettingsTab', 'dataManagementTab'];
         tabBtns.forEach(btn => {
           const btnEl = document.getElementById('btn-' + btn);
           if (btnEl) {
@@ -90,21 +90,19 @@
 
         let html = '';
         currentStaffRoster.forEach((staff, idx) => {
-          const specialRoles = ["admin", "hr", "principal", "sub coordinator"];
-          let roleHtml = "";
           let role = staff.role ? staff.role.trim() : "Teacher";
+          const allRoles = ["Teacher", "Substitute", "Admin", "HR", "Principal", "Sub Coordinator"];
 
-          if (specialRoles.includes(role.toLowerCase())) {
-              roleHtml = `<span class="text-gray-500 font-medium">${escapeHtml(role)}</span>`;
-          } else {
-              let isTeacher = (role.toLowerCase() !== "substitute");
-              roleHtml = `
-                  <select onchange="updateStaffRoleInline('${escapeJs(staff.email)}', this.value)" class="p-1 border rounded focus:ring-1 focus:ring-[#00843D] outline-none text-sm bg-white">
-                      <option value="Teacher" ${isTeacher ? 'selected' : ''}>Teacher</option>
-                      <option value="Substitute" ${!isTeacher ? 'selected' : ''}>Substitute</option>
-                  </select>
-              `;
-          }
+          let roleHtml = `
+              <select onchange="updateStaffRoleInline('${escapeJs(staff.email)}', this.value)" class="p-1 border rounded focus:ring-1 focus:ring-[#00843D] outline-none text-sm bg-white">
+          `;
+
+          allRoles.forEach(r => {
+              const isSelected = (role.toLowerCase() === r.toLowerCase()) ? 'selected' : '';
+              roleHtml += `<option value="${r}" ${isSelected}>${r}</option>`;
+          });
+
+          roleHtml += `</select>`;
 
           let dutyArr = staff.duty ? String(staff.duty).split(',').map(d => d.trim()) : [];
           let dutyDisplay = dutyArr.length > 0 ? dutyArr.join(', ') : 'None';
@@ -1103,9 +1101,6 @@
         <button onclick="switchSettingsTab('generalSettingsTab')" id="btn-generalSettingsTab" class="py-2 px-4 text-[#002147] font-semibold border-b-2 border-[#002147] focus:outline-none">
           General Settings
         </button>
-        <button onclick="switchSettingsTab('roleManagementTab')" id="btn-roleManagementTab" class="py-2 px-4 text-gray-500 hover:text-[#002147] font-medium focus:outline-none">
-          Role Management
-        </button>
         <button onclick="switchSettingsTab('staffRosterTab')" id="btn-staffRosterTab" class="py-2 px-4 text-gray-500 hover:text-[#002147] font-medium focus:outline-none">
           Staff Roster
         </button>
@@ -1132,55 +1127,6 @@
 
 
       <!-- Role Management -->
-      <div id="roleManagementTab" class="settings-tab-content bg-white rounded-xl shadow-sm border border-gray-200 p-6 hidden">
-
-        <div class="flex justify-between items-center mb-4 border-b pb-2">
-           <h3 class="text-xl font-bold text-[#002147]">User Roles</h3>
-           <button onclick="openAddRoleModal()" class="bg-[#00843D] hover:bg-green-700 text-white font-bold py-1.5 px-4 rounded-lg transition-colors text-sm flex items-center gap-2">
-               <span>➕</span> Add User Role
-           </button>
-        </div>
-        <div class="overflow-x-auto">
-          <table class="w-full text-left border-collapse min-w-max">
-            <thead>
-              <tr class="bg-gray-50 border-b border-gray-200 text-sm text-gray-700 uppercase hidden sm:table-row">
-                <th class="p-3">User Email</th>
-                <th class="p-3">Assigned Role</th>
-                <th class="p-3 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody id="roleManagementTableBody" class="divide-y divide-gray-100">
-               <tr><td colspan="3" class="p-8 text-center text-gray-400 italic">Loading roles...</td></tr>
-            </tbody>
-          </table>
-        </div>
-
-        <div class="mt-8 flex justify-between items-center mb-4 border-b pb-2">
-           <h3 class="text-xl font-bold text-[#002147]">Role Permissions</h3>
-           <button onclick="saveRolePermissions()" class="bg-[#002147] hover:bg-blue-900 text-white font-bold py-1.5 px-4 rounded-lg transition-colors text-sm flex items-center gap-2">
-               <span>💾</span> Save Permissions
-           </button>
-        </div>
-        <div class="overflow-x-auto">
-          <table class="w-full text-left border-collapse min-w-max text-sm">
-            <thead>
-              <tr class="bg-gray-50 border-b border-gray-200 text-gray-700 uppercase">
-                <th class="p-3">Role</th>
-                <th class="p-3 text-center">Admin Dashboard</th>
-                <th class="p-3 text-center">HR Dashboard</th>
-                <th class="p-3 text-center">Today at a Glance</th>
-                <th class="p-3 text-center">My Upcoming Sub Duties</th>
-                <th class="p-3 text-center">Today's Open Jobs</th>
-                <th class="p-3 text-center">My Past Absences</th>
-                <th class="p-3 text-center">Settings</th>
-              </tr>
-            </thead>
-            <tbody id="rolePermissionsTableBody" class="divide-y divide-gray-100">
-               <tr><td colspan="8" class="p-8 text-center text-gray-400 italic">Loading permissions...</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
 
 
     <!-- Staff Roster Tab -->
@@ -1682,206 +1628,6 @@
           })
           .updateSettings(settingsToUpdate);
       }
-
-      let currentRoles = [];
-
-      function loadRolesData() {
-        google.script.run
-          .withSuccessHandler(roles => {
-            currentRoles = roles;
-            renderRolesTable();
-          })
-          .withFailureHandler(err => {
-            document.getElementById('roleManagementTableBody').innerHTML = `<tr><td colspan="3" class="p-8 text-center text-red-600 font-bold">Failed to load roles: ${escapeHtml(err.message)}</td></tr>`;
-          })
-          .getUserRoles();
-      }
-
-      function renderRolesTable() {
-        const tbody = document.getElementById('roleManagementTableBody');
-        if (currentRoles.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="3" class="p-8 text-center text-gray-400 italic">No user roles found.</td></tr>';
-          return;
-        }
-
-        let html = '';
-        currentRoles.forEach((r, idx) => {
-          html += `
-            <tr class="hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0">
-              <td class="p-3 text-sm text-gray-800 font-medium" id="role-email-text-${idx}">${escapeHtml(r.email)}</td>
-              <td class="p-3 text-sm text-gray-600" id="role-role-text-${idx}">${escapeHtml(r.role)}</td>
-              <td class="p-3 text-right space-x-2">
-                <button onclick="editRole(${idx})" id="role-edit-btn-${idx}" class="text-blue-600 hover:text-blue-800 font-semibold text-sm">Edit</button>
-                <button onclick="deleteRole('${escapeJs(r.email)}')" class="text-red-600 hover:text-red-800 font-semibold text-sm">Delete</button>
-              </td>
-            </tr>
-          `;
-        });
-        tbody.innerHTML = html;
-      }
-
-      function editRole(idx) {
-        const r = currentRoles[idx];
-        const emailTd = document.getElementById(`role-email-text-${idx}`);
-        const roleTd = document.getElementById(`role-role-text-${idx}`);
-        const editBtn = document.getElementById(`role-edit-btn-${idx}`);
-
-        const options = ["Admin", "Sub Coordinator", "HR", "Principal"];
-        let selectHtml = `<select id="edit-role-select-${idx}" class="p-1 border rounded focus:ring-2 focus:ring-[#00843D] outline-none">`;
-        options.forEach(opt => {
-          selectHtml += `<option value="${opt}" ${r.role.toLowerCase() === opt.toLowerCase() ? 'selected' : ''}>${opt}</option>`;
-        });
-        selectHtml += `</select>`;
-
-        emailTd.innerHTML = `<input type="email" id="edit-role-email-${idx}" value="${escapeHtml(r.email)}" class="p-1 border rounded w-full focus:ring-2 focus:ring-[#00843D] outline-none">`;
-        roleTd.innerHTML = selectHtml;
-
-        editBtn.innerText = "Save";
-        editBtn.onclick = function() { saveRoleEdit(idx, r.email); };
-      }
-
-      function saveRoleEdit(idx, oldEmail) {
-        const newEmail = document.getElementById(`edit-role-email-${idx}`).value;
-        const newRole = document.getElementById(`edit-role-select-${idx}`).value;
-
-        if (!newEmail || !newRole) {
-          showToast("Email and Role cannot be empty.", 'info');
-          return;
-        }
-
-        google.script.run
-          .withSuccessHandler(result => {
-            if (result && result.success) {
-              loadRolesData(); // Reload table
-            } else {
-              showToast("Failed to update role: " + (result ? result.error : "Unknown error"), "error");
-              loadRolesData(); // Revert on failure
-            }
-          })
-          .withFailureHandler(err => {
-            showToast("Connection Error: " + err.message, 'error');
-            loadRolesData();
-          })
-          .editUserRole(oldEmail, newEmail, newRole);
-      }
-
-      function deleteRole(email) {
-        showConfirm(`Are you sure you want to remove the role for ${email}?`, () => {
-        google.script.run
-          .withSuccessHandler(result => {
-            if (result && result.success) {
-              loadRolesData();
-            } else {
-              showToast("Failed to delete role: " + (result ? result.error : "Unknown error"), "error");
-            }
-          })
-          .withFailureHandler(err => {
-            showToast("Connection Error: " + err.message, 'error');
-          })
-          .deleteUserRole(email);
-      });
-      }
-
-      function openAddRoleModal() {
-        document.getElementById('addRoleEmail').value = '';
-        document.getElementById('addRoleSelect').value = 'Admin';
-
-        const modal = document.getElementById('addRoleModal');
-        const overlay = document.getElementById('genericModalOverlay');
-        const body = document.querySelector('body');
-
-        modal.classList.remove('opacity-0');
-        modal.classList.remove('pointer-events-none');
-        overlay.classList.remove('opacity-0');
-        overlay.classList.remove('pointer-events-none');
-        body.classList.add('overflow-hidden');
-        // Delay slightly to let inputs initialize if needed
-        setTimeout(captureModalState, 50);
-      }
-
-      function closeAddRoleModal() {
-        const modal = document.getElementById('addRoleModal');
-        const overlay = document.getElementById('genericModalOverlay');
-        const body = document.querySelector('body');
-
-        modal.classList.add('opacity-0');
-        modal.classList.add('pointer-events-none');
-        overlay.classList.add('opacity-0');
-        overlay.classList.add('pointer-events-none');
-        body.classList.remove('overflow-hidden');
-      }
-
-      function submitAddRole() {
-        const email = document.getElementById('addRoleEmail').value;
-        const role = document.getElementById('addRoleSelect').value;
-
-        if (!email || !role) {
-          showToast("Please fill in both email and role.", 'error');
-          return;
-        }
-
-        const btn = document.getElementById('addRoleSubmitBtn');
-        const originalText = btn.innerText;
-        btn.disabled = true;
-        btn.innerText = "Adding...";
-
-        google.script.run
-          .withSuccessHandler(result => {
-            if (result && result.success) {
-              originalModalData = {};
-              closeAddRoleModal();
-              document.getElementById('addRoleEmail').value = '';
-              document.getElementById('addRoleSelect').value = 'Admin';
-              loadRolesData();
-            } else {
-              showToast("Failed to add role: " + (result ? result.error : "Unknown error"), "error");
-            }
-            btn.disabled = false;
-            btn.innerText = originalText;
-          })
-          .withFailureHandler(err => {
-            showToast("Connection Error: " + err.message, 'error');
-            btn.disabled = false;
-            btn.innerText = originalText;
-          })
-          .addUserRole(email, role);
-      }
-    </script>
-
-    <!-- Add Role Modal -->
-    <div id="addRoleModal" class="modal transition-opacity duration-[250ms] ease-in-out opacity-0 pointer-events-none fixed w-full h-full top-0 left-0 flex items-center justify-center z-[110]" onclick="if(event.target === this) attemptCloseAllModals()">
-      <div class="modal-container bg-white w-11/12 md:max-w-md mx-auto rounded-2xl shadow-2xl z-[110] overflow-y-auto max-h-[90vh]">
-        <div class="p-6">
-          <div class="flex justify-between items-center pb-3 border-b">
-            <p class="text-xl font-bold text-[#002147]">Add User Role</p>
-            <div onclick="attemptCloseAllModals()" class="cursor-pointer z-50 p-2 hover:bg-gray-100 rounded-full">
-              <svg class="fill-current text-black" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 18 18"><path d="M14.53 4.53l-1.06-1.06L9 7.94 4.53 3.47 3.47 4.53 7.94 9l-4.47 4.47 1.06 1.06L9 10.06l4.47 4.47 1.06-1.06L10.06 9z"></path></svg>
-            </div>
-          </div>
-          <div class="mt-4 space-y-4">
-             <div>
-               <label class="block text-sm font-bold mb-1">User Email Address</label>
-               <input type="email" id="addRoleEmail" placeholder="e.g. teacher@gocathedral.com" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none">
-             </div>
-             <div>
-               <label class="block text-sm font-bold mb-1">Role</label>
-               <select id="addRoleSelect" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none">
-                 <option value="Admin">Admin</option>
-                 <option value="Sub Coordinator">Sub Coordinator</option>
-                 <option value="HR">HR</option>
-                 <option value="Principal">Principal</option>
-               </select>
-             </div>
-             <div class="mt-4 flex justify-end">
-                <button id="addRoleSubmitBtn" onclick="submitAddRole()" class="bg-[#00843D] hover:bg-green-700 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-md">
-                  Add Role
-                </button>
-             </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
 
     <!-- Add/Edit Staff Modal -->
     <div id="staffModal" class="modal transition-opacity duration-[250ms] ease-in-out opacity-0 pointer-events-none fixed w-full h-full top-0 left-0 flex items-center justify-center z-[110]" onclick="if(event.target === this) attemptCloseAllModals()">
@@ -2476,7 +2222,6 @@
       let originalModalData = {};
 
       function captureModalState() {
-        const isAddRoleModalOpen = !document.getElementById('addRoleModal').classList.contains('opacity-0');
         const isRequestModalOpen = !document.querySelector('#modal').classList.contains('opacity-0');
 
         const isStaffModalOpen = !document.getElementById('staffModal').classList.contains('opacity-0');
@@ -2487,12 +2232,6 @@
             email: document.getElementById('staffEmailInput').value,
             duty: document.getElementById('staffDutyInput').value
           };
-        } else if (isAddRoleModalOpen) {
-          originalModalData = {
-            email: document.getElementById('addRoleEmail').value,
-            role: document.getElementById('addRoleSelect').value
-          };
-        } else if (isRequestModalOpen) {
           const periodCbs = document.querySelectorAll('.period-cb');
           const checkedPeriods = [];
           periodCbs.forEach(cb => { if(cb.checked) checkedPeriods.push(cb.value) });
@@ -2511,7 +2250,6 @@
       }
 
       function hasUnsavedData() {
-        const isAddRoleModalOpen = !document.getElementById('addRoleModal').classList.contains('opacity-0');
         const isRequestModalOpen = !document.querySelector('#modal').classList.contains('opacity-0');
 
         const isStaffModalOpen = !document.getElementById('staffModal').classList.contains('opacity-0');
@@ -2524,13 +2262,6 @@
           if (originalModalData.name !== undefined && (currentName !== originalModalData.name || currentEmail !== originalModalData.email || currentDuty !== originalModalData.duty)) return true;
         }
 
-        if (isAddRoleModalOpen) {
-          const currentEmail = document.getElementById('addRoleEmail').value;
-          const currentRole = document.getElementById('addRoleSelect').value;
-
-          if (originalModalData.email === undefined && currentEmail.trim() !== "") return true;
-          if (originalModalData.email !== undefined && (currentEmail !== originalModalData.email || currentRole !== originalModalData.role)) return true;
-        }
 
         if (isRequestModalOpen) {
           const periodCbs = document.querySelectorAll('.period-cb');
@@ -3006,7 +2737,7 @@
         const userRole = (document.getElementById('userName').dataset.role || 'teacher').toLowerCase();
 
         if (userRole === 'hr') {
-            const adminTabs = ['btn-generalSettingsTab', 'btn-roleManagementTab', 'btn-staffRosterTab', 'btn-auditLogsTab', 'btn-dataManagementTab'];
+            const adminTabs = ['btn-generalSettingsTab', 'btn-staffRosterTab', 'btn-auditLogsTab', 'btn-dataManagementTab'];
             adminTabs.forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.classList.add('hidden');

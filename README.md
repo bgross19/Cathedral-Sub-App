@@ -45,7 +45,6 @@ The application requires live Master Schedule data from PowerSchool.
 ### 3. Initial Configuration
 To start using the app, you need to populate the initial data:
 *   **Staff Roster:** Go to the `Staff Roster` sheet and add your staff members (Name, Email, Duty). Alternatively, you can use the bulk upload feature in the Admin Settings Dashboard.
-*   **User Roles:** Go to the `User Roles` sheet and assign roles to users (Admin, HR, Sub Coordinator, Principal). Give yourself the `Admin` role to access the Settings Dashboard.
 *   **Pay Periods:** Go to the `PayPeriods` sheet (or use the HR Dashboard) to configure the pay periods (Period Number, Start Date, End Date) for HR reporting.
 
 ### 4. Cache Warming Trigger
@@ -65,4 +64,4 @@ The application is structured into the following key files:
 *   **`Index.html`**: The frontend UI of the web application. It handles routing, rendering dashboards, modals, and user interactions using vanilla JavaScript and Tailwind CSS.
 *   **`code.gs`**: The main backend logic. It contains functions for handling absence requests, assigning subs, fetching payload data, validating permissions, and processing email notifications.
 *   **`powerschool.gs`**: Handles all interactions with the PowerSchool API, including OAuth authentication, querying the Master Schedule via PowerQuery, and caching the results.
-*   **`Setupdatabase.gs`**: A one-time utility script used to initialize the Google Sheet with the required tabs (Absence Requests, Staff Roster, User Roles, etc.) and default headers.
+*   **`Setupdatabase.gs`**: A one-time utility script used to initialize the Google Sheet with the required tabs (Absence Requests, Staff Roster, etc.) and default headers.

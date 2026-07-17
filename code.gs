@@ -230,22 +230,13 @@ function getUserData(ss) {
   var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
   var rosterData = rosterSheet ? rosterSheet.getDataRange().getValues() : [];
   var name = "Teacher"; 
+  var role = "Teacher";
   var targetEmail = String(email).toLowerCase();
   
   for (var i = 1; i < rosterData.length; i++) {
     if (String(rosterData[i][1]).toLowerCase() === targetEmail) {
       name = rosterData[i][0]; 
-      break;
-    }
-  }
-  
-  var roleSheet = getSheetOrThrow(ss, "User Roles");
-  var roleData = roleSheet ? roleSheet.getDataRange().getValues() : [];
-  var role = "Teacher";
-  
-  for (var j = 1; j < roleData.length; j++) {
-    if (String(roleData[j][0]).toLowerCase() === targetEmail) {
-      role = roleData[j][1]; 
+      role = rosterData[i][2] ? String(rosterData[i][2]).trim() : "Teacher";
       break;
     }
   }
@@ -566,33 +557,6 @@ function buildScheduleLookup(scheduleData) {
   return scheduleLookup;
 }
 
-/**
- * Fetches all user roles.
- */
-function getUserRoles() {
-  try {
-    var ss = getSS();
-    var user = getUserData(ss);
-    assertPermission(user, "Settings");
-
-    var roleSheet = getSheetOrThrow(ss, "User Roles");
-    if (!roleSheet) return [];
-
-    var data = roleSheet.getDataRange().getValues();
-    var roles = [];
-    for (var i = 1; i < data.length; i++) {
-      if (String(data[i][0]).trim()) {
-        roles.push({
-          email: String(data[i][0]).trim(),
-          role: String(data[i][1]).trim()
-        });
-      }
-    }
-    return roles;
-  } catch (err) {
-    throw new Error("Failed to fetch roles: " + err.message);
-  }
-}
 
 /**
  * Adds a new user role.
@@ -716,7 +680,6 @@ function updateStaffRoleInlineAdmin(email, newRole) {
     if (rowIndexToUpdate !== -1) {
        rosterSheet.getRange(rowIndexToUpdate, 1, 1, 4).setValues([[currentName, targetEmail, newRole, currentDuty]]);
        logAuditAction("STAFF_UPDATED", targetEmail, "Updated staff role inline: " + currentName + " to " + newRole);
-       upsertUserRoleInternal(ss, targetEmail, newRole);
        clearRosterCache();
        return { success: true };
     }
@@ -844,7 +807,6 @@ function saveStaffMemberAdmin(staffData) {
     }
 
     // Always upsert the role if it's Teacher or Substitute, or if we need to explicitly assign it
-    upsertUserRoleInternal(ss, newEmail.toLowerCase(), newRole);
 
     clearRosterCache();
 
@@ -1002,8 +964,6 @@ function bulkUpsertStaffRoster(updates) {
           existingEmailsMap[lowerEmail] = -1;
        }
 
-       // Update User Roles sheet
-       upsertUserRoleInternal(ss, lowerEmail, role);
 
        processedCount++;
     }
@@ -1027,24 +987,6 @@ function bulkUpsertStaffRoster(updates) {
   }
 }
 
-function addUserRole(email, role) {
-  try {
-    var ss = getSS();
-    var user = getUserData(ss);
-    assertPermission(user, "Settings");
-
-    var roleSheet = getSheetOrThrow(ss, "User Roles");
-
-    logAuditAction("ROLE_ADDED", email, "Assigned role: " + role);
-    roleSheet.appendRow([email.toLowerCase().trim(), role.trim()]);
-        return {
-      success: true };
-  } catch (err) {
-    notifyAdminOfError("addUserRole", err);
-    return {
-      success: false, error: err.message };
-  }
-}
 
 function refreshMasterScheduleCache() {
   try {
@@ -1067,112 +1009,12 @@ function refreshMasterScheduleCache() {
 /**
  * Edits an existing user role.
  */
-function editUserRole(oldEmail, newEmail, role) {
-  try {
-    var ss = getSS();
-    var user = getUserData(ss);
-    assertPermission(user, "Settings");
-
-    var oldEmailClean = oldEmail.toLowerCase().trim();
-    var newEmailClean = newEmail.toLowerCase().trim();
-
-    if (oldEmailClean !== newEmailClean) {
-      deleteUserRoleInternal(ss, oldEmailClean);
-    }
-
-    upsertUserRoleInternal(ss, newEmailClean, role, true);
-
-    // Additional logging to override the generic internal sync logs for admin actions
-    if (oldEmailClean !== newEmailClean) {
-        logAuditAction("ROLE_UPDATED", oldEmail, "Changed role to: " + role + " (Email: " + newEmail + ")");
-    }
-    return { success: true };
-
-  } catch (err) {
-    notifyAdminOfError("editUserRole", err);
-    return { success: false, error: err.message };
-  }
-}
 
 /**
  * Deletes a user role.
  */
-function deleteUserRoleInternal(ss, email) {
-    var roleSheet = getSheetOrThrow(ss, "User Roles");
-    var data = roleSheet.getDataRange().getValues();
-    var targetEmail = email.toLowerCase().trim();
-    var targetIndex = -1;
-    for (var i = 1; i < data.length; i++) {
-      if (String(data[i][0]).toLowerCase().trim() === targetEmail) {
-        targetIndex = i;
-        break;
-      }
-    }
-    if (targetIndex !== -1) {
-      logAuditAction("ROLE_DELETED", targetEmail, "Removed role (Internal sync)");
-      roleSheet.deleteRow(targetIndex + 1);
-    }
-}
 
-function upsertUserRoleInternal(ss, email, role, forceUpdate) {
-    var roleSheet = getSheetOrThrow(ss, "User Roles");
-    var data = roleSheet.getDataRange().getValues();
-    var targetEmail = email.toLowerCase().trim();
-    var targetIndex = -1;
-    for (var i = 1; i < data.length; i++) {
-      if (String(data[i][0]).toLowerCase().trim() === targetEmail) {
-        targetIndex = i;
-        break;
-      }
-    }
 
-    // Some roles like Admin should not be overwritten by roster sync
-    var specialRoles = ["admin", "hr", "principal", "sub coordinator"];
-    if (targetIndex !== -1) {
-        var currentRole = String(data[targetIndex][1]).toLowerCase().trim();
-        if (forceUpdate || specialRoles.indexOf(currentRole) === -1) {
-             roleSheet.getRange(targetIndex + 1, 1, 1, 2).setValues([[targetEmail, role.trim()]]);
-             logAuditAction("ROLE_UPDATED", targetEmail, "Updated role via roster sync: " + role);
-        }
-    } else {
-        roleSheet.appendRow([targetEmail, role.trim()]);
-        logAuditAction("ROLE_ADDED", targetEmail, "Assigned role via roster sync: " + role);
-    }
-}
-
-function deleteUserRole(email) {
-  try {
-    var ss = getSS();
-    var user = getUserData(ss);
-    assertPermission(user, "Settings");
-
-    var roleSheet = getSheetOrThrow(ss, "User Roles");
-
-    var data = roleSheet.getDataRange().getValues();
-    var targetEmail = email.toLowerCase().trim();
-    var targetIndex = -1;
-
-    for (var i = 1; i < data.length; i++) {
-      if (String(data[i][0]).toLowerCase().trim() === targetEmail) {
-        targetIndex = i;
-        break;
-      }
-    }
-
-    if (targetIndex !== -1) {
-      logAuditAction("ROLE_DELETED", targetEmail, "Removed role");
-      roleSheet.deleteRow(targetIndex + 1);
-      return {
-      success: true };
-    }
-
-    throw new Error("User not found.");
-  } catch (err) {
-    notifyAdminOfError("deleteUserRole", err);
-    return {
-      success: false, error: err.message };
-  }
-}
 
 /**
  * Fetches settings for the frontend.
@@ -1267,12 +1109,13 @@ function updateSettings(newSettings) {
 
 function getCoordinatorEmail(ss) {
   var ss = ss || getSS();
-  var roleSheet = getSheetOrThrow(ss, "User Roles");
-  if (!roleSheet) return null;
+  var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
+  if (!rosterSheet) return null;
 
-  var data = roleSheet.getDataRange().getValues();
+  var data = rosterSheet.getDataRange().getValues();
   for (var i = 1; i < data.length; i++) {
-    if (String(data[i][1]).toLowerCase() === "sub coordinator") return String(data[i][0]);
+    // Column 2 is Role, Column 1 is Email
+    if (String(data[i][2]).toLowerCase().trim() === "sub coordinator") return String(data[i][1]).trim();
   }
   return null;
 }
@@ -2116,8 +1959,6 @@ function getInitialPayload() {
     var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
     var rosterData = rosterSheet ? rosterSheet.getDataRange().getValues() : [];
 
-    var roleSheet = getSheetOrThrow(ss, "User Roles");
-    var roleData = roleSheet ? roleSheet.getDataRange().getValues() : [];
 
     var settings = getSettings(ss); // Already passes ss to avoid fetching again
 
