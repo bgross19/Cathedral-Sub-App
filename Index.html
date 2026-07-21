@@ -1822,7 +1822,10 @@
             if (cols.length === 1 && cols[0].hasAttribute('colspan')) return;
 
             const rowData = Array.from(cols).map(td => {
-                let text = td.textContent.trim().replace(/(\r\n|\n|\r)/gm, ' ');
+                let text = td.getAttribute('data-export');
+                if (!text) {
+                    text = td.textContent.trim().replace(/(\r\n|\n|\r)/gm, ' ');
+                }
                 if (/^[=+\-@\t\r]/.test(text)) {
                     text = "'" + text;
                 }
@@ -2013,6 +2016,8 @@
       let adminCurrentView = 'period'; // 'period' or 'request'
       let hrDataRaw = [];
       let hrPayPeriods = [];
+      let hrDateColors = {};
+      let hrRates = { green: 10, blueGold: 20 };
       let hrDashboardLoaded = false;
       let hrCurrentView = 'absences'; // 'absences' or 'subs'
 
@@ -2150,6 +2155,8 @@
               if (payload.hrData) {
                   hrDataRaw = payload.hrData.requests || [];
                   hrPayPeriods = payload.hrData.payPeriods || [];
+                  hrDateColors = payload.hrData.dateColors || {};
+                  hrRates = payload.hrData.rates || { green: 10, blueGold: 20 };
               }
             }
 
@@ -4209,6 +4216,8 @@
             hrDashboardLoaded = true;
             hrDataRaw = data.requests || [];
             hrPayPeriods = data.payPeriods || [];
+            hrDateColors = data.dateColors || {};
+            hrRates = data.rates || { green: 10, blueGold: 20 };
 
             const today = new Date();
             const offset = today.getTimezoneOffset() * 60000;
@@ -4398,7 +4407,7 @@
                     let coveredPeriod = subObj.period;
 
                     if (!aggregated[subName]) {
-                        aggregated[subName] = { duties: 0, extras: 0, total: 0 };
+                        aggregated[subName] = { duties: 0, extras: 0, total: 0, greenExtras: 0, blueGoldExtras: 0 };
                     }
 
                     let teacherDuty = dutyLookup[subName];
@@ -4407,6 +4416,12 @@
                         aggregated[subName].duties += 1;
                     } else {
                         aggregated[subName].extras += 1;
+                        let dateColor = hrDateColors[req.date] || "Gold";
+                        if (dateColor.toLowerCase() === "green") {
+                            aggregated[subName].greenExtras += 1;
+                        } else {
+                            aggregated[subName].blueGoldExtras += 1;
+                        }
                     }
                     aggregated[subName].total += 1;
                 });
@@ -4422,7 +4437,18 @@
                 }
             } else {
                 if (aggregated[name].total > 0) {
-                    resultList.push({ name: name, duties: aggregated[name].duties, extras: aggregated[name].extras, total: aggregated[name].total });
+                    let greenPay = aggregated[name].greenExtras * parseFloat(hrRates.green || 0);
+                    let blueGoldPay = aggregated[name].blueGoldExtras * parseFloat(hrRates.blueGold || 0);
+                    let extraPay = greenPay + blueGoldPay;
+                    resultList.push({
+                        name: name,
+                        duties: aggregated[name].duties,
+                        extras: aggregated[name].extras,
+                        total: aggregated[name].total,
+                        greenExtras: aggregated[name].greenExtras,
+                        blueGoldExtras: aggregated[name].blueGoldExtras,
+                        extraPay: extraPay
+                    });
                 }
             }
         }
@@ -4503,6 +4529,10 @@
               </tr>
             `;
           } else {
+            let breakdownText = `${escapeHtml(item.greenExtras)} Green, ${escapeHtml(item.blueGoldExtras)} Blue/Gold`;
+            let extraPayFormatted = '$' + Number(item.extraPay).toFixed(2);
+            let exportText = `${extraPayFormatted} (${breakdownText})`;
+
             html += `
               <tr class="hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0">
                 <!-- Mobile View -->
@@ -4511,16 +4541,29 @@
                     <div class="grid grid-cols-2 gap-2 text-sm">
                         <div><span class="font-semibold text-gray-600">Duties:</span> ${escapeHtml(item.duties)}</div>
                         <div><span class="font-semibold text-gray-600">Extras:</span> ${escapeHtml(item.extras)}</div>
-                        <div><span class="font-semibold text-gray-600">Extra (Pay):</span> </div>
+                        <div class="col-span-2">
+                            <span class="font-semibold text-gray-600">Extra (Pay):</span>
+                            <details class="inline-block cursor-pointer">
+                                <summary class="text-[#00843D] font-bold outline-none">${extraPayFormatted}</summary>
+                                <div class="mt-1 text-xs text-gray-500">${breakdownText}</div>
+                            </details>
+                        </div>
                         <div class="col-span-2 pt-2 mt-1 border-t border-gray-100"><span class="font-bold text-gray-800">Totals:</span> ${escapeHtml(item.total)}</div>
                     </div>
                 </td>
                 <!-- Desktop View -->
                 <td class="p-3 text-sm text-gray-800 font-medium hidden sm:table-cell">${escapeHtml(item.name)}</td>
-                <td class="p-3 text-sm text-gray-600 font-bold text-right">${escapeHtml(item.duties)}</td>
-                <td class="p-3 text-sm text-gray-600 font-bold text-right">${escapeHtml(item.extras)}</td>
-                <td class="p-3 text-sm text-gray-600 font-bold text-right"></td>
-                <td class="p-3 text-sm text-gray-600 font-bold text-right">${escapeHtml(item.total)}</td>
+                <td class="p-3 text-sm text-gray-600 font-bold text-right hidden sm:table-cell">${escapeHtml(item.duties)}</td>
+                <td class="p-3 text-sm text-gray-600 font-bold text-right hidden sm:table-cell">${escapeHtml(item.extras)}</td>
+                <td class="p-3 text-sm text-gray-600 font-bold text-right hidden sm:table-cell" data-export="${escapeHtml(exportText)}">
+                    <details class="cursor-pointer relative">
+                        <summary class="text-[#00843D] outline-none hover:underline">${extraPayFormatted}</summary>
+                        <div class="absolute right-0 mt-2 w-max bg-white border rounded shadow-lg p-2 text-xs text-gray-600 z-10 text-left">
+                           ${breakdownText}
+                        </div>
+                    </details>
+                </td>
+                <td class="p-3 text-sm text-gray-600 font-bold text-right hidden sm:table-cell">${escapeHtml(item.total)}</td>
               </tr>
             `;
           }
@@ -4557,7 +4600,10 @@
             const cols = Array.from(allCols).filter(td => !td.classList.contains('sm:hidden'));
 
             const rowData = cols.map(td => {
-                let text = td.textContent.trim();
+                let text = td.getAttribute('data-export');
+                if (!text) {
+                    text = td.textContent.trim();
+                }
                 if (/^[=+\-@\t\r]/.test(text)) {
                     text = "'" + text;
                 }

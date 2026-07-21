@@ -1963,6 +1963,9 @@ function getInitialPayload() {
     var payPeriodsSheet = ss.getSheetByName("PayPeriods");
     var payPeriodsData = payPeriodsSheet ? payPeriodsSheet.getDataRange().getValues() : [];
 
+    var datesSheet = ss.getSheetByName("Dates");
+    var datesData = datesSheet ? datesSheet.getDataRange().getValues() : [];
+
 
     // --- Build lookups ---
     var scheduleLookup = buildScheduleLookup(scheduleData);
@@ -2372,9 +2375,25 @@ function getInitialPayload() {
         });
       }
 
+      var dateColors = {};
+      for (var d = 1; d < datesData.length; d++) {
+        var dateRaw = datesData[d][0];
+        var colorRaw = datesData[d][1];
+        if (dateRaw && colorRaw) {
+          var dateFormatted = dateRaw instanceof Date ? Utilities.formatDate(dateRaw, Session.getScriptTimeZone(), "yyyy-MM-dd") :
+            (function(){ try { return Utilities.formatDate(new Date(dateRaw), Session.getScriptTimeZone(), "yyyy-MM-dd"); } catch(e) { return String(dateRaw); } })();
+          dateColors[dateFormatted] = String(colorRaw).trim();
+        }
+      }
+
       payload.hrData = {
         requests: hrData,
-        payPeriods: payPeriods
+        payPeriods: payPeriods,
+        dateColors: dateColors,
+        rates: {
+          green: settings["Green Day Pay Rate"] || "10",
+          blueGold: settings["Blue/Gold Day Pay Rate"] || "20"
+        }
       };
     }
 
