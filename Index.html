@@ -1817,6 +1817,9 @@
         // Get rows
         const rows = Array.from(table.querySelectorAll('tbody tr'));
         rows.forEach(tr => {
+            // Skip details rows for summary export
+            if (tr.classList.contains('hr-detail-row')) return;
+
             const cols = tr.querySelectorAll('td.sm\\:table-cell, td:not(.sm\\:hidden):not(.sm\\:table-cell)');
             // Check if this is a loading/empty row (colspan)
             if (cols.length === 1 && cols[0].hasAttribute('colspan')) return;
@@ -1824,7 +1827,8 @@
             const rowData = Array.from(cols).map(td => {
                 let text = td.getAttribute('data-export');
                 if (!text) {
-                    text = td.textContent.trim().replace(/(\r\n|\n|\r)/gm, ' ');
+                    // Extract text but remove the arrow character
+                    text = td.textContent.trim().replace(/▼/g, '').replace(/(\r\n|\n|\r)/gm, ' ').trim();
                 }
                 if (/^[=+\-@\t\r]/.test(text)) {
                     text = "'" + text;
@@ -4407,23 +4411,40 @@
                     let coveredPeriod = subObj.period;
 
                     if (!aggregated[subName]) {
-                        aggregated[subName] = { duties: 0, extras: 0, total: 0, greenExtras: 0, blueGoldExtras: 0 };
+                        aggregated[subName] = { duties: 0, extras: 0, total: 0, greenExtras: 0, blueGoldExtras: 0, details: [] };
                     }
 
                     let teacherDuty = dutyLookup[subName];
                     let teacherDutyArr = teacherDuty ? String(teacherDuty).split(',').map(d => d.trim()) : [];
-                    if (teacherDutyArr.includes(String(coveredPeriod))) {
+                    let isDuty = teacherDutyArr.includes(String(coveredPeriod));
+
+                    let dateColor = hrDateColors[req.date] || "Gold";
+                    let individualPay = 0;
+                    let payTypeStr = isDuty ? "Duty" : dateColor;
+
+                    if (isDuty) {
                         aggregated[subName].duties += 1;
                     } else {
                         aggregated[subName].extras += 1;
-                        let dateColor = hrDateColors[req.date] || "Gold";
                         if (dateColor.toLowerCase() === "green") {
                             aggregated[subName].greenExtras += 1;
+                            individualPay = parseFloat(hrRates.green || 0);
                         } else {
                             aggregated[subName].blueGoldExtras += 1;
+                            individualPay = parseFloat(hrRates.blueGold || 0);
                         }
                     }
                     aggregated[subName].total += 1;
+
+                    // Add details
+                    aggregated[subName].details.push({
+                        date: req.date,
+                        teacher: req.teacherName,
+                        period: coveredPeriod,
+                        course: subObj.course || "N/A",
+                        payType: payTypeStr,
+                        pay: individualPay
+                    });
                 });
             });
         }
@@ -4440,6 +4461,17 @@
                     let greenPay = aggregated[name].greenExtras * parseFloat(hrRates.green || 0);
                     let blueGoldPay = aggregated[name].blueGoldExtras * parseFloat(hrRates.blueGold || 0);
                     let extraPay = greenPay + blueGoldPay;
+
+                    // Sort details by date then period
+                    aggregated[name].details.sort((a, b) => {
+                        let dateA = new Date(a.date);
+                        let dateB = new Date(b.date);
+                        if (dateA.getTime() !== dateB.getTime()) {
+                            return dateA - dateB;
+                        }
+                        return parseInt(a.period) - parseInt(b.period);
+                    });
+
                     resultList.push({
                         name: name,
                         duties: aggregated[name].duties,
@@ -4447,7 +4479,8 @@
                         total: aggregated[name].total,
                         greenExtras: aggregated[name].greenExtras,
                         blueGoldExtras: aggregated[name].blueGoldExtras,
-                        extraPay: extraPay
+                        extraPay: extraPay,
+                        details: aggregated[name].details
                     });
                 }
             }
@@ -4533,37 +4566,79 @@
             let extraPayFormatted = '$' + Number(item.extraPay).toFixed(2);
             let exportText = `${extraPayFormatted} (${breakdownText})`;
 
+            let safeName = item.name.replace(/[^a-zA-Z0-9]/g, '');
+            let detailsId = `hr-detail-${safeName}-${Math.random().toString(36).substr(2, 9)}`;
+
+            let detailsHtml = '';
+            if (item.details && item.details.length > 0) {
+                detailsHtml = `
+                <div class="p-4 bg-gray-50 border border-gray-200 rounded-lg mx-2 mb-2 overflow-x-auto shadow-inner">
+                    <table class="w-full text-left border-collapse text-xs">
+                        <thead>
+                            <tr class="text-gray-500 uppercase border-b border-gray-300">
+                                <th class="pb-2 pr-2">Date</th>
+                                <th class="pb-2 pr-2">Teacher</th>
+                                <th class="pb-2 pr-2">Class</th>
+                                <th class="pb-2 pr-2">Type</th>
+                                <th class="pb-2 text-right">Pay</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200">
+                            ${item.details.map(d => `
+                            <tr class="hover:bg-gray-100 transition-colors">
+                                <td class="py-2 pr-2 whitespace-nowrap">${escapeHtml(d.date)}</td>
+                                <td class="py-2 pr-2 truncate max-w-[150px]" title="${escapeHtml(d.teacher)}">${escapeHtml(d.teacher)}</td>
+                                <td class="py-2 pr-2">Per ${escapeHtml(d.period)}: ${escapeHtml(d.course)}</td>
+                                <td class="py-2 pr-2 whitespace-nowrap">
+                                    <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                        d.payType === 'Duty' ? 'bg-gray-200 text-gray-700' :
+                                        d.payType.toLowerCase() === 'green' ? 'bg-green-100 text-green-800' :
+                                        'bg-blue-100 text-blue-800'
+                                    }">${escapeHtml(d.payType)}</span>
+                                </td>
+                                <td class="py-2 text-right font-medium">${d.pay > 0 ? '$' + d.pay.toFixed(2) : '-'}</td>
+                            </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>`;
+            }
+
             html += `
-              <tr class="hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0">
+              <tr class="hover:bg-gray-100 transition-colors border-b border-gray-100 last:border-b-0 cursor-pointer" onclick="document.getElementById('${detailsId}').classList.toggle('hidden')">
                 <!-- Mobile View -->
                 <td class="p-3 block sm:hidden">
-                    <div class="font-bold text-[#002147] mb-2">${escapeHtml(item.name)}</div>
+                    <div class="font-bold text-[#002147] mb-2">${escapeHtml(item.name)} <span class="text-xs text-gray-400 ml-2">▼</span></div>
                     <div class="grid grid-cols-2 gap-2 text-sm">
                         <div><span class="font-semibold text-gray-600">Duties:</span> ${escapeHtml(item.duties)}</div>
                         <div><span class="font-semibold text-gray-600">Extras:</span> ${escapeHtml(item.extras)}</div>
                         <div class="col-span-2">
                             <span class="font-semibold text-gray-600">Extra (Pay):</span>
-                            <details class="inline-block cursor-pointer">
-                                <summary class="text-[#00843D] font-bold outline-none">${extraPayFormatted}</summary>
-                                <div class="mt-1 text-xs text-gray-500">${breakdownText}</div>
-                            </details>
+                            <span class="text-[#00843D] font-bold">${extraPayFormatted}</span>
+                            <div class="mt-1 text-xs text-gray-500">${breakdownText}</div>
                         </div>
                         <div class="col-span-2 pt-2 mt-1 border-t border-gray-100"><span class="font-bold text-gray-800">Totals:</span> ${escapeHtml(item.total)}</div>
                     </div>
                 </td>
                 <!-- Desktop View -->
-                <td class="p-3 text-sm text-gray-800 font-medium hidden sm:table-cell">${escapeHtml(item.name)}</td>
+                <td class="p-3 text-sm text-gray-800 font-medium hidden sm:table-cell">
+                    <div class="flex items-center justify-between">
+                        <span>${escapeHtml(item.name)}</span>
+                        <span class="text-xs text-gray-400 ml-2">▼</span>
+                    </div>
+                </td>
                 <td class="p-3 text-sm text-gray-600 font-bold text-right hidden sm:table-cell">${escapeHtml(item.duties)}</td>
                 <td class="p-3 text-sm text-gray-600 font-bold text-right hidden sm:table-cell">${escapeHtml(item.extras)}</td>
-                <td class="p-3 text-sm text-gray-600 font-bold text-right hidden sm:table-cell" data-export="${escapeHtml(exportText)}">
-                    <details class="cursor-pointer relative">
-                        <summary class="text-[#00843D] outline-none hover:underline">${extraPayFormatted}</summary>
-                        <div class="absolute right-0 mt-2 w-max bg-white border rounded shadow-lg p-2 text-xs text-gray-600 z-10 text-left">
-                           ${breakdownText}
-                        </div>
-                    </details>
+                <td class="p-3 text-sm text-[#00843D] font-bold text-right hidden sm:table-cell" data-export="${escapeHtml(exportText)}">
+                    ${extraPayFormatted}
                 </td>
                 <td class="p-3 text-sm text-gray-600 font-bold text-right hidden sm:table-cell">${escapeHtml(item.total)}</td>
+              </tr>
+              <!-- Expandable Details Row -->
+              <tr id="${detailsId}" class="hidden hr-detail-row bg-gray-50/50">
+                <td colspan="5" class="p-0 border-b border-gray-200">
+                    ${detailsHtml}
+                </td>
               </tr>
             `;
           }
@@ -4593,6 +4668,9 @@
         // Get rows
         const rows = Array.from(table.querySelectorAll('tbody tr'));
         rows.forEach(tr => {
+            // Check if this is the details row, we skip it for copying summary data
+            if (tr.classList.contains('hr-detail-row')) return;
+
             // Check if this is the "Loading" or "No data" row
             const allCols = tr.querySelectorAll('td');
             if (allCols.length === 1 && allCols[0].hasAttribute('colspan')) return;
@@ -4602,7 +4680,8 @@
             const rowData = cols.map(td => {
                 let text = td.getAttribute('data-export');
                 if (!text) {
-                    text = td.textContent.trim();
+                    // Extract text but remove the arrow character
+                    text = td.textContent.trim().replace(/▼/g, '').trim();
                 }
                 if (/^[=+\-@\t\r]/.test(text)) {
                     text = "'" + text;

@@ -2360,7 +2360,9 @@ function getInitialPayload() {
           if (!isNaN(p)) {
             var assignedSub = row[8 + p];
             if (assignedSub && String(assignedSub).trim() !== "") {
-              assignedSubs.push({ name: String(assignedSub).trim(), period: String(p) });
+              var scheduleKey = rowTeacherEmail + "-" + p;
+              var courseStr = scheduleLookup[scheduleKey] ? String(scheduleLookup[scheduleKey].course) : "No Class Assigned";
+              assignedSubs.push({ name: String(assignedSub).trim(), period: String(p), course: courseStr });
             }
           }
         }
