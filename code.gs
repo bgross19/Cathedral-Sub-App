@@ -105,7 +105,7 @@ function getSettings(ss) {
         "sub coordinator": { "Admin Dashboard": true, "HR Dashboard": false, "Today at a Glance": true, "My Upcoming Sub Duties": true, "Today's Open Jobs": true, "My Past Absences": true, "Settings": false },
         "principal": { "Admin Dashboard": true, "HR Dashboard": true, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Open Jobs": false, "My Past Absences": true, "Settings": false },
         "teacher": { "Admin Dashboard": false, "HR Dashboard": false, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Open Jobs": true, "My Past Absences": true, "Settings": false },
-        "substitute": { "Admin Dashboard": false, "HR Dashboard": false, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Open Jobs": true, "My Past Absences": true, "Settings": false }
+        "substitute": { "Admin Dashboard": false, "HR Dashboard": false, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Open Jobs": false, "My Past Absences": false, "Settings": false }
       })
   };
 
@@ -2191,13 +2191,25 @@ function getInitialPayload() {
     if (permissions["Admin Dashboard"] || permissions["HR Dashboard"] || permissions["Today at a Glance"]) {
       // Staff List
       var staffList = [];
+      var allSubAvail = getAllSubstituteAvailability();
+
       for (var i = 1; i < rosterData.length; i++) {
         var staffName = String(rosterData[i][0]).trim();
+        var staffEmail = String(rosterData[i][1]).toLowerCase().trim();
+        var staffRole = String(rosterData[i][2]).toLowerCase().trim();
         var duty = String(rosterData[i][3] || "").trim();
         if (staffName) {
           var display = staffName;
           if (duty) display = staffName + " - " + duty;
-          staffList.push({ name: staffName, display: display, duty: duty });
+
+          staffList.push({
+             name: staffName,
+             display: display,
+             duty: duty,
+             role: staffRole,
+             email: staffEmail,
+             availability: allSubAvail[staffEmail] || {}
+          });
         }
       }
       staffList.sort(function(a, b) {
@@ -2327,6 +2339,10 @@ function getInitialPayload() {
 
 
     // --- 5. Extract HR data if applicable ---
+    if (lowerRole === 'substitute') {
+      payload.subAvailability = getSubstituteAvailability(email);
+    }
+
     if (permissions["HR Dashboard"]) {
       var hrData = [];
       var payPeriods = [];
@@ -2753,4 +2769,90 @@ function loadPayPeriodsSettings() {
  */
 function getAppVersion() {
   return APP_VERSION;
+}
+
+function getSubstituteAvailability(email) {
+  var ss = getSS();
+  var subAvailSheet = ss.getSheetByName("SubstituteAvailability");
+  if (!subAvailSheet) return {};
+
+  var data = subAvailSheet.getDataRange().getValues();
+  var availability = {};
+  var targetEmail = String(email).toLowerCase();
+
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][0]).toLowerCase() === targetEmail) {
+      var cellVal = data[i][1];
+      var dateStr = (cellVal instanceof Date) ? _formatDateToYYYYMMDD(cellVal) : String(cellVal).trim();
+      availability[dateStr] = data[i][2];
+    }
+  }
+  return availability;
+}
+
+function saveSubstituteAvailability(dateStr, status) {
+  var email = Session.getActiveUser().getEmail();
+  var targetEmail = String(email).toLowerCase();
+  var ss = getSS();
+  var subAvailSheet = ss.getSheetByName("SubstituteAvailability");
+
+  if (!subAvailSheet) {
+    throw new Error("SubstituteAvailability sheet not found.");
+  }
+
+  var data = subAvailSheet.getDataRange().getValues();
+  var rowIndex = -1;
+
+  for (var i = 1; i < data.length; i++) {
+    var cellVal = data[i][1];
+    var rowDateStr = (cellVal instanceof Date) ? _formatDateToYYYYMMDD(cellVal) : String(cellVal).trim();
+    if (String(data[i][0]).toLowerCase() === targetEmail && rowDateStr === dateStr) {
+      rowIndex = i + 1; // 1-based index for sheets
+      break;
+    }
+  }
+
+  if (status === 'Not Available') {
+    if (rowIndex !== -1) {
+      subAvailSheet.deleteRow(rowIndex);
+    }
+  } else {
+    if (rowIndex !== -1) {
+      subAvailSheet.getRange(rowIndex, 3).setValue(status);
+    } else {
+      subAvailSheet.appendRow([targetEmail, dateStr, status]);
+    }
+  }
+}
+
+function getAllSubstituteAvailability() {
+  var ss = getSS();
+  var subAvailSheet = ss.getSheetByName("SubstituteAvailability");
+  if (!subAvailSheet) return {};
+
+  var data = subAvailSheet.getDataRange().getValues();
+  var availabilityMap = {}; // Format: { "email": { "YYYY-MM-DD": "status" } }
+
+  for (var i = 1; i < data.length; i++) {
+    var email = String(data[i][0]).toLowerCase().trim();
+    var cellVal = data[i][1];
+    var dateStr = (cellVal instanceof Date) ? _formatDateToYYYYMMDD(cellVal) : String(cellVal).trim();
+    var status = String(data[i][2]).trim();
+
+    if (!availabilityMap[email]) {
+      availabilityMap[email] = {};
+    }
+    availabilityMap[email][dateStr] = status;
+  }
+
+  return availabilityMap;
+}
+
+function _formatDateToYYYYMMDD(dateObj) {
+  var yyyy = dateObj.getFullYear();
+  var mm = String(dateObj.getMonth() + 1);
+  if (mm.length < 2) mm = '0' + mm;
+  var dd = String(dateObj.getDate());
+  if (dd.length < 2) dd = '0' + dd;
+  return yyyy + '-' + mm + '-' + dd;
 }
