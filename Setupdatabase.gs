@@ -30,6 +30,16 @@ function setupDatabase() {
 
   // 3. Settings Sheet
   var settingsSheet = ss.getSheetByName("Settings");
+
+  // 7. SubstituteAvailability Sheet
+  var subAvailSheet = ss.getSheetByName("SubstituteAvailability");
+  if (!subAvailSheet) {
+    subAvailSheet = ss.insertSheet("SubstituteAvailability");
+    var subAvailHeaders = ["Email", "Date", "Availability"];
+    subAvailSheet.getRange(1, 1, 1, subAvailHeaders.length).setValues([subAvailHeaders]);
+    subAvailSheet.getRange(1, 1, 1, subAvailHeaders.length).setFontWeight("bold");
+    subAvailSheet.getRange("B:B").setNumberFormat("@"); // Set Date column to plain text
+  }
   if (!settingsSheet) {
     settingsSheet = ss.insertSheet("Settings");
     var settingsHeaders = ["Setting Name", "Setting Value"];

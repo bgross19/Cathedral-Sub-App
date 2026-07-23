@@ -818,9 +818,9 @@
       
       <div class="bg-white rounded-2xl shadow-sm p-6 mb-6 border-t-4 border-[#00843D]">
         <h2 class="text-2xl font-bold text-[#002147]">Welcome, <span id="welcomeName">Teacher</span>!</h2>
-        <p class="text-gray-600 mt-1 mb-6">Need coverage for a class? Submit your request below.</p>
+        <p id="welcomeDescription" class="text-gray-600 mt-1 mb-6">Need coverage for a class? Submit your request below.</p>
         
-        <button onclick="toggleModal()" class="w-full sm:w-auto bg-[#00843D] hover:bg-green-700 text-white font-bold py-3 px-8 rounded-xl transition-all transform hover:scale-105 shadow-md flex items-center justify-center gap-2">
+        <button id="newAbsenceBtn" onclick="toggleModal()" class="w-full sm:w-auto bg-[#00843D] hover:bg-green-700 text-white font-bold py-3 px-8 rounded-xl transition-all transform hover:scale-105 shadow-md flex items-center justify-center gap-2">
           <span>➕</span> New Absence Request
         </button>
       </div>
@@ -861,6 +861,31 @@
         <div class="overflow-hidden">
           <div id="mySubDuties" class="bg-white rounded-xl shadow-sm p-8 text-center text-gray-400 border border-gray-200">
               Loading sub-duties...
+          </div>
+        </div>
+      </div>
+
+      <div id="myAvailabilitySection" class="hidden mb-6">
+        <div class="mb-3 flex items-center cursor-pointer select-none" id="headerMyAvailability" onclick="toggleSection('myAvailabilityWrapper', 'iconMyAvailability')">
+          <svg id="iconMyAvailability" class="fill-current text-[#002147] mr-2 transition-transform duration-300" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+          <h3 class="text-lg font-bold text-[#002147]">My Availability</h3>
+        </div>
+        <div id="myAvailabilityWrapper" class="grid grid-rows-1 transition-all duration-300 ease-in-out">
+          <div class="overflow-hidden">
+            <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
+                <div class="mb-4 text-gray-600">Click a day to toggle availability (Full Day -> AM -> PM -> Not Available).</div>
+                <div class="flex items-center gap-4 mb-4">
+                  <button onclick="changeAvailabilityMonth(-1)" class="text-blue-600 hover:text-blue-800 font-bold">&lt; Prev</button>
+                  <h4 id="availabilityMonthLabel" class="text-lg font-bold text-[#002147] text-center flex-1">Loading...</h4>
+                  <button onclick="changeAvailabilityMonth(1)" class="text-blue-600 hover:text-blue-800 font-bold">Next &gt;</button>
+                </div>
+                <div class="grid grid-cols-7 gap-1 text-center font-bold text-sm text-gray-700 mb-2">
+                   <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+                </div>
+                <div id="availabilityCalendarGrid" class="grid grid-cols-7 gap-1">
+                   <!-- Calendar injected here -->
+                </div>
+            </div>
           </div>
         </div>
       </div>
@@ -2171,6 +2196,14 @@
             renderTodaysOpenJobs(payload.todaysOpenJobs);
 
             let lowerRole = data.role.toLowerCase();
+
+            if (lowerRole === 'substitute') {
+               const welcomeDesc = document.getElementById('welcomeDescription');
+               if (welcomeDesc) welcomeDesc.innerText = "Review your assignments and upcoming availability below.";
+               const newAbsBtn = document.getElementById('newAbsenceBtn');
+               if (newAbsBtn) newAbsBtn.classList.add('hidden');
+            }
+
             // Toggle Navigation Buttons and Main Sections using permissions payload
             var perms = payload.permissions || {};
             currentUserPermissions = perms;
@@ -2217,6 +2250,22 @@
             if (!perms["My Upcoming Sub Duties"]) {
                 document.getElementById('headerMySubDuties').classList.add('hidden');
                 document.getElementById('mySubDutiesWrapper').classList.add('hidden');
+            }
+            if (lowerRole === 'substitute') {
+                const myAbsHeader = document.getElementById('headerMyAbsences');
+                if (myAbsHeader) myAbsHeader.classList.add('hidden');
+                const myAbsWrapper = document.getElementById('myAbsencesWrapper');
+                if (myAbsWrapper) myAbsWrapper.classList.add('hidden');
+                const myOpenJobsHeader = document.getElementById('headerTodaysOpenJobs');
+                if (myOpenJobsHeader) myOpenJobsHeader.classList.add('hidden');
+                const myOpenJobsWrapper = document.getElementById('todaysOpenJobsWrapper');
+                if (myOpenJobsWrapper) myOpenJobsWrapper.classList.add('hidden');
+
+                const myAvailSection = document.getElementById('myAvailabilitySection');
+                if (myAvailSection) myAvailSection.classList.remove('hidden');
+
+                // Initialize availability calendar
+                initAvailabilityCalendar(payload.subAvailability || {});
             }
             if (lowerRole === 'hr' || lowerRole === 'principal') {
               document.getElementById('navHRBtn').classList.remove('hidden');
@@ -2607,9 +2656,20 @@
           // Build HTML for subs who are NOT busy
           let optionsHtml = '';
           staffList.forEach(staff => {
-              if (!busySubs.has(staff.name.trim().toLowerCase())) {
-                  optionsHtml += `<option value="${escapeHtml(staff.display)}"></option>`;
+              if (busySubs.has(staff.name.trim().toLowerCase())) return;
+
+              // Filter Substitutes by availability for this date
+              if (staff.role === 'substitute') {
+                  const avail = staff.availability ? staff.availability[dateStr] : null;
+                  if (!avail || avail === 'Not Available') {
+                      return; // Skip this substitute, they are not available
+                  }
+                  // Further filtering could be done if AM/PM matches period,
+                  // but standard says they indicate available days and we pop them up.
+                  // For simplicity, if they have any availability logged, show them.
               }
+
+              optionsHtml += `<option value="${escapeHtml(staff.display)}"></option>`;
           });
 
           datalist.innerHTML = optionsHtml;
@@ -3854,6 +3914,118 @@
             container.innerHTML = html;
             container.classList.remove('text-gray-400');
           }
+
+      let currentAvailabilityMonth = new Date();
+      currentAvailabilityMonth.setDate(1); // Set to 1st of month to avoid overflow
+      let subAvailabilityData = {};
+
+      function initAvailabilityCalendar(initialData) {
+          subAvailabilityData = initialData;
+          renderAvailabilityCalendar();
+      }
+
+      function changeAvailabilityMonth(delta) {
+          currentAvailabilityMonth.setMonth(currentAvailabilityMonth.getMonth() + delta);
+          renderAvailabilityCalendar();
+      }
+
+      function toggleAvailability(dateStr) {
+          const statuses = ['Available', 'AM Only', 'PM Only', 'Not Available'];
+          const currentStatus = subAvailabilityData[dateStr] || 'Not Available';
+
+          let nextIndex = (statuses.indexOf(currentStatus) + 1) % statuses.length;
+          const nextStatus = statuses[nextIndex];
+
+          if (nextStatus === 'Not Available') {
+              delete subAvailabilityData[dateStr];
+          } else {
+              subAvailabilityData[dateStr] = nextStatus;
+          }
+
+          // Optimistically render
+          renderAvailabilityCalendar();
+
+          // Persist to backend
+          google.script.run
+            .withFailureHandler(err => {
+                showToast("Failed to save availability: " + err.message, "error");
+                // Revert locally (not implemented for simplicity, relying on user to fix)
+            })
+            .saveSubstituteAvailability(dateStr, nextStatus);
+      }
+
+      function renderAvailabilityCalendar() {
+          const grid = document.getElementById('availabilityCalendarGrid');
+          const label = document.getElementById('availabilityMonthLabel');
+          if (!grid || !label) return;
+
+          const year = currentAvailabilityMonth.getFullYear();
+          const month = currentAvailabilityMonth.getMonth();
+
+          const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+          label.innerText = `${monthNames[month]} ${year}`;
+
+          const firstDay = new Date(year, month, 1);
+          const lastDay = new Date(year, month + 1, 0);
+
+          const startingDayOfWeek = firstDay.getDay(); // 0-6 (Sun-Sat)
+          const totalDays = lastDay.getDate();
+
+          let html = '';
+
+          // Empty cells before start of month
+          for (let i = 0; i < startingDayOfWeek; i++) {
+              html += `<div class="p-4 border rounded-lg bg-gray-50 border-gray-100 opacity-50"></div>`;
+          }
+
+          // Days of the month
+          for (let day = 1; day <= totalDays; day++) {
+              const currentDate = new Date(year, month, day);
+              const dayOfWeek = currentDate.getDay();
+              // Pad zero for correct YYYY-MM-DD
+              const mm = String(month + 1).padStart(2, '0');
+              const dd = String(day).padStart(2, '0');
+              const stdDateStr = `${year}-${mm}-${dd}`;
+
+              const status = subAvailabilityData[stdDateStr] || 'Not Available';
+              const isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
+
+              if (isWeekend) {
+                  html += `<div class="p-4 border rounded-lg bg-gray-100 border-gray-200 text-gray-400 relative">
+                              <span class="absolute top-1 left-2 text-sm font-bold">${day}</span>
+                           </div>`;
+              } else {
+                  let statusColor = "bg-white border-gray-200 hover:bg-gray-50";
+                  let statusIcon = "";
+
+                  if (status === 'Available') {
+                      statusColor = "bg-green-100 border-green-500 text-green-800";
+                      statusIcon = "Full";
+                  } else if (status === 'AM Only') {
+                      statusColor = "bg-blue-100 border-blue-400 text-blue-800";
+                      statusIcon = "AM";
+                  } else if (status === 'PM Only') {
+                      statusColor = "bg-orange-100 border-orange-400 text-orange-800";
+                      statusIcon = "PM";
+                  }
+
+                  html += `<div onclick="toggleAvailability('${stdDateStr}')" class="p-4 sm:p-6 border rounded-lg cursor-pointer transition-colors relative flex items-center justify-center ${statusColor}">
+                              <span class="absolute top-1 left-2 text-sm font-bold">${day}</span>
+                              <span class="text-xs font-bold mt-3">${statusIcon}</span>
+                           </div>`;
+              }
+          }
+
+          grid.innerHTML = html;
+      }
+
+      // Helper function for local date formatting to match backend if needed
+      function Utilities_formatDateLocal(date) {
+         const yyyy = date.getFullYear();
+         const mm = String(date.getMonth() + 1).padStart(2, '0');
+         const dd = String(date.getDate()).padStart(2, '0');
+         return `${yyyy}-${mm}-${dd}`;
+      }
 
       function loadMyAbsences() {
         google.script.run
