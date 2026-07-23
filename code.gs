@@ -1478,30 +1478,28 @@ function cancelAbsence(absenceId) {
         }
       }
 
-      if (currentUserEmail !== teacherEmail) {
-         var rawDate = data[i][3];
-         var formattedDateForEmail = rawDate;
-         if (rawDate instanceof Date) {
-             formattedDateForEmail = Utilities.formatDate(rawDate, Session.getScriptTimeZone(), "MMM d, yyyy");
-         } else {
-             try {
-                 formattedDateForEmail = Utilities.formatDate(new Date(rawDate), Session.getScriptTimeZone(), "MMM d, yyyy");
-             } catch(e) { console.error("Error formatting date: " + e.message); }
-         }
-
-         var teacherSubject = "Absence Request Canceled by Administrator";
-         var teacherBody = "Your absence request for " + formattedDateForEmail + " has been canceled by an administrator.\n\n" +
-                           "Reason: " + data[i][5] + "\n" +
-                           "Periods: " + data[i][4] + "\n\n" +
-                           "If you have questions, please contact the sub coordinator.";
-
-         var teacherHtml = "<p>Your absence request for <strong>" + formattedDateForEmail + "</strong> has been canceled by an administrator.</p>" +
-                           "<ul><li><strong>Reason:</strong> " + data[i][5] + "</li>" +
-                           "<li><strong>Periods:</strong> " + data[i][4] + "</li></ul>" +
-                           "<p>If you have questions, please contact the sub coordinator.</p>";
-
-         enqueueEmail(teacherEmail, teacherSubject, teacherBody, {htmlBody: teacherHtml});
+      var rawDate = data[i][3];
+      var formattedDateForEmail = rawDate;
+      if (rawDate instanceof Date) {
+          formattedDateForEmail = Utilities.formatDate(rawDate, Session.getScriptTimeZone(), "MMM d, yyyy");
+      } else {
+          try {
+              formattedDateForEmail = Utilities.formatDate(new Date(rawDate), Session.getScriptTimeZone(), "MMM d, yyyy");
+          } catch(e) { console.error("Error formatting date: " + e.message); }
       }
+
+      var teacherSubject = "Absence Request Canceled";
+      var teacherBody = "Your absence request for " + formattedDateForEmail + " has been canceled.\n\n" +
+                        "Reason: " + data[i][5] + "\n" +
+                        "Periods: " + data[i][4] + "\n\n" +
+                        "If you have questions, please contact the sub coordinator.";
+
+      var teacherHtml = "<p>Your absence request for <strong>" + formattedDateForEmail + "</strong> has been canceled.</p>" +
+                        "<ul><li><strong>Reason:</strong> " + data[i][5] + "</li>" +
+                        "<li><strong>Periods:</strong> " + data[i][4] + "</li></ul>" +
+                        "<p>If you have questions, please contact the sub coordinator.</p>";
+
+      enqueueEmail(teacherEmail, teacherSubject, teacherBody, {htmlBody: teacherHtml});
 
           return {
       success: true };
@@ -1653,35 +1651,33 @@ function updateAbsence(absenceId, formData) {
       logAuditAction("ABSENCE_UPDATED", absenceId, "Updated absence details (Date: " + formData.date + ", Periods: " + formData.periods + ")");
 
 
-      if (currentUserEmail !== teacherEmail) {
-         var rawDate = data[i][3];
-         var formattedDateForEmail = rawDate;
-         if (rawDate instanceof Date) {
-             formattedDateForEmail = Utilities.formatDate(rawDate, Session.getScriptTimeZone(), "MMM d, yyyy");
-         } else {
-             try {
-                 formattedDateForEmail = Utilities.formatDate(new Date(rawDate), Session.getScriptTimeZone(), "MMM d, yyyy");
-             } catch(e) { console.error("Error formatting date: " + e.message); }
-         }
-
-         var teacherSubject = "Absence Request Updated by Administrator";
-         var teacherBody = "Your absence request for " + formattedDateForEmail + " has been updated by an administrator.\n\n" +
-                           "Updated Details:\n" +
-                           "Date: " + formData.date + "\n" +
-                           "Periods: " + formData.periods + "\n" +
-                           "Reason: " + formData.reason + "\n" +
-                           "Duration: " + formData.duration + "\n\n" +
-                           "If you have questions, please contact the sub coordinator.";
-
-         var teacherHtml = "<p>Your absence request for <strong>" + formattedDateForEmail + "</strong> has been updated by an administrator.</p>" +
-                           "<ul><li><strong>Date:</strong> " + formData.date + "</li>" +
-                           "<li><strong>Periods:</strong> " + formData.periods + "</li>" +
-                           "<li><strong>Reason:</strong> " + formData.reason + "</li>" +
-                           "<li><strong>Duration:</strong> " + formData.duration + "</li></ul>" +
-                           "<p>If you have questions, please contact the sub coordinator.</p>";
-
-         enqueueEmail(teacherEmail, teacherSubject, teacherBody, {htmlBody: teacherHtml});
+      var rawDate = data[i][3];
+      var formattedDateForEmail = rawDate;
+      if (rawDate instanceof Date) {
+          formattedDateForEmail = Utilities.formatDate(rawDate, Session.getScriptTimeZone(), "MMM d, yyyy");
+      } else {
+          try {
+              formattedDateForEmail = Utilities.formatDate(new Date(rawDate), Session.getScriptTimeZone(), "MMM d, yyyy");
+          } catch(e) { console.error("Error formatting date: " + e.message); }
       }
+
+      var teacherSubject = "Absence Request Updated";
+      var teacherBody = "Your absence request for " + formattedDateForEmail + " has been updated.\n\n" +
+                        "Updated Details:\n" +
+                        "Date: " + formData.date + "\n" +
+                        "Periods: " + formData.periods + "\n" +
+                        "Reason: " + formData.reason + "\n" +
+                        "Duration: " + formData.duration + "\n\n" +
+                        "If you have questions, please contact the sub coordinator.";
+
+      var teacherHtml = "<p>Your absence request for <strong>" + formattedDateForEmail + "</strong> has been updated.</p>" +
+                        "<ul><li><strong>Date:</strong> " + formData.date + "</li>" +
+                        "<li><strong>Periods:</strong> " + formData.periods + "</li>" +
+                        "<li><strong>Reason:</strong> " + formData.reason + "</li>" +
+                        "<li><strong>Duration:</strong> " + formData.duration + "</li></ul>" +
+                        "<p>If you have questions, please contact the sub coordinator.</p>";
+
+      enqueueEmail(teacherEmail, teacherSubject, teacherBody, {htmlBody: teacherHtml});
 
           return {
       success: true };
