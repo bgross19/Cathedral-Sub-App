@@ -317,15 +317,12 @@ function enqueueEmail(to, subject, body, options) {
     // Look up the name from the Staff Roster
     var recipientName = to; // Default to email
     try {
-      var rosterSheet = ss.getSheetByName("Staff Roster");
-      if (rosterSheet) {
-        var rosterData = rosterSheet.getDataRange().getValues();
-        var targetEmail = String(to).toLowerCase().trim();
-        for (var i = 1; i < rosterData.length; i++) {
-          if (String(rosterData[i][1]).toLowerCase().trim() === targetEmail) {
-            recipientName = String(rosterData[i][0]).trim();
-            break;
-          }
+      var rosterData = getRosterDataCached(ss);
+      var targetEmail = String(to).toLowerCase().trim();
+      for (var i = 1; i < rosterData.length; i++) {
+        if (String(rosterData[i][1]).toLowerCase().trim() === targetEmail) {
+          recipientName = String(rosterData[i][0]).trim();
+          break;
         }
       }
     } catch(e) {

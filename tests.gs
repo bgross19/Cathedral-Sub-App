@@ -457,3 +457,15 @@ function runTests() {
 
   return TestRunner.getSummary();
 }
+
+/**
+ * Temporary benchmark function to measure execution time of enqueueEmail.
+ */
+function benchmarkEnqueueEmail() {
+  var start = new Date().getTime();
+  for (var i = 0; i < 100; i++) {
+    enqueueEmail("test@example.com", "Benchmark Test", "This is a benchmark test.");
+  }
+  var end = new Date().getTime();
+  Logger.log("Execution time for 100 iterations: " + (end - start) + " ms");
+}
