@@ -1181,6 +1181,35 @@
             </tbody>
           </table>
         </div>
+
+        <!-- Role Permissions -->
+        <div class="mt-8 border-t border-gray-200 pt-6">
+           <div class="flex justify-between items-center mb-4">
+               <h3 class="text-xl font-bold text-[#002147]">Role Permissions</h3>
+               <button onclick="saveRolePermissions()" class="bg-[#002147] hover:bg-blue-900 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-sm text-sm">
+                   Save Permissions
+               </button>
+           </div>
+           <div class="overflow-x-auto bg-white rounded-xl shadow-sm border border-gray-200">
+               <table class="w-full text-left border-collapse min-w-max">
+                   <thead>
+                       <tr class="bg-gray-50 border-b border-gray-200 text-sm text-gray-700 uppercase">
+                           <th class="p-3 w-48 sticky left-0 bg-gray-50 z-10 border-r border-gray-200">Role</th>
+                           <th class="p-3 text-center">Admin Dashboard</th>
+                           <th class="p-3 text-center">HR Dashboard</th>
+                           <th class="p-3 text-center">Today at a Glance</th>
+                           <th class="p-3 text-center">My Upcoming Sub Duties</th>
+                           <th class="p-3 text-center">Today's Open Jobs</th>
+                           <th class="p-3 text-center">My Past Absences</th>
+                           <th class="p-3 text-center">Settings</th>
+                       </tr>
+                   </thead>
+                   <tbody id="rolePermissionsTableBody" class="divide-y divide-gray-100">
+                       <tr><td colspan="8" class="p-8 text-center text-gray-400 italic">Loading permissions...</td></tr>
+                   </tbody>
+               </table>
+           </div>
+        </div>
       </div>
 
       <!-- Data Management Tab -->
