@@ -2797,27 +2797,26 @@ function saveSubstituteAvailability(dateStr, status) {
   }
 
   var data = subAvailSheet.getDataRange().getValues();
-  var rowIndex = -1;
+  var matchingRows = [];
 
   for (var i = 1; i < data.length; i++) {
     var cellVal = data[i][1];
     var rowDateStr = (cellVal instanceof Date) ? _formatDateToYYYYMMDD(cellVal) : String(cellVal).trim();
     if (String(data[i][0]).toLowerCase() === targetEmail && rowDateStr === dateStr) {
-      rowIndex = i + 1; // 1-based index for sheets
-      break;
+      matchingRows.push(i + 1); // 1-based index for sheets
     }
   }
 
-  if (status === 'Not Available') {
-    if (rowIndex !== -1) {
-      subAvailSheet.deleteRow(rowIndex);
+  if (matchingRows.length > 0) {
+    // Update the first matching row with the new status (even if 'Not Available')
+    subAvailSheet.getRange(matchingRows[0], 3).setValue(status);
+
+    // Delete any subsequent duplicate rows (iterate backwards to avoid shifting issues)
+    for (var j = matchingRows.length - 1; j > 0; j--) {
+      subAvailSheet.deleteRow(matchingRows[j]);
     }
   } else {
-    if (rowIndex !== -1) {
-      subAvailSheet.getRange(rowIndex, 3).setValue(status);
-    } else {
-      subAvailSheet.appendRow([targetEmail, dateStr, status]);
-    }
+    subAvailSheet.appendRow([targetEmail, dateStr, status]);
   }
 }
 
