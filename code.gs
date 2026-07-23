@@ -932,6 +932,7 @@ function bulkUpsertStaffRoster(updates) {
 
     var newRows = [];
     var processedCount = 0;
+    var dataChanged = false;
 
     for (var j = 0; j < updates.length; j++) {
        var update = updates[j];
@@ -944,9 +945,18 @@ function bulkUpsertStaffRoster(updates) {
 
        var lowerEmail = email.toLowerCase();
        if (existingEmailsMap[lowerEmail] && existingEmailsMap[lowerEmail] > 0) {
-          // Update existing row directly
+          // Update in memory
           var rowIndex = existingEmailsMap[lowerEmail];
-          rosterSheet.getRange(rowIndex, 1, 1, 4).setValues([[name, email, role, duty]]);
+          // getRange is 1-based, array is 0-based
+          var dataIndex = rowIndex - 1;
+
+          if (data[dataIndex][0] !== name || data[dataIndex][1] !== email || data[dataIndex][2] !== role || data[dataIndex][3] !== duty) {
+            data[dataIndex][0] = name;
+            data[dataIndex][1] = email;
+            data[dataIndex][2] = role;
+            data[dataIndex][3] = duty;
+            dataChanged = true;
+          }
        } else {
           // Track for batch append
           newRows.push([name, email, role, duty]);
@@ -954,8 +964,17 @@ function bulkUpsertStaffRoster(updates) {
           existingEmailsMap[lowerEmail] = -1;
        }
 
-
        processedCount++;
+    }
+
+    // Perform a single batch update for existing rows if any were modified
+    if (dataChanged) {
+       // Using getRange(1, 1, data.length, 4) because we are only updating the first 4 columns,
+       // but data might have more columns, so we map the first 4 columns of the data array.
+       var updateData = data.map(function(row) {
+         return [row[0], row[1], row[2], row[3]];
+       });
+       rosterSheet.getRange(1, 1, updateData.length, 4).setValues(updateData);
     }
 
     if (newRows.length > 0) {
