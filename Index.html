@@ -2234,7 +2234,9 @@
                let html = "";
                reasons.forEach(r => {
                  // Store hrRequired property dynamically to be accessed later
-                 html += `<option value="${escapeHtml(r.reason)}" data-hr-required="${r.hrRequired}" data-principal-required="${r.principalRequired}">${escapeHtml(r.reason)}</option>`;
+                 let hrStr = (r.hrRequired === true || String(r.hrRequired).toLowerCase() === "true") ? "true" : "false";
+                 let prStr = (r.principalRequired === true || String(r.principalRequired).toLowerCase() === "true") ? "true" : "false";
+                 html += `<option value="${escapeHtml(r.reason)}" data-hr-required="${hrStr}" data-principal-required="${prStr}">${escapeHtml(r.reason)}</option>`;
                });
                if (html === "") {
                  html = `<option value="Personal" data-hr-required="false" data-principal-required="false">Personal</option>`; // Fallback
@@ -2563,8 +2565,10 @@
         let hrRequired = false;
         let principalRequired = false;
         if (select.options.length > 0 && select.selectedIndex > -1) {
-            hrRequired = select.options[select.selectedIndex].getAttribute('data-hr-required') === 'true';
-            principalRequired = select.options[select.selectedIndex].getAttribute('data-principal-required') === 'true';
+            let hrAttr = select.options[select.selectedIndex].getAttribute('data-hr-required');
+            let prAttr = select.options[select.selectedIndex].getAttribute('data-principal-required');
+            hrRequired = (String(hrAttr).trim().toLowerCase() === 'true');
+            principalRequired = (String(prAttr).trim().toLowerCase() === 'true');
         }
 
         if (hrRequired) {
