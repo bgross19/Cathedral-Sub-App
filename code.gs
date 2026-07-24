@@ -2183,6 +2183,34 @@ function getInitialPayload() {
       absenceReasons: String(absenceReasons)
     };
 
+    // --- Pre-calculate Date Colors for Frontend ---
+    userData.dateColors = dateColors;
+
+    // --- Pre-calculate Teacher Schedule for Frontend ---
+    var teacherSchedule = [];
+    if (scheduleData && scheduleData.length > 0) {
+      var headers = scheduleData[0];
+      var joinIdx = headers.indexOf("EMAIL_PERIOD_JOIN");
+
+      if (joinIdx > -1) {
+        for (var s = 1; s < scheduleData.length; s++) {
+          var joinKey = String(scheduleData[s][joinIdx]).toLowerCase().trim();
+          if (joinKey.indexOf(targetEmail + "-") === 0) {
+             // Extract period from joinKey
+             var parts = joinKey.split("-");
+             if (parts.length === 2) {
+                var p = parseInt(parts[1], 10);
+                if (!isNaN(p) && teacherSchedule.indexOf(p) === -1) {
+                   teacherSchedule.push(p);
+                }
+             }
+          }
+        }
+      }
+    }
+    userData.teacherSchedule = teacherSchedule;
+
+
 
     // --- 3. Extract common data (My Absences, My Sub Duties, Open Jobs) ---
     var myUpcomingAbsences = [];

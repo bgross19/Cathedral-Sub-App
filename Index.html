@@ -1786,6 +1786,7 @@
             <div class="grid grid-cols-2 gap-4">
               <div>
                 <label class="block text-sm font-bold mb-1">Date of Absence</label>
+                <span id="dayColorBadge" class="hidden text-xs font-bold px-2 py-1 rounded-full ml-2 align-middle"></span>
                 <input type="date" id="absDate" required class="w-full p-3 border rounded-xl focus:ring-2 focus:ring-[#00843D] outline-none">
               </div>
               <div>
@@ -2200,13 +2201,22 @@
                document.getElementById('absReason').innerHTML = `<option value="Personal" data-hr-required="false" data-principal-required="false">Personal</option>`;
             }
 
+
+            // Set date colors and teacher schedule globals
+            if (data.dateColors) {
+                userDateColors = data.dateColors;
+            }
+            if (data.teacherSchedule) {
+                userTeacherSchedule = data.teacherSchedule;
+            }
             // Render common parts
+
             renderMyAbsences(payload.myAbsences);
             renderMyPastAbsences(payload.myPastAbsences);
             renderMySubDuties(payload.mySubDuties);
             renderTodaysOpenJobs(payload.todaysOpenJobs);
 
-            globalDateColors = payload.dateColors || {};
+            globalDateColors = data.dateColors ? data.dateColors : {};
 
             let lowerRole = data.role.toLowerCase();
 
@@ -2234,7 +2244,7 @@
               if (payload.hrData) {
                   hrDataRaw = payload.hrData.requests || [];
                   hrPayPeriods = payload.hrData.payPeriods || [];
-                  hrDateColors = payload.dateColors || payload.hrData.dateColors || {};
+                  hrDateColors = userDateColors || {};
                   hrRates = payload.hrData.rates || { green: 10, blueGold: 20 };
               }
             }
@@ -2322,6 +2332,9 @@
 
       // --- MODAL CLOSE AND UNSAVED DATA LOGIC ---
       let originalModalData = {};
+      let userDateColors = {};
+      let userTeacherSchedule = [];
+
 
       function captureModalState() {
         const isRequestModalOpen = !document.querySelector('#modal').classList.contains('opacity-0');
@@ -2462,6 +2475,9 @@
              setUrgency('Standard');
              checkSpecialReason();
              document.getElementById('adminDeleteBtn').classList.add('hidden');
+
+             // Hide color badge on reset
+             document.getElementById('dayColorBadge').classList.add('hidden');
 
              // Uncheck all periods
              document.querySelectorAll('.period-cb').forEach(cb => cb.checked = false);
