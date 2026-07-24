@@ -47,6 +47,7 @@ function setupDatabase() {
       ["Email Mode", "Live"],
       ["Redirect Email", "Bgross@gocathedral.com"],
       ["App URL", DEFAULT_APP_URL],
+      ["Max Multi-Select Days", "5"],
       ["Urgency Cutoff Time", "15"],
       ["Term ID", "3503"],
       ["PS_CLIENT_ID", ""],
