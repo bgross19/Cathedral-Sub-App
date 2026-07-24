@@ -1,3 +1,29 @@
+
+/**
+ * Helper to get the 1-based column index for a given period.
+ * 0-based array index is one less.
+ */
+function getSubColumnIndex(period) {
+  var p = String(period).toLowerCase().trim();
+  if (p === '0') return 18; // Col R
+  if (p === 'a' || p === 'advisory') return 19; // Col S
+  var pNum = parseInt(p);
+  if (!isNaN(pNum) && pNum >= 1 && pNum <= 8) {
+    return 10 + pNum - 1; // Col J is 10 for Period 1
+  }
+  return -1;
+}
+
+/**
+ * Helper to get the master schedule join period.
+ */
+function getScheduleJoinPeriod(period) {
+  var p = String(period).toLowerCase().trim();
+  if (p === '0') return '9';
+  if (p === 'a' || p === 'advisory') return '10';
+  return String(period);
+}
+
 const APP_VERSION = "1.0.0";
 const DEFAULT_APP_URL = "https://script.google.com/a/macros/gocathedral.com/s/AKfycbwKZrBo4R-9O97aVNCjOHk9PddWCb6XNKviDS1lj4nNc49khl3T9OL8pGUDa7E1XE0/exec";
 
@@ -1234,7 +1260,7 @@ function submitAbsence(formData) {
     var newRow = [
       uniqueId, timestamp, email, formData.date, "'" + formData.periods,
       formData.reason, formData.duration, urgencyFormatted, instructions,
-      "", "", "", "", "", "", "", "", "Active"
+      "", "", "", "", "", "", "", "", "", "", "Active"
     ];
     mainSheet.appendRow(newRow);
 
@@ -1312,7 +1338,7 @@ function cancelMySubDuty(absenceId, period) {
     var targetUserName = userName.toLowerCase();
     for (var i = 1; i < data.length; i++) {
       if (String(data[i][0]) === String(absenceId)) {
-        var subColumnIndex = 10 + parseInt(period) - 1;
+        var subColumnIndex = getSubColumnIndex(period);
         var assignedSub = String(data[i][subColumnIndex - 1] || "").trim();
 
         if (assignedSub.toLowerCase() === targetUserName) {
@@ -1395,7 +1421,7 @@ function getAbsenceDetailsLocal(row, period, scheduleLookup, nameLookup) {
   var courseStr = "No Class Assigned";
 
   if (period) {
-    var joinKey = teacherEmail.toLowerCase() + "-" + period;
+    var joinKey = teacherEmail.toLowerCase() + "-" + getScheduleJoinPeriod(period);
     if (scheduleLookup) {
       var scheduleInfo = scheduleLookup[joinKey];
       if (scheduleInfo) {
@@ -1463,11 +1489,13 @@ function cancelAbsence(absenceId) {
         assertPermission(user, "Admin Dashboard", "Unauthorized to cancel this absence.");
       }
 
-      sheet.getRange(i + 1, 18).setValue("Canceled");
+      sheet.getRange(i + 1, 20).setValue("Canceled");
       logAuditAction("ABSENCE_CANCELLED", absenceId, "Cancelled entire absence request");
 
-      for (var p = 1; p <= 8; p++) {
-        var subIndex = 8 + p;
+      var allPeriods = ['1', '2', '3', '4', '5', '6', '7', '8', '0', 'Advisory'];
+      for (var pIdx = 0; pIdx < allPeriods.length; pIdx++) {
+        var p = allPeriods[pIdx];
+        var subIndex = getSubColumnIndex(p) - 1;
         var subName = String(data[i][subIndex] || "").trim();
         if (subName) {
           var email = subEmailLookup[subName];
@@ -1584,8 +1612,10 @@ function updateAbsence(absenceId, formData) {
 
       // Identify sub clears
       var subClearUpdates = [];
-      for (var p = 1; p <= 8; p++) {
-        var subIndex = 8 + p;
+      var allPeriods = ['1', '2', '3', '4', '5', '6', '7', '8', '0', 'Advisory'];
+      for (var pIdx = 0; pIdx < allPeriods.length; pIdx++) {
+        var p = allPeriods[pIdx];
+        var subIndex = getSubColumnIndex(p) - 1;
         var subName = String(data[i][subIndex] || "").trim();
 
         if (subName) {
@@ -1627,27 +1657,27 @@ function updateAbsence(absenceId, formData) {
 
       // Build a contiguous array for columns 4 through 17 (index 3 to 16)
       // D is 4 (Date), E is 5 (Periods), F is 6 (Reason), G is 7 (Duration), H is 8 (Urgency), I is 9 (Instructions)
-      // J to Q are 10 to 17 (Sub 1 to Sub 8)
+      // J to S are 10 to 19 (Sub 1 to Advisory)
       var updatedRowBlock = [
         formData.date, "'" + formData.periods, formData.reason,
         formData.duration, urgencyFormatted, instructions
       ];
 
       // Append the existing sub data to the block
-      for (var sIdx = 9; sIdx <= 16; sIdx++) {
+      for (var sIdx = 9; sIdx <= 18; sIdx++) {
          updatedRowBlock.push(data[i][sIdx]);
       }
 
       // Clear the necessary sub periods in the block
       for (var s = 0; s < subClearUpdates.length; s++) {
-         // subIndex is between 9 and 16.
+         // subIndex is between 9 and 18.
          // updatedRowBlock[0] maps to column 4.
          // updatedRowBlock[subIndex - 3] maps to column subIndex + 1.
          updatedRowBlock[subClearUpdates[s] - 3] = "";
       }
 
       // Single API call to update both the basic info and all sub clearing at once
-      sheet.getRange(i + 1, 4, 1, 14).setValues([updatedRowBlock]);
+      sheet.getRange(i + 1, 4, 1, 16).setValues([updatedRowBlock]);
       logAuditAction("ABSENCE_UPDATED", absenceId, "Updated absence details (Date: " + formData.date + ", Periods: " + formData.periods + ")");
 
 
@@ -1842,7 +1872,7 @@ function assignSubToPeriod(absenceId, period, subName) {
           throw new Error("Period " + period + " was not requested for this absence.");
       }
 
-      var subColumnIndex = 10 + parseInt(period) - 1; // 1-based index for Apps Script Ranges: Col J is 10 (Period 1 Sub)
+      var subColumnIndex = getSubColumnIndex(period); // 1-based index for Apps Script Ranges: Col J is 10 (Period 1 Sub)
 
       var existingSub = String(data[i][subColumnIndex - 1] || "").trim(); // array is 0-indexed, so subColumnIndex - 1
       var newSub = String(subName || "").trim();
@@ -1868,7 +1898,7 @@ function assignSubToPeriod(absenceId, period, subName) {
             var rowEmail = String(data[j][2] || "").toLowerCase();
             if (rowEmail === "") continue;
 
-            var rowStatus = String(data[j][17] || "Active");
+            var rowStatus = String(data[j][19] || "Active");
             var rowDuration = String(data[j][6] || "").trim();
 
             if (rowEmail === newSubEmail && rowStatus !== "Canceled" && rowDuration === "Full Day") {
@@ -2057,7 +2087,7 @@ function getInitialPayload() {
 
     for (var i = 1; i < absenceData.length; i++) {
       var row = absenceData[i];
-      var status = String(row[17] || 'Active');
+      var status = String(row[19] || 'Active');
       if (status === 'Canceled') continue;
 
       var rowTeacherEmail = String(row[2]).toLowerCase();
@@ -2119,12 +2149,14 @@ function getInitialPayload() {
         var duration = String(row[6]);
         var instructions = String(row[8]);
 
-        for (var p = 1; p <= 8; p++) {
+        var allPeriods = ['1', '2', '3', '4', '5', '6', '7', '8', '0', 'Advisory'];
+      for (var pIdx = 0; pIdx < allPeriods.length; pIdx++) {
+        var p = allPeriods[pIdx];
           if (periodsRequested.indexOf(String(p)) !== -1) {
-            var subColumnIndex = 8 + p;
+            var subColumnIndex = getSubColumnIndex(p) - 1;
             var assignedSub = String(row[subColumnIndex] || "").trim().toLowerCase();
 
-            var joinKey = rowTeacherEmail + "-" + p;
+            var joinKey = rowTeacherEmail + "-" + getScheduleJoinPeriod(p);
             var scheduleInfo = scheduleLookup[joinKey];
             var roomStr = scheduleInfo && scheduleInfo.room ? String(scheduleInfo.room) : "No Class Assigned";
             var courseStr = scheduleInfo && scheduleInfo.course ? String(scheduleInfo.course) : "No Class Assigned";
@@ -2231,7 +2263,7 @@ function getInitialPayload() {
 
       for (var i = 1; i < absenceData.length; i++) {
         var row = absenceData[i];
-        var status = String(row[17] || 'Active');
+        var status = String(row[19] || 'Active');
         if (status === 'Canceled') continue;
 
         var dateVal = row[3];
@@ -2257,11 +2289,13 @@ function getInitialPayload() {
           var duration = String(row[6]);
           var instructions = String(row[8]);
 
-          for (var p = 1; p <= 8; p++) {
+          var allPeriods = ['1', '2', '3', '4', '5', '6', '7', '8', '0', 'Advisory'];
+      for (var pIdx = 0; pIdx < allPeriods.length; pIdx++) {
+        var p = allPeriods[pIdx];
             if (periodsRequested.indexOf(String(p)) !== -1) {
-              var assignedSub = row[8 + p];
+              var assignedSub = row[getSubColumnIndex(p) - 1];
               if (!assignedSub || String(assignedSub).trim() === "") {
-                var joinKey = rowTeacherEmail + "-" + p;
+                var joinKey = rowTeacherEmail + "-" + getScheduleJoinPeriod(p);
                 var scheduleInfo = scheduleLookup[joinKey];
                 quickCover.push({
                   id: rowId,
@@ -2289,7 +2323,7 @@ function getInitialPayload() {
       var adminData = [];
       for (var i = 1; i < absenceData.length; i++) {
         var row = absenceData[i];
-        if (String(row[17] || "").trim() === "Canceled") continue;
+        if (String(row[19] || "").trim() === "Canceled") continue;
 
         var dateStr = row[3];
         var dateObj = new Date(dateStr);
@@ -2304,7 +2338,7 @@ function getInitialPayload() {
         for (var j = 0; j < periods.length; j++) {
           var p = parseInt(periods[j]);
           if (!isNaN(p)) {
-            var scheduleKey = rowTeacherEmail + "-" + p;
+            var scheduleKey = rowTeacherEmail + "-" + getScheduleJoinPeriod(p);
             adminData.push({
               id: String(row[0] || ""),
               originalDate: String(dateStr || ""),
@@ -2317,7 +2351,7 @@ function getInitialPayload() {
               teacherEmail: String(rowTeacherEmail || ""),
               course: scheduleLookup[scheduleKey] ? String(scheduleLookup[scheduleKey].course) : "",
               room: scheduleLookup[scheduleKey] ? String(scheduleLookup[scheduleKey].room) : "",
-              assignedSub: String(row[8 + p] || "").trim(),
+              assignedSub: String(row[getSubColumnIndex(p) - 1] || "").trim(),
               reason: String(row[5] || "").trim(),
               duration: String(row[6] || "").trim(),
               instructions: String(row[8] || "").trim()
@@ -2369,7 +2403,7 @@ function getInitialPayload() {
 
       for (var i = 1; i < absenceData.length; i++) {
         var row = absenceData[i];
-        if (String(row[17] || "").trim() === "Canceled") continue;
+        if (String(row[19] || "").trim() === "Canceled") continue;
 
         var dateStr = row[3];
         var dateObj = new Date(dateStr);
@@ -2384,11 +2418,12 @@ function getInitialPayload() {
         var assignedSubs = [];
 
         for (var j = 0; j < periods.length; j++) {
-          var p = parseInt(periods[j]);
-          if (!isNaN(p)) {
-            var assignedSub = row[8 + p];
+          var pStr = periods[j];
+          var p = pStr; // Keep as string for getSubColumnIndex
+          if (p) {
+            var assignedSub = row[getSubColumnIndex(p) - 1];
             if (assignedSub && String(assignedSub).trim() !== "") {
-              var scheduleKey = rowTeacherEmail + "-" + p;
+              var scheduleKey = rowTeacherEmail + "-" + getScheduleJoinPeriod(p);
               var courseStr = scheduleLookup[scheduleKey] ? String(scheduleLookup[scheduleKey].course) : "No Class Assigned";
               assignedSubs.push({ name: String(assignedSub).trim(), period: String(p), course: courseStr });
             }
