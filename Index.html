@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
+      // === Globals ===
+      let userDateColors = {};
+      let userTeacherSchedule = [];
+
       // === Mobile Navigation Menu ===
       function toggleMobileMenu() {
         const menu = document.getElementById('navMenu');
@@ -1822,7 +1826,10 @@
 
             <div class="grid grid-cols-2 gap-4">
               <div>
-                <label class="block text-sm font-bold mb-1">Date of Absence</label>
+                <label class="block text-sm font-bold mb-1 flex items-center">
+                  Date of Absence
+                  <span id="dayColorBadge" class="hidden ml-2 text-xs font-bold px-2 py-1 rounded border"></span>
+                </label>
                 <input type="date" id="absDate" required class="w-full p-3 border rounded-xl focus:ring-2 focus:ring-[#00843D] outline-none">
               </div>
               <div>
@@ -2246,6 +2253,8 @@
             renderTodaysOpenJobs(payload.todaysOpenJobs);
 
             globalDateColors = payload.dateColors || {};
+            userDateColors = payload.dateColors || {};
+            userTeacherSchedule = data.teacherSchedule || [];
 
             let lowerRole = data.role.toLowerCase();
 
@@ -4695,6 +4704,51 @@
             .submitAbsence(formData);
         }
       };
+
+      document.getElementById('absDate').addEventListener('change', function(e) {
+          const dateStr = this.value;
+          if (!dateStr) {
+              document.getElementById('dayColorBadge').classList.add('hidden');
+              return;
+          }
+
+          let color = userDateColors[dateStr] || 'Red';
+          const badge = document.getElementById('dayColorBadge');
+          badge.classList.remove('hidden');
+          badge.innerText = color + ' Day';
+
+          // Clear previous color classes
+          badge.className = badge.className.replace(/bg-\w+-100/g, '').replace(/text-\w+-800/g, '').replace(/border-\w+-200/g, '');
+
+          let activePeriods = [];
+          if (color.toLowerCase() === 'green') {
+              badge.classList.add('bg-green-100', 'text-green-800', 'border-green-200');
+              activePeriods = [1, 2, 3, 4, 5, 6, 7, 8];
+          } else if (color.toLowerCase() === 'blue') {
+              badge.classList.add('bg-blue-100', 'text-blue-800', 'border-blue-200');
+              activePeriods = [1, 2, 3, 4];
+          } else if (color.toLowerCase() === 'gold') {
+              badge.classList.add('bg-yellow-100', 'text-yellow-800', 'border-yellow-200'); // Tailwind uses yellow for gold
+              activePeriods = [5, 6, 7, 8];
+          } else { // Red
+              badge.classList.add('bg-red-100', 'text-red-800', 'border-red-200');
+              activePeriods = [];
+          }
+
+          // Auto-select periods if it's a new request
+          const isEdit = document.getElementById('editAbsenceId').value !== "";
+          if (!isEdit) {
+              const allCbs = document.querySelectorAll('.period-cb');
+              allCbs.forEach(cb => cb.checked = false);
+
+              allCbs.forEach(cb => {
+                  const p = parseInt(cb.value);
+                  if (!isNaN(p) && activePeriods.includes(p) && userTeacherSchedule.includes(p)) {
+                      cb.checked = true;
+                  }
+              });
+          }
+      });
 
       function toggleHRDashboard() {
         const mainContent = document.getElementById('mainContent');
