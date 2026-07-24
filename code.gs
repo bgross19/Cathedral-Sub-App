@@ -92,12 +92,12 @@ function getSettings(ss) {
     "Green Day Pay Rate": "10",
     "Blue/Gold Day Pay Rate": "20",
     "Absence Reasons": JSON.stringify([
-      {reason: "Personal", hrRequired: false},
-      {reason: "Professional Development", hrRequired: false},
-      {reason: "Retreat", hrRequired: false},
-      {reason: "Athletics", hrRequired: false},
-      {reason: "Jury Duty", hrRequired: true},
-      {reason: "Bereavement", hrRequired: true}
+      {reason: "Personal", hrRequired: false, principalRequired: false},
+      {reason: "Professional Development", hrRequired: false, principalRequired: false},
+      {reason: "Retreat", hrRequired: false, principalRequired: false},
+      {reason: "Athletics", hrRequired: false, principalRequired: true},
+      {reason: "Jury Duty", hrRequired: true, principalRequired: false},
+      {reason: "Bereavement", hrRequired: true, principalRequired: false}
     ]),
     "RolePermissions": JSON.stringify({
         "admin": { "Admin Dashboard": true, "HR Dashboard": true, "Today at a Glance": true, "My Upcoming Sub Duties": true, "Today's Open Jobs": true, "My Past Absences": true, "Settings": true },
@@ -245,12 +245,12 @@ function getUserData(ss) {
   var appUrl = settings["App URL"] || DEFAULT_APP_URL;
   var urgencyCutoffTime = settings["Urgency Cutoff Time"] || "15";
   var defaultAbsenceReasons = JSON.stringify([
-      {reason: "Personal", hrRequired: false},
-      {reason: "Professional Development", hrRequired: false},
-      {reason: "Retreat", hrRequired: false},
-      {reason: "Athletics", hrRequired: false},
-      {reason: "Jury Duty", hrRequired: true},
-      {reason: "Bereavement", hrRequired: true}
+      {reason: "Personal", hrRequired: false, principalRequired: false},
+      {reason: "Professional Development", hrRequired: false, principalRequired: false},
+      {reason: "Retreat", hrRequired: false, principalRequired: false},
+      {reason: "Athletics", hrRequired: false, principalRequired: true},
+      {reason: "Jury Duty", hrRequired: true, principalRequired: false},
+      {reason: "Bereavement", hrRequired: true, principalRequired: false}
   ]);
   var absenceReasons = settings["Absence Reasons"] || defaultAbsenceReasons;
 
@@ -1130,6 +1130,26 @@ function getCoordinatorEmail(ss) {
 }
 
 /**
+ * Helper to get a list of emails by role.
+ */
+function getEmailsByRole(sheetSS, roleStr) {
+  var ss = sheetSS || getSS();
+  var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
+  if (!rosterSheet) return [];
+
+  var data = rosterSheet.getDataRange().getValues();
+  var emails = [];
+  var targetRole = roleStr.toLowerCase().trim();
+  for (var i = 1; i < data.length; i++) {
+    var roles = String(data[i][2]).toLowerCase().split(",").map(function(r) { return r.trim(); });
+    if (roles.indexOf(targetRole) !== -1) {
+       emails.push(String(data[i][1]).trim());
+    }
+  }
+  return emails;
+}
+
+/**
  * Helper to calculate if an absence request is urgent based on submission time.
  */
 function calculateIsUrgentByTime(absenceDateStr, timestamp, ss) {
@@ -1249,10 +1269,80 @@ function submitAbsence(formData) {
       sendUrgentCoverageEmail(ss, teacherName, formData, instructions);
     }
     
-    logAuditAction("ABSENCE_SUBMITTED", uniqueId, "Requested coverage for " + formData.date + " (Periods: " + formData.periods + ")");
-    // SEND CONFIRMATION EMAIL TO SUBMITTER
+    // Check Settings to see if HR or Principal needs to be notified
     var settings = getSettings();
     var appUrl = settings["App URL"] || DEFAULT_APP_URL;
+    var reasons = [];
+    try {
+        reasons = JSON.parse(settings["Absence Reasons"] || "[]");
+    } catch(e) {}
+
+    var hrRequired = false;
+    var principalRequired = false;
+    for (var i = 0; i < reasons.length; i++) {
+        if (reasons[i].reason === formData.reason) {
+            hrRequired = reasons[i].hrRequired === true;
+            principalRequired = reasons[i].principalRequired === true;
+            break;
+        }
+    }
+
+    if (hrRequired) {
+        var hrEmails = getEmailsByRole(ss, "hr");
+        for (var h = 0; h < hrEmails.length; h++) {
+            var hrEmail = hrEmails[h];
+            var hrSubject = teacherName + " " + formData.reason + " Absence Request";
+            var hrBody = "An absence request has been submitted requiring attention.\n\n" +
+                         "Teacher: " + teacherName + "\n" +
+                         "Date Needed: " + formData.date + "\n" +
+                         "Periods: " + formData.periods + "\n" +
+                         "Reason: " + formData.reason + "\n\n" +
+                         "Instructions: " + (instructions ? instructions : "None") + "\n\n" +
+                         "Please log into the Cathedral Sub App for more information: " + appUrl;
+
+            var hrHtmlBody = "<p>An absence request has been submitted requiring attention.</p>" +
+                             "<ul>" +
+                             "<li><strong>Teacher:</strong> " + teacherName + "</li>" +
+                             "<li><strong>Date Needed:</strong> " + formData.date + "</li>" +
+                             "<li><strong>Periods:</strong> " + formData.periods + "</li>" +
+                             "<li><strong>Reason:</strong> " + formData.reason + "</li>" +
+                             "</ul>" +
+                             "<p><strong>Instructions:</strong> " + (instructions ? instructions : "None") + "</p>" +
+                             "<p>Please log into the <a href='" + appUrl + "'>Cathedral Sub App</a> for more information.</p>";
+
+            enqueueEmail(hrEmail, hrSubject, hrBody, { htmlBody: hrHtmlBody });
+        }
+    }
+
+    if (principalRequired) {
+        var prinEmails = getEmailsByRole(ss, "principal");
+        for (var p = 0; p < prinEmails.length; p++) {
+            var prinEmail = prinEmails[p];
+            var prinSubject = teacherName + " " + formData.reason + " Absence Request";
+            var prinBody = "An absence request has been submitted requiring attention.\n\n" +
+                           "Teacher: " + teacherName + "\n" +
+                           "Date Needed: " + formData.date + "\n" +
+                           "Periods: " + formData.periods + "\n" +
+                           "Reason: " + formData.reason + "\n\n" +
+                           "Instructions: " + (instructions ? instructions : "None") + "\n\n" +
+                           "Please log into the Cathedral Sub App for more information: " + appUrl;
+
+            var prinHtmlBody = "<p>An absence request has been submitted requiring attention.</p>" +
+                               "<ul>" +
+                               "<li><strong>Teacher:</strong> " + teacherName + "</li>" +
+                               "<li><strong>Date Needed:</strong> " + formData.date + "</li>" +
+                               "<li><strong>Periods:</strong> " + formData.periods + "</li>" +
+                               "<li><strong>Reason:</strong> " + formData.reason + "</li>" +
+                               "</ul>" +
+                               "<p><strong>Instructions:</strong> " + (instructions ? instructions : "None") + "</p>" +
+                               "<p>Please log into the <a href='" + appUrl + "'>Cathedral Sub App</a> for more information.</p>";
+
+            enqueueEmail(prinEmail, prinSubject, prinBody, { htmlBody: prinHtmlBody });
+        }
+    }
+
+    logAuditAction("ABSENCE_SUBMITTED", uniqueId, "Requested coverage for " + formData.date + " (Periods: " + formData.periods + ")");
+    // SEND CONFIRMATION EMAIL TO SUBMITTER
 
     var confSubject = "New Absence Request Confirmation";
     var confBody = "Your absence request has been successfully submitted.\n\n" +
@@ -2062,12 +2152,12 @@ function getInitialPayload() {
     var appUrl = settings["App URL"] || DEFAULT_APP_URL;
     var urgencyCutoffTime = settings["Urgency Cutoff Time"] || "15";
     var defaultAbsenceReasons = JSON.stringify([
-        {reason: "Personal", hrRequired: false},
-        {reason: "Professional Development", hrRequired: false},
-        {reason: "Retreat", hrRequired: false},
-        {reason: "Athletics", hrRequired: false},
-        {reason: "Jury Duty", hrRequired: true},
-        {reason: "Bereavement", hrRequired: true}
+        {reason: "Personal", hrRequired: false, principalRequired: false},
+        {reason: "Professional Development", hrRequired: false, principalRequired: false},
+        {reason: "Retreat", hrRequired: false, principalRequired: false},
+        {reason: "Athletics", hrRequired: false, principalRequired: true},
+        {reason: "Jury Duty", hrRequired: true, principalRequired: false},
+        {reason: "Bereavement", hrRequired: true, principalRequired: false}
     ]);
     var absenceReasons = settings["Absence Reasons"] || defaultAbsenceReasons;
     var rolePermissions = settings["RolePermissions"] || "{}";
