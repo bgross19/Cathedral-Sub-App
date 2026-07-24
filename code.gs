@@ -1800,7 +1800,7 @@ function sendSubNotification(subEmail, type, details) {
 /**
  * Assigns a substitute to a specific period for an absence request.
  */
-function assignSubToPeriod(absenceId, period, subName) {
+function assignSubToPeriod(absenceId, period, subName, forceOverride) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
@@ -1855,6 +1855,54 @@ function assignSubToPeriod(absenceId, period, subName) {
       // Double check for race condition
       if (existingSub !== "" && newSub !== "") {
         throw new Error("Sorry, this job was just filled by someone else!");
+      }
+
+      // Check if the new sub is available based on Dates and SubstituteAvailability
+      if (newSub !== "" && !forceOverride) {
+        var newSubEmail = (subEmailLookup[newSub] || "").toLowerCase();
+        if (newSubEmail !== "") {
+           var targetDateRaw = data[i][3];
+           var targetDateStr = (targetDateRaw instanceof Date) ? Utilities.formatDate(targetDateRaw, Session.getScriptTimeZone(), "yyyy-MM-dd") : String(targetDateRaw).trim();
+
+           var allSubAvail = getAllSubstituteAvailability();
+           var subAvail = allSubAvail[newSubEmail] || {};
+           var availStatus = subAvail[targetDateStr] || "Not Available";
+
+           if (availStatus !== "Available" && availStatus !== "AM Only" && availStatus !== "PM Only") {
+               throw new Error(JSON.stringify({type: "AVAILABILITY_ERROR", message: "Sub not listed as available, proceed?"}));
+           }
+
+           // Fetch day color
+           var datesSheet = ss.getSheetByName("Dates");
+           var dayColor = "Green"; // default
+           if (datesSheet) {
+               var datesData = datesSheet.getDataRange().getValues();
+               for (var d = 1; d < datesData.length; d++) {
+                   var dRaw = datesData[d][0];
+                   var dColor = datesData[d][1];
+                   if (dRaw && dColor) {
+                       var dFormatted = dRaw instanceof Date ? Utilities.formatDate(dRaw, Session.getScriptTimeZone(), "yyyy-MM-dd") :
+                          (function(){ try { return Utilities.formatDate(new Date(dRaw), Session.getScriptTimeZone(), "yyyy-MM-dd"); } catch(e) { return String(dRaw); } })();
+                       if (dFormatted === targetDateStr) {
+                           dayColor = String(dColor).trim();
+                           break;
+                       }
+                   }
+               }
+           }
+
+           var p = parseInt(period);
+           if (availStatus === "AM Only") {
+               if ((dayColor === "Green" && p > 4) || (dayColor === "Blue" && p > 2) || (dayColor === "Gold" && p > 6)) {
+                   throw new Error(JSON.stringify({type: "AVAILABILITY_ERROR", message: "Sub not listed as available, proceed?"}));
+               }
+           }
+           if (availStatus === "PM Only") {
+               if ((dayColor === "Green" && p <= 4) || (dayColor === "Blue" && p <= 2) || (dayColor === "Gold" && p <= 6)) {
+                   throw new Error(JSON.stringify({type: "AVAILABILITY_ERROR", message: "Sub not listed as available, proceed?"}));
+               }
+           }
+        }
       }
 
       // Check if the new sub is absent for a full day on the same date
@@ -1977,6 +2025,20 @@ function getInitialPayload() {
 
     var datesSheet = ss.getSheetByName("Dates");
     var datesData = datesSheet ? datesSheet.getDataRange().getValues() : [];
+
+    var dateColors = {};
+    if (datesData && datesData.length > 0) {
+      for (var d = 1; d < datesData.length; d++) {
+        var dateRaw = datesData[d][0];
+        var colorRaw = datesData[d][1];
+        if (dateRaw && colorRaw) {
+          var dateFormatted = dateRaw instanceof Date ? Utilities.formatDate(dateRaw, Session.getScriptTimeZone(), "yyyy-MM-dd") :
+            (function(){ try { return Utilities.formatDate(new Date(dateRaw), Session.getScriptTimeZone(), "yyyy-MM-dd"); } catch(e) { return String(dateRaw); } })();
+          dateColors[dateFormatted] = String(colorRaw).trim();
+        }
+      }
+    }
+
 
 
     // --- Build lookups ---
@@ -2179,7 +2241,8 @@ function getInitialPayload() {
       myPastAbsences: myPastAbsences,
       mySubDuties: mySubDuties,
       todaysOpenJobs: todaysOpenJobs,
-      permissions: permissions
+      permissions: permissions,
+      dateColors: dateColors
     };
 
 
@@ -2405,16 +2468,6 @@ function getInitialPayload() {
         });
       }
 
-      var dateColors = {};
-      for (var d = 1; d < datesData.length; d++) {
-        var dateRaw = datesData[d][0];
-        var colorRaw = datesData[d][1];
-        if (dateRaw && colorRaw) {
-          var dateFormatted = dateRaw instanceof Date ? Utilities.formatDate(dateRaw, Session.getScriptTimeZone(), "yyyy-MM-dd") :
-            (function(){ try { return Utilities.formatDate(new Date(dateRaw), Session.getScriptTimeZone(), "yyyy-MM-dd"); } catch(e) { return String(dateRaw); } })();
-          dateColors[dateFormatted] = String(colorRaw).trim();
-        }
-      }
 
       payload.hrData = {
         requests: hrData,
