@@ -2076,6 +2076,7 @@
       let hrPayPeriods = [];
       let hrDateColors = {};
       let hrRates = { green: 10, blueGold: 20 };
+      let globalDateColors = {};
       let hrDashboardLoaded = false;
       let hrCurrentView = 'absences'; // 'absences' or 'subs'
 
@@ -2195,6 +2196,8 @@
             renderMySubDuties(payload.mySubDuties);
             renderTodaysOpenJobs(payload.todaysOpenJobs);
 
+            globalDateColors = payload.dateColors || {};
+
             let lowerRole = data.role.toLowerCase();
 
             if (lowerRole === 'substitute') {
@@ -2221,7 +2224,7 @@
               if (payload.hrData) {
                   hrDataRaw = payload.hrData.requests || [];
                   hrPayPeriods = payload.hrData.payPeriods || [];
-                  hrDateColors = payload.hrData.dateColors || {};
+                  hrDateColors = payload.dateColors || payload.hrData.dateColors || {};
                   hrRates = payload.hrData.rates || { green: 10, blueGold: 20 };
               }
             }
@@ -2593,11 +2596,51 @@
             }
           })
           .withFailureHandler(err => {
-            showToast("Connection error: " + err.message, 'error');
-            btn.disabled = false;
-            btn.innerText = originalText;
+            if (err.message && err.message.includes('AVAILABILITY_ERROR')) {
+              let parsedErr;
+              try { parsedErr = JSON.parse(err.message.replace(/^Error: /, '')); } catch(e) { parsedErr = {message: 'Sub not listed as available, proceed?'}; }
+              showConfirm(parsedErr.message || 'Sub not listed as available, proceed?', () => {
+                 btn.innerText = 'Forcing...';
+                 google.script.run
+                    .withSuccessHandler(result => {
+                       if (result && result.success) {
+                          if (subName) {
+                             showToast('Sub assigned successfully!', 'success');
+                          } else {
+                             showToast('Sub Removed Successfully', 'success');
+                          }
+                          if (isFromModal) {
+                             closeAllModals();
+                          }
+                          google.script.run.withSuccessHandler(refreshed => {
+                             if (refreshed.quickCover) {
+                                renderQuickCover(refreshed.quickCover);
+                                updateDashboardTotals();
+                             }
+                             if (refreshed.adminData) {
+                                adminDataRaw = refreshed.adminData;
+                                updateDashboardTotals();
+                             }
+                          }).refreshData(['quickCover', 'adminData']);
+                       }
+                    })
+                    .withFailureHandler(forceErr => {
+                       showToast("Connection error: " + forceErr.message, 'error');
+                       btn.disabled = false;
+                       btn.innerText = originalText;
+                    })
+                    .assignSubToPeriod(absenceId, period, subName, true);
+              }, () => {
+                 btn.disabled = false;
+                 btn.innerText = originalText;
+              });
+            } else {
+              showToast("Connection error: " + err.message, 'error');
+              btn.disabled = false;
+              btn.innerText = originalText;
+            }
           })
-          .assignSubToPeriod(absenceId, period, subName);
+          .assignSubToPeriod(absenceId, period, subName, false);
         });
       }
 
@@ -2631,12 +2674,46 @@
             }
             EventBus.publish('refresh_adminData', { renderAtAGlance: true });
           })
-          .withFailureHandler((err) => {
-            showToast("Connection error: " + err.message, 'error');
-            btn.disabled = false;
-            btn.innerText = originalText;
+          .withFailureHandler(err => {
+            if (err.message && err.message.includes('AVAILABILITY_ERROR')) {
+              let parsedErr;
+              try { parsedErr = JSON.parse(err.message.replace(/^Error: /, '')); } catch(e) { parsedErr = {message: 'Sub not listed as available, proceed?'}; }
+              showConfirm(parsedErr.message || 'Sub not listed as available, proceed?', () => {
+                 btn.innerText = 'Forcing...';
+                 google.script.run
+                    .withSuccessHandler(result => {
+                       if (result && result.success) {
+                          if (subName) {
+                             showToast('Sub assigned successfully!', 'success');
+                          } else {
+                             showToast('Sub Removed Successfully', 'success');
+                          }
+                          google.script.run.withSuccessHandler(refreshed => {
+                             if (refreshed.adminData) {
+                                adminDataRaw = refreshed.adminData;
+                                renderAtAGlanceTable(adminDataRaw);
+                             }
+                             updateDashboardTotals();
+                          }).refreshData(['adminData']);
+                       }
+                    })
+                    .withFailureHandler(forceErr => {
+                       showToast("Error: " + forceErr.message, 'error');
+                       btn.disabled = false;
+                       btn.innerText = originalText;
+                    })
+                    .assignSubToPeriod(absenceId, period, subName, true);
+              }, () => {
+                 btn.disabled = false;
+                 btn.innerText = originalText;
+              });
+            } else {
+              showToast("Error: " + err.message, 'error');
+              btn.disabled = false;
+              btn.innerText = originalText;
+            }
           })
-          .assignSubToPeriod(absenceId, period, subName);
+          .assignSubToPeriod(absenceId, period, subName, false);
       }
 
       function updateDynamicStaffList(dateStr, period) {
@@ -2653,6 +2730,9 @@
               }
           });
 
+          const p = parseInt(period);
+          let dayColor = globalDateColors[dateStr] || "Green";
+
           // Build HTML for subs who are NOT busy
           let optionsHtml = '';
           staffList.forEach(staff => {
@@ -2661,12 +2741,20 @@
               // Filter Substitutes by availability for this date
               if (staff.role === 'substitute') {
                   const avail = staff.availability ? staff.availability[dateStr] : null;
-                  if (!avail || avail === 'Not Available') {
+                  if (avail !== "Available" && avail !== "AM Only" && avail !== "PM Only") {
                       return; // Skip this substitute, they are not available
                   }
-                  // Further filtering could be done if AM/PM matches period,
-                  // but standard says they indicate available days and we pop them up.
-                  // For simplicity, if they have any availability logged, show them.
+
+                  if (avail === 'AM Only') {
+                      if (dayColor === 'Green' && p > 4) return;
+                      if (dayColor === 'Blue' && p > 2) return;
+                      if (dayColor === 'Gold' && p > 6) return;
+                  }
+                  if (avail === 'PM Only') {
+                      if (dayColor === 'Green' && p <= 4) return;
+                      if (dayColor === 'Blue' && p <= 2) return;
+                      if (dayColor === 'Gold' && p <= 6) return;
+                  }
               }
 
               optionsHtml += `<option value="${escapeHtml(staff.display)}"></option>`;
@@ -3569,11 +3657,55 @@
             }
           })
           .withFailureHandler(err => {
-            showToast("Error: " + err.message, 'error');
-            btn.disabled = false;
-            btn.innerText = originalText;
+            if (err.message && err.message.includes('AVAILABILITY_ERROR')) {
+              let parsedErr;
+              try { parsedErr = JSON.parse(err.message.replace(/^Error: /, '')); } catch(e) { parsedErr = {message: 'Sub not listed as available, proceed?'}; }
+              showConfirm(parsedErr.message || 'Sub not listed as available, proceed?', () => {
+                 btn.innerText = 'Forcing...';
+                 google.script.run
+                    .withSuccessHandler(result => {
+                       if (result && result.success) {
+                          closeAllModals();
+                          if (subName) {
+                             showToast('Sub assigned successfully!', 'success');
+                          } else {
+                             showToast('Sub Removed Successfully', 'success');
+                          }
+                          const atAGlanceVisible = document.getElementById('atAGlanceSection') && !document.getElementById('atAGlanceSection').classList.contains('hidden');
+                          const componentToRefresh = atAGlanceVisible ? 'adminData' : 'adminData';
+
+                          google.script.run.withSuccessHandler(refreshed => {
+                             if (refreshed.adminData) {
+                                adminDataRaw = refreshed.adminData;
+                                if (atAGlanceVisible) {
+                                   renderAtAGlanceTable(adminDataRaw);
+                                } else {
+                                   renderAdminDataRawSilent(adminDataRaw);
+                                }
+                             }
+                             updateDashboardTotals();
+                          }).refreshData([componentToRefresh]);
+                       } else {
+                          showToast('Failed to assign sub.', 'error');
+                       }
+                    })
+                    .withFailureHandler(forceErr => {
+                       showToast("Error: " + forceErr.message, 'error');
+                       btn.disabled = false;
+                       btn.innerText = originalText;
+                    })
+                    .assignSubToPeriod(absenceId, period, subName, true);
+              }, () => {
+                 btn.disabled = false;
+                 btn.innerText = originalText;
+              });
+            } else {
+              showToast("Error: " + err.message, 'error');
+              btn.disabled = false;
+              btn.innerText = originalText;
+            }
           })
-          .assignSubToPeriod(absenceId, period, subName);
+          .assignSubToPeriod(absenceId, period, subName, false);
       }
 
       function handleInlineAdminAssign(absenceId, period, inputElementId) {
@@ -3633,12 +3765,59 @@
             }
           })
           .withFailureHandler(err => {
-            showToast("Error: " + err.message, 'error');
-            inputEl.value = originalValue;
-            inputEl.disabled = false;
-            inputEl.classList.remove('bg-[#f3f4f6]');
+            if (err.message && err.message.includes('AVAILABILITY_ERROR')) {
+              let parsedErr;
+              try { parsedErr = JSON.parse(err.message.replace(/^Error: /, '')); } catch(e) { parsedErr = {message: 'Sub not listed as available, proceed?'}; }
+              showConfirm(parsedErr.message || 'Sub not listed as available, proceed?', () => {
+                 inputEl.classList.add('bg-[#f3f4f6]', 'opacity-70');
+                 google.script.run
+                    .withSuccessHandler(result => {
+                       if (result && result.success) {
+                          if (subName) {
+                             showToast('Sub assigned successfully!', 'success');
+                          } else {
+                             showToast('Sub Removed Successfully', 'success');
+                          }
+                          inputEl.setAttribute('data-original-value', subName);
+                          inputEl.classList.remove('bg-[#f3f4f6]', 'opacity-70');
+                          inputEl.disabled = false;
+
+                          if (subName) {
+                             inputEl.classList.add('text-green-700', 'font-bold');
+                             inputEl.classList.remove('text-gray-400', 'italic');
+                          } else {
+                             inputEl.classList.remove('text-green-700', 'font-bold');
+                             inputEl.classList.add('text-gray-400', 'italic');
+                          }
+
+                          google.script.run.withSuccessHandler(refreshed => {
+                             if (refreshed.adminData) {
+                                adminDataRaw = refreshed.adminData;
+                                updateDashboardTotals();
+                             }
+                          }).refreshData(['adminData']);
+                       }
+                    })
+                    .withFailureHandler(forceErr => {
+                       showToast("Error: " + forceErr.message, 'error');
+                       inputEl.value = originalValue;
+                       inputEl.disabled = false;
+                       inputEl.classList.remove('bg-[#f3f4f6]', 'opacity-70');
+                    })
+                    .assignSubToPeriod(absenceId, period, subName, true);
+              }, () => {
+                 inputEl.value = originalValue;
+                 inputEl.disabled = false;
+                 inputEl.classList.remove('bg-[#f3f4f6]', 'opacity-70');
+              });
+            } else {
+              showToast("Error: " + err.message, 'error');
+              inputEl.value = originalValue;
+              inputEl.disabled = false;
+              inputEl.classList.remove('bg-[#f3f4f6]');
+            }
           })
-          .assignSubToPeriod(absenceId, period, subName);
+          .assignSubToPeriod(absenceId, period, subName, false);
       }
 
       function openDetailsModal(index) {
@@ -3754,11 +3933,51 @@
             }
           })
           .withFailureHandler(err => {
-            showToast("Connection error: " + err.message, 'error');
-            btn.disabled = false;
-            btn.innerText = originalText;
+            if (err.message && err.message.includes('AVAILABILITY_ERROR')) {
+              let parsedErr;
+              try { parsedErr = JSON.parse(err.message.replace(/^Error: /, '')); } catch(e) { parsedErr = {message: 'Sub not listed as available, proceed?'}; }
+              showConfirm(parsedErr.message || 'Sub not listed as available, proceed?', () => {
+                 btn.innerText = 'Forcing...';
+                 google.script.run
+                    .withSuccessHandler(result => {
+                       if (result && result.success) {
+                          if (subName) {
+                             showToast('Sub assigned successfully!', 'success');
+                          } else {
+                             showToast('Sub Removed Successfully', 'success');
+                          }
+                          if (isFromModal) {
+                             closeAllModals();
+                          }
+                          google.script.run.withSuccessHandler(refreshed => {
+                             if (refreshed.quickCover) {
+                                renderQuickCover(refreshed.quickCover);
+                                updateDashboardTotals();
+                             }
+                             if (refreshed.adminData) {
+                                adminDataRaw = refreshed.adminData;
+                                updateDashboardTotals();
+                             }
+                          }).refreshData(['quickCover', 'adminData']);
+                       }
+                    })
+                    .withFailureHandler(forceErr => {
+                       showToast("Connection error: " + forceErr.message, 'error');
+                       btn.disabled = false;
+                       btn.innerText = originalText;
+                    })
+                    .assignSubToPeriod(absenceId, period, subName, true);
+              }, () => {
+                 btn.disabled = false;
+                 btn.innerText = originalText;
+              });
+            } else {
+              showToast("Connection error: " + err.message, 'error');
+              btn.disabled = false;
+              btn.innerText = originalText;
+            }
           })
-          .assignSubToPeriod(absenceId, period, subName);
+          .assignSubToPeriod(absenceId, period, subName, false);
       }
 
       function renderMySubDuties(duties) {
