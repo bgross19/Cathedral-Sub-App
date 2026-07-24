@@ -126,12 +126,12 @@ function getSettings(ss) {
       {reason: "Bereavement", hrRequired: true, principalRequired: false}
     ]),
     "RolePermissions": JSON.stringify({
-        "admin": { "Admin Dashboard": true, "HR Dashboard": true, "Today at a Glance": true, "My Upcoming Sub Duties": true, "Today's Open Jobs": true, "My Past Absences": true, "Settings": true },
-        "hr": { "Admin Dashboard": false, "HR Dashboard": true, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Open Jobs": false, "My Past Absences": true, "Settings": true },
-        "sub coordinator": { "Admin Dashboard": true, "HR Dashboard": false, "Today at a Glance": true, "My Upcoming Sub Duties": true, "Today's Open Jobs": true, "My Past Absences": true, "Settings": false },
-        "principal": { "Admin Dashboard": true, "HR Dashboard": true, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Open Jobs": false, "My Past Absences": true, "Settings": false },
-        "teacher": { "Admin Dashboard": false, "HR Dashboard": false, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Open Jobs": true, "My Past Absences": true, "Settings": false },
-        "substitute": { "Admin Dashboard": false, "HR Dashboard": false, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Open Jobs": false, "My Past Absences": false, "Settings": false }
+        "admin": { "Admin Dashboard": true, "HR Dashboard": true, "Today at a Glance": true, "My Upcoming Sub Duties": true, "Today's Open Jobs": true, "My Past Absences": true, "Settings": true, "Add Request on Behalf": true },
+        "hr": { "Admin Dashboard": false, "HR Dashboard": true, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Open Jobs": false, "My Past Absences": true, "Settings": true, "Add Request on Behalf": true },
+        "sub coordinator": { "Admin Dashboard": true, "HR Dashboard": false, "Today at a Glance": true, "My Upcoming Sub Duties": true, "Today's Open Jobs": true, "My Past Absences": true, "Settings": false, "Add Request on Behalf": true },
+        "principal": { "Admin Dashboard": true, "HR Dashboard": true, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Open Jobs": false, "My Past Absences": true, "Settings": false, "Add Request on Behalf": true },
+        "teacher": { "Admin Dashboard": false, "HR Dashboard": false, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Open Jobs": true, "My Past Absences": true, "Settings": false, "Add Request on Behalf": false },
+        "substitute": { "Admin Dashboard": false, "HR Dashboard": false, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Open Jobs": false, "My Past Absences": false, "Settings": false, "Add Request on Behalf": false }
       })
   };
 
@@ -1269,22 +1269,51 @@ function submitAbsence(formData) {
     var ss = getSS();
     var mainSheet = getSheetOrThrow(ss, "Absence Requests");
     
+    var timestamp = new Date();
+    var submitterEmail = Session.getActiveUser().getEmail();
+    var submitterData = getUserData(ss);
+
+    var targetEmail = submitterEmail;
+    var teacherName = submitterData.name;
+
+    var instructions = formData.specialInstructions || "";
+
+    // Handle "On Behalf" submissions
+    if (formData.onBehalfTeacher) {
+      // Find the teacher's email based on the provided name
+      var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
+      var rosterData = rosterSheet.getDataRange().getValues();
+
+      var foundEmail = null;
+      var targetName = formData.onBehalfTeacher.trim().toLowerCase();
+
+      for (var i = 1; i < rosterData.length; i++) {
+        if (String(rosterData[i][0]).toLowerCase().indexOf(targetName) !== -1 || String(rosterData[i][0]).toLowerCase() === targetName) {
+           foundEmail = rosterData[i][1];
+           teacherName = rosterData[i][0]; // Proper casing
+           break;
+        }
+      }
+
+      if (foundEmail) {
+        targetEmail = foundEmail;
+        instructions = (instructions ? instructions + "\n" : "") + "(Submitted by " + submitterData.name + ")";
+      } else {
+        return { success: false, error: "Teacher '" + formData.onBehalfTeacher + "' not found in Staff Roster." };
+      }
+    }
+
     var urgencyFormatted = formData.urgency === 'Urgent' ? 'Urgent (Less than 24 hr notice)' : 'Standard (Advanced Notice)';
-    var instructions = formData.specialInstructions;
     if (formData.hrConfirmed) instructions = "[HR Docs Provided] " + instructions;
 
-    var timestamp = new Date();
-    var email = Session.getActiveUser().getEmail();
     var uniqueId = Utilities.getUuid();
 
     var newRow = [
-      uniqueId, timestamp, email, formData.date, "'" + formData.periods,
+      uniqueId, timestamp, targetEmail, formData.date, "'" + formData.periods,
       formData.reason, formData.duration, urgencyFormatted, instructions,
       "", "", "", "", "", "", "", "", "", "", "Active"
     ];
     mainSheet.appendRow(newRow);
-
-    var teacherName = getUserData(ss).name;
 
     var isMarkedUrgent = urgencyFormatted === 'Urgent (Less than 24 hr notice)';
     var isUrgentByTime = calculateIsUrgentByTime(formData.date, timestamp, ss);
@@ -2200,7 +2229,8 @@ function getInitialPayload() {
       "My Upcoming Sub Duties": hasPermission(lowerRole, "My Upcoming Sub Duties", rolePermissions),
       "Today's Open Jobs": hasPermission(lowerRole, "Today's Open Jobs", rolePermissions),
       "My Past Absences": hasPermission(lowerRole, "My Past Absences", rolePermissions),
-      "Settings": hasPermission(lowerRole, "Settings", rolePermissions) || lowerRole === "admin"
+      "Settings": hasPermission(lowerRole, "Settings", rolePermissions) || lowerRole === "admin",
+      "Add Request on Behalf": hasPermission(lowerRole, "Add Request on Behalf", rolePermissions)
     };
 
     var userData = {
