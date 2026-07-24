@@ -1232,10 +1232,11 @@
                            <th class="p-3 text-center">Today's Open Jobs</th>
                            <th class="p-3 text-center">My Past Absences</th>
                            <th class="p-3 text-center">Settings</th>
+                           <th class="p-3 text-center">Add Request on Behalf</th>
                        </tr>
                    </thead>
                    <tbody id="rolePermissionsTableBody" class="divide-y divide-gray-100">
-                       <tr><td colspan="8" class="p-8 text-center text-gray-400 italic">Loading permissions...</td></tr>
+                       <tr><td colspan="9" class="p-8 text-center text-gray-400 italic">Loading permissions...</td></tr>
                    </tbody>
                </table>
            </div>
@@ -1474,7 +1475,32 @@
             container.innerHTML = html;
             renderAbsenceReasons();
             try {
-                 rolePermissionsMatrix = JSON.parse(settings['RolePermissions'] || '{}');
+                 const savedMatrix = JSON.parse(settings['RolePermissions'] || '{}');
+                 const defaultMatrix = {
+                    "admin": { "Admin Dashboard": true, "HR Dashboard": true, "Today at a Glance": true, "My Upcoming Sub Duties": true, "Today's Open Jobs": true, "My Past Absences": true, "Settings": true, "Add Request on Behalf": true },
+                    "hr": { "Admin Dashboard": false, "HR Dashboard": true, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Open Jobs": false, "My Past Absences": true, "Settings": true, "Add Request on Behalf": true },
+                    "sub coordinator": { "Admin Dashboard": true, "HR Dashboard": false, "Today at a Glance": true, "My Upcoming Sub Duties": true, "Today's Open Jobs": true, "My Past Absences": true, "Settings": false, "Add Request on Behalf": true },
+                    "principal": { "Admin Dashboard": true, "HR Dashboard": true, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Open Jobs": false, "My Past Absences": true, "Settings": false, "Add Request on Behalf": true },
+                    "teacher": { "Admin Dashboard": false, "HR Dashboard": false, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Open Jobs": true, "My Past Absences": true, "Settings": false, "Add Request on Behalf": false },
+                    "substitute": { "Admin Dashboard": false, "HR Dashboard": false, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Open Jobs": false, "My Past Absences": false, "Settings": false, "Add Request on Behalf": false }
+                 };
+
+                 // Merge saved matrix into default matrix
+                 rolePermissionsMatrix = {};
+                 const roles = ["admin", "hr", "sub coordinator", "principal", "teacher", "substitute"];
+                 const views = ["Admin Dashboard", "HR Dashboard", "Today at a Glance", "My Upcoming Sub Duties", "Today's Open Jobs", "My Past Absences", "Settings", "Add Request on Behalf"];
+
+                 roles.forEach(role => {
+                    rolePermissionsMatrix[role] = {};
+                    views.forEach(view => {
+                       if (savedMatrix[role] && typeof savedMatrix[role][view] !== 'undefined') {
+                          rolePermissionsMatrix[role][view] = savedMatrix[role][view];
+                       } else {
+                          rolePermissionsMatrix[role][view] = defaultMatrix[role] ? defaultMatrix[role][view] === true : false;
+                       }
+                    });
+                 });
+
                  renderRolePermissionsMatrix();
             } catch (e) {
                  console.error("Failed to parse RolePermissions", e);
@@ -1790,7 +1816,8 @@
             
             <div id="onBehalfSection" class="hidden">
               <label class="block text-sm font-bold mb-1">Teacher</label>
-              <input type="text" id="onBehalfTeacher" list="dynamicStaffDataList" placeholder="Select teacher..." class="w-full p-3 border rounded-xl focus:ring-2 focus:ring-[#00843D] outline-none">
+              <input type="text" id="onBehalfTeacher" list="allStaffDataList" placeholder="Select teacher..." class="w-full p-3 border rounded-xl focus:ring-2 focus:ring-[#00843D] outline-none">
+              <datalist id="allStaffDataList"></datalist>
             </div>
 
             <div class="grid grid-cols-2 gap-4">
@@ -2324,6 +2351,17 @@
 
       function renderStaffList(list) {
             staffList = list;
+
+            // Populate the datalist for "Add Request on Behalf"
+            const allStaffDatalist = document.getElementById('allStaffDataList');
+            if (allStaffDatalist) {
+                let optionsHtml = '';
+                staffList.forEach(staff => {
+                    optionsHtml += `<option value="${escapeHtml(staff.name)}"></option>`;
+                });
+                allStaffDatalist.innerHTML = optionsHtml;
+            }
+
             // Rerender Quick Cover in case it loaded before the staff list
             if (typeof currentUnfilledData !== 'undefined' && currentUnfilledData && currentUnfilledData.length > 0) {
                renderQuickCover(currentUnfilledData);

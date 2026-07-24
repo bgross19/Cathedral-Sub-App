@@ -2142,9 +2142,26 @@ function hasPermission(role, view, rolePermissionsStr) {
   try {
     var permissions = JSON.parse(rolePermissionsStr || '{}');
     var lowerRole = String(role).toLowerCase();
-    if (permissions[lowerRole] && permissions[lowerRole][view] === true) {
-      return true;
+
+    // Check if the permission is explicitly set
+    if (permissions[lowerRole] && typeof permissions[lowerRole][view] !== 'undefined') {
+      return permissions[lowerRole][view] === true;
     }
+
+    // Fallback to default if not explicitly set in the saved JSON
+    var defaultSettings = {
+        "admin": { "Admin Dashboard": true, "HR Dashboard": true, "Today at a Glance": true, "My Upcoming Sub Duties": true, "Today's Open Jobs": true, "My Past Absences": true, "Settings": true, "Add Request on Behalf": true },
+        "hr": { "Admin Dashboard": false, "HR Dashboard": true, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Open Jobs": false, "My Past Absences": true, "Settings": true, "Add Request on Behalf": true },
+        "sub coordinator": { "Admin Dashboard": true, "HR Dashboard": false, "Today at a Glance": true, "My Upcoming Sub Duties": true, "Today's Open Jobs": true, "My Past Absences": true, "Settings": false, "Add Request on Behalf": true },
+        "principal": { "Admin Dashboard": true, "HR Dashboard": true, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Open Jobs": false, "My Past Absences": true, "Settings": false, "Add Request on Behalf": true },
+        "teacher": { "Admin Dashboard": false, "HR Dashboard": false, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Open Jobs": true, "My Past Absences": true, "Settings": false, "Add Request on Behalf": false },
+        "substitute": { "Admin Dashboard": false, "HR Dashboard": false, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Open Jobs": false, "My Past Absences": false, "Settings": false, "Add Request on Behalf": false }
+    };
+
+    if (defaultSettings[lowerRole] && typeof defaultSettings[lowerRole][view] !== 'undefined') {
+        return defaultSettings[lowerRole][view] === true;
+    }
+
     return false;
   } catch (e) {
     return false;
