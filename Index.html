@@ -3,6 +3,10 @@
   <head>
     <base target="_top">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       // === Globals ===
@@ -1416,16 +1420,21 @@
                   <input type="email" id="settingsRedirectEmail" value="${escapeHtml(settings["Redirect Email"] || "")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none">
                 </div>
               </div>
-              <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label class="block text-sm font-bold mb-1">App URL</label>
                   <input type="text" id="settingsAppUrl" value="${escapeHtml(settings["App URL"] || "")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none">
                 </div>
                 <div>
+                  <label class="block text-sm font-bold mb-1">Max Multi-Select Days</label>
+                  <input type="number" id="settingsMaxMultiDays" min="1" max="14" value="${escapeHtml(settings["Max Multi-Select Days"] || "5")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none" title="Maximum number of days a teacher can select at once.">
+                </div>
+              </div>
+              <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
                   <label class="block text-sm font-bold mb-1">Urgency Cutoff Time (24h format)</label>
                   <input type="number" id="settingsUrgencyCutoff" min="0" max="23" value="${escapeHtml(settings["Urgency Cutoff Time"] || "15")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none" title="Hour of the day after which next-day absences become urgent. (e.g. 15 = 3 PM)">
                 </div>
-              </div>
               <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label class="block text-sm font-bold mb-1">Term ID</label>
@@ -1584,6 +1593,8 @@
           "Email Mode": document.getElementById('settingsEmailMode').value,
           "Redirect Email": document.getElementById('settingsRedirectEmail').value,
           "App URL": document.getElementById('settingsAppUrl').value,
+          "Max Multi-Select Days": document.getElementById('settingsMaxMultiDays').value,
+          "Max Multi-Select Days": document.getElementById('settingsMaxMultiDays').value,
           "Urgency Cutoff Time": document.getElementById('settingsUrgencyCutoff').value,
           "Data Fetch Window (Days)": document.getElementById('settingsFetchWindow').value,
           "Term ID": document.getElementById('settingsTermId').value,
@@ -1830,11 +1841,11 @@
                   Date of Absence
                   <span id="dayColorBadge" class="hidden ml-2 text-xs font-bold px-2 py-1 rounded border"></span>
                 </label>
-                <input type="date" id="absDate" required class="w-full p-3 border rounded-xl focus:ring-2 focus:ring-[#00843D] outline-none">
+                <input type="text" id="absDate" required class="w-full p-3 border rounded-xl focus:ring-2 focus:ring-[#00843D] outline-none" placeholder="Select Date(s)...">
               </div>
               <div>
                 <label class="block text-sm font-bold mb-1">Duration</label>
-                <select id="absDuration" class="w-full p-3 border rounded-xl outline-none bg-white">
+                <select id="absDuration" class="w-full p-3 border rounded-xl outline-none bg-white" onchange="if(window.absDatePicker && window.absDatePicker.selectedDates.length > 0) handleAbsDateChangeMulti(window.absDatePicker.selectedDates);">
                   <option value="Full Day">Full Day</option>
                   <option value="Half Day">Half Day</option>
                 </select>
@@ -1843,7 +1854,9 @@
 
             <div>
               <label class="block text-sm font-bold mb-2">Period(s) Needed</label>
-              <div class="grid grid-cols-5 gap-2">
+              <div id="multiDatePeriodsContainer" class="hidden flex flex-col gap-4 mb-4"></div>
+              <div id="multiDatePeriodsContainer" class="hidden flex flex-col gap-4 mb-4"></div>
+              <div id="singleDatePeriodsBlock" class="grid grid-cols-5 gap-2">
                 <label class="flex items-center gap-2 p-2 border rounded-lg cursor-pointer hover:bg-gray-50"><input type="checkbox" value="1" class="period-cb h-4 w-4"> 1</label>
                 <label class="flex items-center gap-2 p-2 border rounded-lg cursor-pointer hover:bg-gray-50"><input type="checkbox" value="2" class="period-cb h-4 w-4"> 2</label>
                 <label class="flex items-center gap-2 p-2 border rounded-lg cursor-pointer hover:bg-gray-50"><input type="checkbox" value="3" class="period-cb h-4 w-4"> 3</label>
@@ -2173,6 +2186,22 @@
 
       function initApp() {
         initToggles();
+        window.absDatePicker = flatpickr("#absDate", {
+            mode: "multiple",
+            dateFormat: "Y-m-d",
+            onChange: function(selectedDates, dateStr, instance) {
+                handleAbsDateChangeMulti(selectedDates);
+            }
+        });
+
+        window.absDatePicker = flatpickr("#absDate", {
+            mode: "multiple",
+            dateFormat: "Y-m-d",
+            onChange: function(selectedDates, dateStr, instance) {
+                handleAbsDateChangeMulti(selectedDates);
+            }
+        });
+
         scheduleVersionCheck();
 
         // Parse URL parameters for "Sign Me Up" links
@@ -2519,6 +2548,13 @@
           body.classList.add('overflow-hidden');
 
           if (!isEdit) {
+             if(window.absDatePicker) {
+                 window.absDatePicker.set("mode", "multiple");
+                 window.absDatePicker.clear();
+             }
+             document.getElementById("singleDatePeriodsBlock").classList.remove("hidden");
+             document.getElementById("multiDatePeriodsContainer").classList.add("hidden");
+             document.getElementById("multiDatePeriodsContainer").innerHTML = "";
              document.getElementById('requestModalTitle').innerText = isOnBehalf ? "Request Sub for Teacher" : "Request Sub";
              document.getElementById('absenceForm').reset();
              document.getElementById('editAbsenceId').value = "";
@@ -2539,6 +2575,12 @@
                document.getElementById('onBehalfTeacher').value = "";
              }
           } else {
+             if(window.absDatePicker) {
+                 window.absDatePicker.set("mode", "single");
+             }
+             document.getElementById("singleDatePeriodsBlock").classList.remove("hidden");
+             document.getElementById("multiDatePeriodsContainer").classList.add("hidden");
+             document.getElementById("multiDatePeriodsContainer").innerHTML = "";
              document.getElementById('onBehalfSection').classList.add('hidden');
              document.getElementById('onBehalfTeacher').required = false;
              document.getElementById('onBehalfTeacher').value = "";
@@ -2553,6 +2595,352 @@
           overlay.classList.add('pointer-events-none');
           body.classList.remove('overflow-hidden');
         }
+      }
+
+      function handleAbsDateChangeMulti(selectedDates) {
+          const singleBlock = document.getElementById("singleDatePeriodsBlock");
+          const multiContainer = document.getElementById("multiDatePeriodsContainer");
+          const maxDays = parseInt(document.getElementById("settingsMaxMultiDays")?.value || "5", 10);
+
+          if (selectedDates.length > maxDays) {
+              showToast("Maximum of " + maxDays + " days can be selected at once.", "warning");
+              window.absDatePicker.setDate(selectedDates.slice(0, maxDays));
+              return;
+          }
+
+          if (selectedDates.length <= 1) {
+              singleBlock.classList.remove("hidden");
+              multiContainer.classList.add("hidden");
+              multiContainer.innerHTML = "";
+              if (selectedDates.length === 1) {
+                  const dateStr = window.absDatePicker.formatDate(selectedDates[0], "Y-m-d");
+                  updatePeriodsForSingleDate(dateStr, document.getElementById("absDuration").value);
+              } else {
+                  document.getElementById("dayColorBadge").classList.add("hidden");
+              }
+              return;
+          }
+
+          // Multiple dates selected
+          singleBlock.classList.add("hidden");
+          multiContainer.classList.remove("hidden");
+          multiContainer.innerHTML = "";
+
+          const duration = document.getElementById("absDuration").value;
+
+          selectedDates.sort((a,b) => a - b).forEach(date => {
+              const dateStr = window.absDatePicker.formatDate(date, "Y-m-d");
+              const blockId = "multi_periods_" + dateStr;
+
+              // Create a block for each date
+              const block = document.createElement("div");
+              block.className = "border rounded-lg p-3 bg-gray-50";
+              block.innerHTML = `
+                  <div class="font-bold text-sm mb-2 flex justify-between">
+                     <span>${date.toLocaleDateString("en-US", {weekday: "short", month: "short", day: "numeric"})}</span>
+                     <span id="badge_${dateStr}" class="text-xs px-2 py-1 rounded border"></span>
+                  </div>
+                  <div class="grid grid-cols-5 gap-2" id="${blockId}">
+                    <label class="flex items-center gap-2 p-1 border rounded cursor-pointer hover:bg-white bg-white text-sm"><input type="checkbox" value="1" class="multi-period-cb h-3 w-3"> 1</label>
+                    <label class="flex items-center gap-2 p-1 border rounded cursor-pointer hover:bg-white bg-white text-sm"><input type="checkbox" value="2" class="multi-period-cb h-3 w-3"> 2</label>
+                    <label class="flex items-center gap-2 p-1 border rounded cursor-pointer hover:bg-white bg-white text-sm"><input type="checkbox" value="3" class="multi-period-cb h-3 w-3"> 3</label>
+                    <label class="flex items-center gap-2 p-1 border rounded cursor-pointer hover:bg-white bg-white text-sm"><input type="checkbox" value="4" class="multi-period-cb h-3 w-3"> 4</label>
+                    <label class="flex items-center gap-2 p-1 border rounded cursor-pointer hover:bg-white bg-white text-sm"><input type="checkbox" value="5" class="multi-period-cb h-3 w-3"> 5</label>
+                    <label class="flex items-center gap-2 p-1 border rounded cursor-pointer hover:bg-white bg-white text-sm"><input type="checkbox" value="6" class="multi-period-cb h-3 w-3"> 6</label>
+                    <label class="flex items-center gap-2 p-1 border rounded cursor-pointer hover:bg-white bg-white text-sm"><input type="checkbox" value="7" class="multi-period-cb h-3 w-3"> 7</label>
+                    <label class="flex items-center gap-2 p-1 border rounded cursor-pointer hover:bg-white bg-white text-sm"><input type="checkbox" value="8" class="multi-period-cb h-3 w-3"> 8</label>
+                    <label class="flex items-center gap-2 p-1 border rounded cursor-pointer hover:bg-white bg-white text-sm"><input type="checkbox" value="0" class="multi-period-cb h-3 w-3"> 0</label>
+                    <label class="flex items-center gap-2 p-1 border rounded cursor-pointer hover:bg-white bg-white text-sm"><input type="checkbox" value="Advisory" class="multi-period-cb h-3 w-3"> Adv</label>
+                  </div>
+              `;
+              multiContainer.appendChild(block);
+              updatePeriodsForMultiDateBlock(dateStr, duration, blockId, "badge_" + dateStr);
+          });
+      }
+
+      function updatePeriodsForSingleDate(dateStr, duration) {
+          if (!dateStr) {
+              document.getElementById("dayColorBadge").classList.add("hidden");
+              return;
+          }
+
+          let color = userDateColors[dateStr] || 'Red';
+          const badge = document.getElementById('dayColorBadge');
+          badge.classList.remove('hidden');
+          badge.innerText = color + ' Day';
+          badge.className = "ml-2 text-xs font-bold px-2 py-1 rounded border " +
+                          (color === "Green" ? "bg-green-100 text-green-800 border-green-300" :
+                           color === "Blue" ? "bg-blue-100 text-blue-800 border-blue-300" :
+                           color === "Gold" ? "bg-yellow-100 text-yellow-800 border-yellow-300" : "bg-gray-100 text-gray-800 border-gray-300");
+
+          let activePeriods = [];
+
+          if (color === "Green") {
+              if (duration === "Full Day") activePeriods = [1, 2, 3, 4, 5, 6, 7, 8];
+              else if (duration === "Half Day (AM)") activePeriods = [1, 2, 3, 4];
+              else if (duration === "Half Day (PM)") activePeriods = [5, 6, 7, 8];
+          } else if (color === "Blue") {
+              if (duration === "Full Day") activePeriods = [1, 2, 3, 4];
+              else if (duration === "Half Day (AM)") activePeriods = [1, 2];
+              else if (duration === "Half Day (PM)") activePeriods = [3, 4];
+          } else if (color === "Gold") {
+              if (duration === "Full Day") activePeriods = [5, 6, 7, 8];
+              else if (duration === "Half Day (AM)") activePeriods = [5, 6];
+              else if (duration === "Half Day (PM)") activePeriods = [7, 8];
+          }
+
+          let finalPeriods = [];
+          if (userTeacherSchedule && userTeacherSchedule.length > 0) {
+              activePeriods.forEach(ap => {
+                  let strAp = String(ap);
+                  if (userTeacherSchedule.includes(strAp)) {
+                      finalPeriods.push(strAp);
+                  }
+              });
+              if (duration === "Full Day") {
+                  if (userTeacherSchedule.includes("0")) finalPeriods.push("0");
+                  if (userTeacherSchedule.includes("Advisory")) finalPeriods.push("Advisory");
+              } else if (duration === "Half Day (AM)") {
+                  if (userTeacherSchedule.includes("0")) finalPeriods.push("0");
+              } else if (duration === "Half Day (PM)") {
+                  if (userTeacherSchedule.includes("Advisory")) finalPeriods.push("Advisory");
+              }
+          } else {
+              finalPeriods = activePeriods.map(String);
+          }
+
+          document.querySelectorAll("#singleDatePeriodsBlock .period-cb").forEach(cb => {
+              cb.checked = finalPeriods.includes(cb.value);
+          });
+      }
+
+      function updatePeriodsForMultiDateBlock(dateStr, duration, blockId, badgeId) {
+          if (!dateStr) return;
+          let color = userDateColors[dateStr] || 'Red';
+          const badge = document.getElementById(badgeId);
+          if(badge) {
+              badge.innerText = color + " Day";
+              badge.className = "text-xs px-2 py-1 rounded border " +
+                              (color === "Green" ? "bg-green-100 text-green-800 border-green-300" :
+                               color === "Blue" ? "bg-blue-100 text-blue-800 border-blue-300" :
+                               color === "Gold" ? "bg-yellow-100 text-yellow-800 border-yellow-300" : "bg-gray-100 text-gray-800 border-gray-300");
+          }
+
+          let activePeriods = [];
+
+          if (color === "Green") {
+              if (duration === "Full Day") activePeriods = [1, 2, 3, 4, 5, 6, 7, 8];
+              else if (duration === "Half Day (AM)") activePeriods = [1, 2, 3, 4];
+              else if (duration === "Half Day (PM)") activePeriods = [5, 6, 7, 8];
+          } else if (color === "Blue") {
+              if (duration === "Full Day") activePeriods = [1, 2, 3, 4];
+              else if (duration === "Half Day (AM)") activePeriods = [1, 2];
+              else if (duration === "Half Day (PM)") activePeriods = [3, 4];
+          } else if (color === "Gold") {
+              if (duration === "Full Day") activePeriods = [5, 6, 7, 8];
+              else if (duration === "Half Day (AM)") activePeriods = [5, 6];
+              else if (duration === "Half Day (PM)") activePeriods = [7, 8];
+          }
+
+          let finalPeriods = [];
+          if (userTeacherSchedule && userTeacherSchedule.length > 0) {
+              activePeriods.forEach(ap => {
+                  let strAp = String(ap);
+                  if (userTeacherSchedule.includes(strAp)) {
+                      finalPeriods.push(strAp);
+                  }
+              });
+              if (duration === "Full Day") {
+                  if (userTeacherSchedule.includes("0")) finalPeriods.push("0");
+                  if (userTeacherSchedule.includes("Advisory")) finalPeriods.push("Advisory");
+              } else if (duration === "Half Day (AM)") {
+                  if (userTeacherSchedule.includes("0")) finalPeriods.push("0");
+              } else if (duration === "Half Day (PM)") {
+                  if (userTeacherSchedule.includes("Advisory")) finalPeriods.push("Advisory");
+              }
+          } else {
+              finalPeriods = activePeriods.map(String);
+          }
+
+          const blockContainer = document.getElementById(blockId);
+          if(blockContainer) {
+              blockContainer.querySelectorAll(".multi-period-cb").forEach(cb => {
+                  cb.checked = finalPeriods.includes(cb.value);
+              });
+          }
+      }
+
+      function handleAbsDateChangeMulti(selectedDates) {
+          const singleBlock = document.getElementById("singleDatePeriodsBlock");
+          const multiContainer = document.getElementById("multiDatePeriodsContainer");
+          const maxDays = parseInt(document.getElementById("settingsMaxMultiDays")?.value || "5", 10);
+
+          if (selectedDates.length > maxDays) {
+              showToast("Maximum of " + maxDays + " days can be selected at once.", "warning");
+              window.absDatePicker.setDate(selectedDates.slice(0, maxDays));
+              return;
+          }
+
+          if (selectedDates.length <= 1) {
+              singleBlock.classList.remove("hidden");
+              multiContainer.classList.add("hidden");
+              multiContainer.innerHTML = "";
+              if (selectedDates.length === 1) {
+                  const dateStr = window.absDatePicker.formatDate(selectedDates[0], "Y-m-d");
+                  updatePeriodsForSingleDate(dateStr, document.getElementById("absDuration").value);
+              } else {
+                  document.getElementById("dayColorBadge").classList.add("hidden");
+              }
+              return;
+          }
+
+          // Multiple dates selected
+          singleBlock.classList.add("hidden");
+          multiContainer.classList.remove("hidden");
+          multiContainer.innerHTML = "";
+
+          const duration = document.getElementById("absDuration").value;
+
+          selectedDates.sort((a,b) => a - b).forEach(date => {
+              const dateStr = window.absDatePicker.formatDate(date, "Y-m-d");
+              const blockId = "multi_periods_" + dateStr;
+
+              // Create a block for each date
+              const block = document.createElement("div");
+              block.className = "border rounded-lg p-3 bg-gray-50";
+              block.innerHTML = `
+                  <div class="font-bold text-sm mb-2 flex justify-between">
+                     <span>${date.toLocaleDateString("en-US", {weekday: "short", month: "short", day: "numeric"})}</span>
+                     <span id="badge_${dateStr}" class="text-xs px-2 py-1 rounded border"></span>
+                  </div>
+                  <div class="grid grid-cols-5 gap-2" id="${blockId}">
+                    <label class="flex items-center gap-2 p-1 border rounded cursor-pointer hover:bg-white bg-white text-sm"><input type="checkbox" value="1" class="multi-period-cb h-3 w-3"> 1</label>
+                    <label class="flex items-center gap-2 p-1 border rounded cursor-pointer hover:bg-white bg-white text-sm"><input type="checkbox" value="2" class="multi-period-cb h-3 w-3"> 2</label>
+                    <label class="flex items-center gap-2 p-1 border rounded cursor-pointer hover:bg-white bg-white text-sm"><input type="checkbox" value="3" class="multi-period-cb h-3 w-3"> 3</label>
+                    <label class="flex items-center gap-2 p-1 border rounded cursor-pointer hover:bg-white bg-white text-sm"><input type="checkbox" value="4" class="multi-period-cb h-3 w-3"> 4</label>
+                    <label class="flex items-center gap-2 p-1 border rounded cursor-pointer hover:bg-white bg-white text-sm"><input type="checkbox" value="5" class="multi-period-cb h-3 w-3"> 5</label>
+                    <label class="flex items-center gap-2 p-1 border rounded cursor-pointer hover:bg-white bg-white text-sm"><input type="checkbox" value="6" class="multi-period-cb h-3 w-3"> 6</label>
+                    <label class="flex items-center gap-2 p-1 border rounded cursor-pointer hover:bg-white bg-white text-sm"><input type="checkbox" value="7" class="multi-period-cb h-3 w-3"> 7</label>
+                    <label class="flex items-center gap-2 p-1 border rounded cursor-pointer hover:bg-white bg-white text-sm"><input type="checkbox" value="8" class="multi-period-cb h-3 w-3"> 8</label>
+                    <label class="flex items-center gap-2 p-1 border rounded cursor-pointer hover:bg-white bg-white text-sm"><input type="checkbox" value="0" class="multi-period-cb h-3 w-3"> 0</label>
+                    <label class="flex items-center gap-2 p-1 border rounded cursor-pointer hover:bg-white bg-white text-sm"><input type="checkbox" value="Advisory" class="multi-period-cb h-3 w-3"> Adv</label>
+                  </div>
+              `;
+              multiContainer.appendChild(block);
+              updatePeriodsForMultiDateBlock(dateStr, duration, blockId, "badge_" + dateStr);
+          });
+      }
+
+      function updatePeriodsForSingleDate(dateStr, duration) {
+          if (!dateStr) {
+              document.getElementById("dayColorBadge").classList.add("hidden");
+              return;
+          }
+
+          let color = userDateColors[dateStr] || 'Red';
+          const badge = document.getElementById('dayColorBadge');
+          badge.classList.remove('hidden');
+          badge.innerText = color + ' Day';
+          badge.className = "ml-2 text-xs font-bold px-2 py-1 rounded border " +
+                          (color === "Green" ? "bg-green-100 text-green-800 border-green-300" :
+                           color === "Blue" ? "bg-blue-100 text-blue-800 border-blue-300" :
+                           color === "Gold" ? "bg-yellow-100 text-yellow-800 border-yellow-300" : "bg-gray-100 text-gray-800 border-gray-300");
+
+          let activePeriods = [];
+
+          if (color === "Green") {
+              if (duration === "Full Day") activePeriods = [1, 2, 3, 4, 5, 6, 7, 8];
+              else if (duration === "Half Day (AM)") activePeriods = [1, 2, 3, 4];
+              else if (duration === "Half Day (PM)") activePeriods = [5, 6, 7, 8];
+          } else if (color === "Blue") {
+              if (duration === "Full Day") activePeriods = [1, 2, 3, 4];
+              else if (duration === "Half Day (AM)") activePeriods = [1, 2];
+              else if (duration === "Half Day (PM)") activePeriods = [3, 4];
+          } else if (color === "Gold") {
+              if (duration === "Full Day") activePeriods = [5, 6, 7, 8];
+              else if (duration === "Half Day (AM)") activePeriods = [5, 6];
+              else if (duration === "Half Day (PM)") activePeriods = [7, 8];
+          }
+
+          let finalPeriods = [];
+          if (userTeacherSchedule && userTeacherSchedule.length > 0) {
+              activePeriods.forEach(ap => {
+                  let strAp = String(ap);
+                  if (userTeacherSchedule.includes(strAp)) {
+                      finalPeriods.push(strAp);
+                  }
+              });
+              if (duration === "Full Day") {
+                  if (userTeacherSchedule.includes("0")) finalPeriods.push("0");
+                  if (userTeacherSchedule.includes("Advisory")) finalPeriods.push("Advisory");
+              } else if (duration === "Half Day (AM)") {
+                  if (userTeacherSchedule.includes("0")) finalPeriods.push("0");
+              } else if (duration === "Half Day (PM)") {
+                  if (userTeacherSchedule.includes("Advisory")) finalPeriods.push("Advisory");
+              }
+          } else {
+              finalPeriods = activePeriods.map(String);
+          }
+
+          document.querySelectorAll("#singleDatePeriodsBlock .period-cb").forEach(cb => {
+              cb.checked = finalPeriods.includes(cb.value);
+          });
+      }
+
+      function updatePeriodsForMultiDateBlock(dateStr, duration, blockId, badgeId) {
+          if (!dateStr) return;
+          let color = userDateColors[dateStr] || 'Red';
+          const badge = document.getElementById(badgeId);
+          if(badge) {
+              badge.innerText = color + " Day";
+              badge.className = "text-xs px-2 py-1 rounded border " +
+                              (color === "Green" ? "bg-green-100 text-green-800 border-green-300" :
+                               color === "Blue" ? "bg-blue-100 text-blue-800 border-blue-300" :
+                               color === "Gold" ? "bg-yellow-100 text-yellow-800 border-yellow-300" : "bg-gray-100 text-gray-800 border-gray-300");
+          }
+
+          let activePeriods = [];
+
+          if (color === "Green") {
+              if (duration === "Full Day") activePeriods = [1, 2, 3, 4, 5, 6, 7, 8];
+              else if (duration === "Half Day (AM)") activePeriods = [1, 2, 3, 4];
+              else if (duration === "Half Day (PM)") activePeriods = [5, 6, 7, 8];
+          } else if (color === "Blue") {
+              if (duration === "Full Day") activePeriods = [1, 2, 3, 4];
+              else if (duration === "Half Day (AM)") activePeriods = [1, 2];
+              else if (duration === "Half Day (PM)") activePeriods = [3, 4];
+          } else if (color === "Gold") {
+              if (duration === "Full Day") activePeriods = [5, 6, 7, 8];
+              else if (duration === "Half Day (AM)") activePeriods = [5, 6];
+              else if (duration === "Half Day (PM)") activePeriods = [7, 8];
+          }
+
+          let finalPeriods = [];
+          if (userTeacherSchedule && userTeacherSchedule.length > 0) {
+              activePeriods.forEach(ap => {
+                  let strAp = String(ap);
+                  if (userTeacherSchedule.includes(strAp)) {
+                      finalPeriods.push(strAp);
+                  }
+              });
+              if (duration === "Full Day") {
+                  if (userTeacherSchedule.includes("0")) finalPeriods.push("0");
+                  if (userTeacherSchedule.includes("Advisory")) finalPeriods.push("Advisory");
+              } else if (duration === "Half Day (AM)") {
+                  if (userTeacherSchedule.includes("0")) finalPeriods.push("0");
+              } else if (duration === "Half Day (PM)") {
+                  if (userTeacherSchedule.includes("Advisory")) finalPeriods.push("Advisory");
+              }
+          } else {
+              finalPeriods = activePeriods.map(String);
+          }
+
+          const blockContainer = document.getElementById(blockId);
+          if(blockContainer) {
+              blockContainer.querySelectorAll(".multi-period-cb").forEach(cb => {
+                  cb.checked = finalPeriods.includes(cb.value);
+              });
+          }
       }
 
       function checkSpecialReason() {
@@ -4406,14 +4794,19 @@
         document.getElementById('submitBtn').innerText = "Save Changes";
 
         // Date format handling
+        let targetDate = "";
         if (abs.formDateString) {
-           document.getElementById('absDate').value = abs.formDateString;
+           targetDate = abs.formDateString;
         } else {
            let d = new Date(abs.rawDateString);
            let year = d.getFullYear();
            let month = String(d.getMonth() + 1).padStart(2, '0');
            let day = String(d.getDate()).padStart(2, '0');
-           document.getElementById('absDate').value = `${year}-${month}-${day}`;
+           targetDate = `${year}-${month}-${day}`;
+        }
+        document.getElementById('absDate').value = targetDate;
+        if(window.absDatePicker) {
+            window.absDatePicker.setDate(targetDate);
         }
 
         document.getElementById('absDuration').value = abs.duration || "Full Day";
@@ -4461,10 +4854,15 @@
          document.getElementById('adminDeleteBtn').classList.remove('hidden');
 
          // Handle date
+         let targetDate = "";
          if (req.formDateString) {
-             document.getElementById('absDate').value = req.formDateString;
+             targetDate = req.formDateString;
          } else {
-             document.getElementById('absDate').value = req.date;
+             targetDate = req.date;
+         }
+         document.getElementById('absDate').value = targetDate;
+         if(window.absDatePicker) {
+            window.absDatePicker.setDate(targetDate);
          }
 
          document.getElementById('absDuration').value = req.duration || "Full Day";
@@ -4705,50 +5103,7 @@
         }
       };
 
-      document.getElementById('absDate').addEventListener('change', function(e) {
-          const dateStr = this.value;
-          if (!dateStr) {
-              document.getElementById('dayColorBadge').classList.add('hidden');
-              return;
-          }
-
-          let color = userDateColors[dateStr] || 'Red';
-          const badge = document.getElementById('dayColorBadge');
-          badge.classList.remove('hidden');
-          badge.innerText = color + ' Day';
-
-          // Clear previous color classes
-          badge.className = badge.className.replace(/bg-\w+-100/g, '').replace(/text-\w+-800/g, '').replace(/border-\w+-200/g, '');
-
-          let activePeriods = [];
-          if (color.toLowerCase() === 'green') {
-              badge.classList.add('bg-green-100', 'text-green-800', 'border-green-200');
-              activePeriods = [1, 2, 3, 4, 5, 6, 7, 8];
-          } else if (color.toLowerCase() === 'blue') {
-              badge.classList.add('bg-blue-100', 'text-blue-800', 'border-blue-200');
-              activePeriods = [1, 2, 3, 4];
-          } else if (color.toLowerCase() === 'gold') {
-              badge.classList.add('bg-yellow-100', 'text-yellow-800', 'border-yellow-200'); // Tailwind uses yellow for gold
-              activePeriods = [5, 6, 7, 8];
-          } else { // Red
-              badge.classList.add('bg-red-100', 'text-red-800', 'border-red-200');
-              activePeriods = [];
-          }
-
-          // Auto-select periods if it's a new request
-          const isEdit = document.getElementById('editAbsenceId').value !== "";
-          if (!isEdit) {
-              const allCbs = document.querySelectorAll('.period-cb');
-              allCbs.forEach(cb => cb.checked = false);
-
-              allCbs.forEach(cb => {
-                  const p = parseInt(cb.value);
-                  if (!isNaN(p) && activePeriods.includes(p) && userTeacherSchedule.includes(p)) {
-                      cb.checked = true;
-                  }
-              });
-          }
-      });
+      // Event listener removed as Flatpickr onChange handles it now.
 
       function toggleHRDashboard() {
         const mainContent = document.getElementById('mainContent');

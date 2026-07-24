@@ -110,6 +110,7 @@ function getSettings(ss) {
     "Email Mode": "Live",
     "Redirect Email": "Bgross@gocathedral.com",
     "App URL": DEFAULT_APP_URL,
+    "Max Multi-Select Days": "5",
     "Urgency Cutoff Time": "15",
     "Term ID": "3503",
     "PS_CLIENT_ID": "",
@@ -1253,6 +1254,30 @@ function sendUrgentCoverageEmail(ss, teacherName, formData, instructions) {
 
     enqueueEmail(coordinatorEmail, subject, body, { htmlBody: htmlBody });
   }
+}
+
+function submitMultipleAbsenceRequests(requestsToSubmit) {
+  var results = [];
+  var failedCount = 0;
+  var lastError = "";
+  for (var i = 0; i < requestsToSubmit.length; i++) {
+    var req = requestsToSubmit[i];
+    var res = submitAbsence(req);
+    if (!res.success) {
+      failedCount++;
+      lastError = res.error + " (on date " + req.date + ")";
+    } else {
+      results.push(res);
+    }
+  }
+
+  if (failedCount > 0) {
+      if (results.length > 0) {
+          return { success: false, error: "Partial success. " + results.length + " saved, but " + failedCount + " failed. Last error: " + lastError };
+      }
+      return { success: false, error: lastError };
+  }
+  return { success: true, count: results.length };
 }
 
 function submitAbsence(formData) {
