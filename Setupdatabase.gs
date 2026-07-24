@@ -13,7 +13,7 @@ function setupDatabase() {
   var absenceHeaders = [
     "ID", "Timestamp", "Email", "Date", "Periods", "Reason", "Duration",
     "Urgency", "Instructions", "Period 1 Sub", "Period 2 Sub", "Period 3 Sub",
-    "Period 4 Sub", "Period 5 Sub", "Period 6 Sub", "Period 7 Sub", "Period 8 Sub", "Status"
+    "Period 4 Sub", "Period 5 Sub", "Period 6 Sub", "Period 7 Sub", "Period 8 Sub", "Period 0 Sub", "Advisory Sub", "Status"
   ];
   absenceSheet.getRange(1, 1, 1, absenceHeaders.length).setValues([absenceHeaders]);
   absenceSheet.getRange(1, 1, 1, absenceHeaders.length).setFontWeight("bold");
