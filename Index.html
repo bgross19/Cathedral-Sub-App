@@ -1497,6 +1497,10 @@
                             <input type="checkbox" id="reason-hr-${idx}" ${r.hrRequired ? 'checked' : ''} class="h-4 w-4">
                             HR Req.
                         </label>
+                        <label class="flex items-center gap-1 text-sm cursor-pointer ml-2">
+                            <input type="checkbox" id="reason-principal-${idx}" ${r.principalRequired ? 'checked' : ''} class="h-4 w-4">
+                            Principal Req.
+                        </label>
                         <button onclick="removeAbsenceReasonRow(${idx})" class="text-red-500 hover:text-red-700 font-bold px-2 ml-2" title="Remove">&times;</button>
                     </div>
                   `;
@@ -1507,7 +1511,7 @@
 
       function addAbsenceReasonRow() {
           saveCurrentAbsenceReasonsState();
-          currentAbsenceReasons.push({reason: "New Reason", hrRequired: false});
+          currentAbsenceReasons.push({reason: "New Reason", hrRequired: false, principalRequired: false});
           renderAbsenceReasons();
       }
 
@@ -1524,9 +1528,11 @@
           for (let i = 0; i < currentAbsenceReasons.length; i++) {
               const textEl = document.getElementById(`reason-text-${i}`);
               const hrEl = document.getElementById(`reason-hr-${i}`);
-              if (textEl && hrEl) {
+              const principalEl = document.getElementById(`reason-principal-${i}`);
+              if (textEl && hrEl && principalEl) {
                   currentAbsenceReasons[i].reason = textEl.value;
                   currentAbsenceReasons[i].hrRequired = hrEl.checked;
+                  currentAbsenceReasons[i].principalRequired = principalEl.checked;
               }
           }
       }
@@ -1817,6 +1823,10 @@
                 <input type="checkbox" id="hrConfirm" class="mt-1 h-5 w-5 rounded text-orange-600">
                 <span class="text-sm text-orange-800 leading-tight">I confirm I have contacted HR and provided documentation for this special absence.</span>
               </label>
+            </div>
+
+            <div id="principalSection" class="hidden bg-blue-50 p-4 rounded-xl border border-blue-200">
+              <span class="text-sm text-blue-800 leading-tight">Athletic Absences must be approved first by the principal and are meant for coaches accompanying athletes on Cathedral Transportation.</span>
             </div>
 
             <div>
@@ -2177,16 +2187,16 @@
                let html = "";
                reasons.forEach(r => {
                  // Store hrRequired property dynamically to be accessed later
-                 html += `<option value="${escapeHtml(r.reason)}" data-hr-required="${r.hrRequired}">${escapeHtml(r.reason)}</option>`;
+                 html += `<option value="${escapeHtml(r.reason)}" data-hr-required="${r.hrRequired}" data-principal-required="${r.principalRequired}">${escapeHtml(r.reason)}</option>`;
                });
                if (html === "") {
-                 html = `<option value="Personal" data-hr-required="false">Personal</option>`; // Fallback
+                 html = `<option value="Personal" data-hr-required="false" data-principal-required="false">Personal</option>`; // Fallback
                }
                document.getElementById('absReason').innerHTML = html;
                checkSpecialReason(); // Call initially to set HR checkbox state
             } catch(e) {
                console.error("Failed to parse absence reasons", e);
-               document.getElementById('absReason').innerHTML = `<option value="Personal" data-hr-required="false">Personal</option>`;
+               document.getElementById('absReason').innerHTML = `<option value="Personal" data-hr-required="false" data-principal-required="false">Personal</option>`;
             }
 
             // Render common parts
@@ -2468,16 +2478,25 @@
       function checkSpecialReason() {
         const select = document.getElementById('absReason');
         const hrSection = document.getElementById('hrSection');
+        const principalSection = document.getElementById('principalSection');
 
         let hrRequired = false;
+        let principalRequired = false;
         if (select.options.length > 0 && select.selectedIndex > -1) {
             hrRequired = select.options[select.selectedIndex].getAttribute('data-hr-required') === 'true';
+            principalRequired = select.options[select.selectedIndex].getAttribute('data-principal-required') === 'true';
         }
 
         if (hrRequired) {
           hrSection.classList.remove('hidden');
         } else {
           hrSection.classList.add('hidden');
+        }
+
+        if (principalRequired) {
+          principalSection.classList.remove('hidden');
+        } else {
+          principalSection.classList.add('hidden');
         }
       }
 
