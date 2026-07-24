@@ -2225,6 +2225,25 @@ function getInitialPayload() {
     var userName = String(name).trim().toLowerCase();
     var lowerRole = String(role).toLowerCase();
 
+    // Compute teacherSchedule
+    var teacherSchedule = [];
+    if (scheduleData && scheduleData.length > 0) {
+      var headers = scheduleData[0];
+      var emailIdx = headers.indexOf("EMAIL_ADDR");
+      var periodIdx = headers.indexOf("PERIOD");
+      if (emailIdx > -1 && periodIdx > -1) {
+        for (var s = 1; s < scheduleData.length; s++) {
+          if (String(scheduleData[s][emailIdx]).toLowerCase().trim() === targetEmail) {
+            var p = parseInt(scheduleData[s][periodIdx], 10);
+            if (!isNaN(p) && p >= 1 && p <= 8 && teacherSchedule.indexOf(p) === -1) {
+              teacherSchedule.push(p);
+            }
+          }
+        }
+      }
+    }
+    teacherSchedule.sort(function(a, b) { return a - b; });
+
     var appUrl = settings["App URL"] || DEFAULT_APP_URL;
     var urgencyCutoffTime = settings["Urgency Cutoff Time"] || "15";
     var defaultAbsenceReasons = JSON.stringify([
@@ -2257,7 +2276,8 @@ function getInitialPayload() {
       email: String(email),
       appUrl: String(appUrl),
       urgencyCutoffTime: String(urgencyCutoffTime),
-      absenceReasons: String(absenceReasons)
+      absenceReasons: String(absenceReasons),
+      teacherSchedule: teacherSchedule
     };
 
 
