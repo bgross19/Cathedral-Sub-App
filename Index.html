@@ -820,9 +820,14 @@
         <h2 class="text-2xl font-bold text-[#002147]">Welcome, <span id="welcomeName">Teacher</span>!</h2>
         <p id="welcomeDescription" class="text-gray-600 mt-1 mb-6">Need coverage for a class? Submit your request below.</p>
         
-        <button id="newAbsenceBtn" onclick="toggleModal()" class="w-full sm:w-auto bg-[#00843D] hover:bg-green-700 text-white font-bold py-3 px-8 rounded-xl transition-all transform hover:scale-105 shadow-md flex items-center justify-center gap-2">
-          <span>➕</span> New Absence Request
-        </button>
+        <div class="flex flex-col sm:flex-row gap-4">
+          <button id="newAbsenceBtn" onclick="toggleModal()" class="w-full sm:w-auto bg-[#00843D] hover:bg-green-700 text-white font-bold py-3 px-8 rounded-xl transition-all transform hover:scale-105 shadow-md flex items-center justify-center gap-2">
+            <span>➕</span> New Absence Request
+          </button>
+          <button id="newAbsenceOnBehalfBtn" onclick="toggleModal(false, null, true)" class="hidden w-full sm:w-auto bg-[#002147] hover:bg-blue-900 text-white font-bold py-3 px-8 rounded-xl transition-all transform hover:scale-105 shadow-md items-center justify-center gap-2">
+            <span>👤</span> Add Request for Teacher
+          </button>
+        </div>
       </div>
 
       <div id="adminSection" class="hidden mb-6">
@@ -1632,7 +1637,7 @@
       function renderRolePermissionsMatrix() {
         const tbody = document.getElementById('rolePermissionsTableBody');
         const roles = ["admin", "hr", "sub coordinator", "principal", "teacher", "substitute"];
-        const views = ["Admin Dashboard", "HR Dashboard", "Today at a Glance", "My Upcoming Sub Duties", "Today's Open Jobs", "My Past Absences", "Settings"];
+        const views = ["Admin Dashboard", "HR Dashboard", "Today at a Glance", "My Upcoming Sub Duties", "Today's Open Jobs", "My Past Absences", "Settings", "Add Request on Behalf"];
 
         let html = '';
         roles.forEach(role => {
@@ -1783,6 +1788,11 @@
           <form id="absenceForm" class="space-y-4 mt-4">
             <input type="hidden" id="editAbsenceId" value="">
             
+            <div id="onBehalfSection" class="hidden">
+              <label class="block text-sm font-bold mb-1">Teacher</label>
+              <input type="text" id="onBehalfTeacher" list="dynamicStaffDataList" placeholder="Select teacher..." class="w-full p-3 border rounded-xl focus:ring-2 focus:ring-[#00843D] outline-none">
+            </div>
+
             <div class="grid grid-cols-2 gap-4">
               <div>
                 <label class="block text-sm font-bold mb-1">Date of Absence</label>
@@ -2223,6 +2233,11 @@
             var perms = payload.permissions || {};
             currentUserPermissions = perms;
 
+            if (perms["Add Request on Behalf"]) {
+               document.getElementById('newAbsenceOnBehalfBtn').classList.remove('hidden');
+               document.getElementById('newAbsenceOnBehalfBtn').classList.add('flex');
+            }
+
             if (perms["Admin Dashboard"] || perms["HR Dashboard"] || perms["Today at a Glance"]) {
                if (payload.staffList) renderStaffList(payload.staffList);
             }
@@ -2443,7 +2458,7 @@
         document.querySelector('body').classList.remove('overflow-hidden');
       }
 
-      function toggleModal(isEdit = false, absId = null) {
+      function toggleModal(isEdit = false, absId = null, isOnBehalf = false) {
         const body = document.querySelector('body');
         const modal = document.querySelector('#modal');
         const overlay = document.querySelector('#genericModalOverlay');
@@ -2457,7 +2472,7 @@
           body.classList.add('overflow-hidden');
 
           if (!isEdit) {
-             document.getElementById('requestModalTitle').innerText = "Request Sub";
+             document.getElementById('requestModalTitle').innerText = isOnBehalf ? "Request Sub for Teacher" : "Request Sub";
              document.getElementById('absenceForm').reset();
              document.getElementById('editAbsenceId').value = "";
              document.getElementById('submitBtn').innerText = "Submit Request";
@@ -2467,6 +2482,19 @@
 
              // Uncheck all periods
              document.querySelectorAll('.period-cb').forEach(cb => cb.checked = false);
+
+             if (isOnBehalf) {
+               document.getElementById('onBehalfSection').classList.remove('hidden');
+               document.getElementById('onBehalfTeacher').required = true;
+             } else {
+               document.getElementById('onBehalfSection').classList.add('hidden');
+               document.getElementById('onBehalfTeacher').required = false;
+               document.getElementById('onBehalfTeacher').value = "";
+             }
+          } else {
+             document.getElementById('onBehalfSection').classList.add('hidden');
+             document.getElementById('onBehalfTeacher').required = false;
+             document.getElementById('onBehalfTeacher').value = "";
           }
           // Delay slightly to let inputs initialize if needed
           setTimeout(captureModalState, 50);
@@ -4549,6 +4577,17 @@
         btn.disabled = true;
         btn.innerHTML = '<div class="flex items-center justify-center gap-2"><div class="w-6 h-6 rounded-full border-[3px] border-gray-100 border-t-[#00843D] animate-spin"></div> Sending...</div>';
 
+        const isHidden = document.getElementById('onBehalfSection').classList.contains('hidden');
+        const onBehalfTeacherName = isHidden ? null : document.getElementById('onBehalfTeacher').value;
+
+        if (!isHidden && !onBehalfTeacherName) {
+           showToast("Please enter the teacher's name.", 'error');
+           const btn = document.getElementById('submitBtn');
+           btn.disabled = false;
+           btn.innerHTML = 'Submit Request';
+           return;
+        }
+
         const formData = {
           date: newDateVal,
           duration: document.getElementById('absDuration').value,
@@ -4556,7 +4595,8 @@
           reason: reason,
           urgency: document.getElementById('urgencyValue').value,
           specialInstructions: document.getElementById('specialInst').value,
-          hrConfirmed: hrChecked
+          hrConfirmed: hrChecked,
+          onBehalfTeacher: onBehalfTeacherName
         };
 
         if (editId) {
