@@ -2707,7 +2707,9 @@
               } else if (duration === "Half Day (PM)") {
                   if (userTeacherSchedule.includes("Advisory")) finalPeriods.push("Advisory");
               }
-          } else {
+          }
+
+          if (finalPeriods.length === 0) {
               finalPeriods = activePeriods.map(String);
           }
 
@@ -2760,7 +2762,9 @@
               } else if (duration === "Half Day (PM)") {
                   if (userTeacherSchedule.includes("Advisory")) finalPeriods.push("Advisory");
               }
-          } else {
+          }
+
+          if (finalPeriods.length === 0) {
               finalPeriods = activePeriods.map(String);
           }
 
@@ -2880,7 +2884,9 @@
               } else if (duration === "Half Day (PM)") {
                   if (userTeacherSchedule.includes("Advisory")) finalPeriods.push("Advisory");
               }
-          } else {
+          }
+
+          if (finalPeriods.length === 0) {
               finalPeriods = activePeriods.map(String);
           }
 
@@ -2933,7 +2939,9 @@
               } else if (duration === "Half Day (PM)") {
                   if (userTeacherSchedule.includes("Advisory")) finalPeriods.push("Advisory");
               }
-          } else {
+          }
+
+          if (finalPeriods.length === 0) {
               finalPeriods = activePeriods.map(String);
           }
 
