@@ -2189,14 +2189,12 @@
         window.absDatePicker = flatpickr("#absDate", {
             mode: "multiple",
             dateFormat: "Y-m-d",
-            onChange: function(selectedDates, dateStr, instance) {
-                handleAbsDateChangeMulti(selectedDates);
-            }
-        });
-
-        window.absDatePicker = flatpickr("#absDate", {
-            mode: "multiple",
-            dateFormat: "Y-m-d",
+            disable: [
+                function(date) {
+                    // Disable weekends (Saturday = 6, Sunday = 0)
+                    return (date.getDay() === 0 || date.getDay() === 6);
+                }
+            ],
             onChange: function(selectedDates, dateStr, instance) {
                 handleAbsDateChangeMulti(selectedDates);
             }
