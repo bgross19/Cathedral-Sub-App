@@ -5,11 +5,33 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       // === Globals ===
+      function parseCsvLine(text, delimiter) {
+         const result = [];
+         let current = '';
+         let inQuotes = false;
+         for (let i = 0; i < text.length; i++) {
+             const char = text[i];
+             if (char === '"') {
+                 if (inQuotes && text[i+1] === '"') {
+                     current += '"';
+                     i++;
+                 } else {
+                     inQuotes = !inQuotes;
+                 }
+             } else if (char === delimiter && !inQuotes) {
+                 result.push(current);
+                 current = '';
+             } else {
+                 current += char;
+             }
+         }
+         result.push(current);
+         return result.map(s => s.trim());
+      }
+
       let userDateColors = {};
       let userTeacherSchedule = [];
 
@@ -386,31 +408,9 @@
              delimiter = '\t';
          }
 
-         function parseCsvLine(text) {
-             const result = [];
-             let current = '';
-             let inQuotes = false;
-             for (let i = 0; i < text.length; i++) {
-                 const char = text[i];
-                 if (char === '"') {
-                     if (inQuotes && text[i+1] === '"') {
-                         current += '"';
-                         i++;
-                     } else {
-                         inQuotes = !inQuotes;
-                     }
-                 } else if (char === delimiter && !inQuotes) {
-                     result.push(current);
-                     current = '';
-                 } else {
-                     current += char;
-                 }
-             }
-             result.push(current);
-             return result.map(s => s.trim());
-         }
 
-         const firstLine = parseCsvLine(lines[0]);
+
+         const firstLine = parseCsvLine(lines[0], delimiter);
          const firstLineUpper = firstLine.map(s => s.toUpperCase());
 
          const hasHeaders = firstLineUpper.includes('LASTFIRST') || firstLineUpper.includes('EMAIL_ADDR') || firstLineUpper.includes('DUTY');
@@ -423,7 +423,7 @@
 
          const updates = [];
          for (let i = startIndex; i < lines.length; i++) {
-            let row = parseCsvLine(lines[i]);
+            let row = parseCsvLine(lines[i], delimiter);
             if (row.length === 0 || (row.length === 1 && row[0] === '')) continue;
 
             let email = "";
@@ -635,31 +635,12 @@
             return;
          }
 
-         function parseCsvLine(text) {
-             const result = [];
-             let current = '';
-             let inQuotes = false;
-             for (let i = 0; i < text.length; i++) {
-                 const char = text[i];
-                 if (char === '"') {
-                     if (inQuotes && text[i+1] === '"') {
-                         current += '"';
-                         i++;
-                     } else {
-                         inQuotes = !inQuotes;
-                     }
-                 } else if ((char === ',' || char === '\t') && !inQuotes) {
-                     result.push(current);
-                     current = '';
-                 } else {
-                     current += char;
-                 }
-             }
-             result.push(current);
-             return result.map(s => s.trim());
+         let delimiter = ',';
+         if (lines[0].includes('	')) {
+             delimiter = '	';
          }
 
-         const firstLine = parseCsvLine(lines[0]);
+         const firstLine = parseCsvLine(lines[0], delimiter);
          const firstLineUpper = firstLine.map(s => s.toUpperCase());
 
          const hasHeaders = firstLineUpper.includes('PAYCHECK') || firstLineUpper.includes('PERIOD START') || firstLineUpper.includes('PERIOD END');
@@ -672,7 +653,7 @@
 
          const updates = [];
          for (let i = startIndex; i < lines.length; i++) {
-            let row = parseCsvLine(lines[i]);
+            let row = parseCsvLine(lines[i], delimiter);
             if (row.length < 3) continue;
 
             let period = row[0].replace(/^"|"$/g, '').trim();
@@ -1594,7 +1575,6 @@
           "Redirect Email": document.getElementById('settingsRedirectEmail').value,
           "App URL": document.getElementById('settingsAppUrl').value,
           "Max Multi-Select Days": document.getElementById('settingsMaxMultiDays').value,
-          "Max Multi-Select Days": document.getElementById('settingsMaxMultiDays').value,
           "Urgency Cutoff Time": document.getElementById('settingsUrgencyCutoff').value,
           "Data Fetch Window (Days)": document.getElementById('settingsFetchWindow').value,
           "Term ID": document.getElementById('settingsTermId').value,
@@ -1854,7 +1834,6 @@
 
             <div>
               <label class="block text-sm font-bold mb-2">Period(s) Needed</label>
-              <div id="multiDatePeriodsContainer" class="hidden flex flex-col gap-4 mb-4"></div>
               <div id="multiDatePeriodsContainer" class="hidden flex flex-col gap-4 mb-4"></div>
               <div id="singleDatePeriodsBlock" class="grid grid-cols-5 gap-2">
                 <label class="flex items-center gap-2 p-2 border rounded-lg cursor-pointer hover:bg-gray-50"><input type="checkbox" value="1" class="period-cb h-4 w-4"> 1</label>
@@ -2186,14 +2165,6 @@
 
       function initApp() {
         initToggles();
-        window.absDatePicker = flatpickr("#absDate", {
-            mode: "multiple",
-            dateFormat: "Y-m-d",
-            onChange: function(selectedDates, dateStr, instance) {
-                handleAbsDateChangeMulti(selectedDates);
-            }
-        });
-
         window.absDatePicker = flatpickr("#absDate", {
             mode: "multiple",
             dateFormat: "Y-m-d",
