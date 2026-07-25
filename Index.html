@@ -2665,23 +2665,10 @@
           let finalPeriods = [];
           if (userTeacherSchedule && userTeacherSchedule.length > 0) {
               activePeriods.forEach(ap => {
-                  let strAp = String(ap);
-                  if (userTeacherSchedule.includes(strAp)) {
-                      finalPeriods.push(strAp);
+                  if (userTeacherSchedule.includes(ap)) {
+                      finalPeriods.push(String(ap));
                   }
               });
-              if (duration === "Full Day") {
-                  if (userTeacherSchedule.includes("0")) finalPeriods.push("0");
-                  if (userTeacherSchedule.includes("Advisory")) finalPeriods.push("Advisory");
-              } else if (duration === "Half Day (AM)") {
-                  if (userTeacherSchedule.includes("0")) finalPeriods.push("0");
-              } else if (duration === "Half Day (PM)") {
-                  if (userTeacherSchedule.includes("Advisory")) finalPeriods.push("Advisory");
-              }
-          }
-
-          if (finalPeriods.length === 0) {
-              finalPeriods = activePeriods.map(String);
           }
 
           document.querySelectorAll("#singleDatePeriodsBlock .period-cb").forEach(cb => {
@@ -2720,23 +2707,10 @@
           let finalPeriods = [];
           if (userTeacherSchedule && userTeacherSchedule.length > 0) {
               activePeriods.forEach(ap => {
-                  let strAp = String(ap);
-                  if (userTeacherSchedule.includes(strAp)) {
-                      finalPeriods.push(strAp);
+                  if (userTeacherSchedule.includes(ap)) {
+                      finalPeriods.push(String(ap));
                   }
               });
-              if (duration === "Full Day") {
-                  if (userTeacherSchedule.includes("0")) finalPeriods.push("0");
-                  if (userTeacherSchedule.includes("Advisory")) finalPeriods.push("Advisory");
-              } else if (duration === "Half Day (AM)") {
-                  if (userTeacherSchedule.includes("0")) finalPeriods.push("0");
-              } else if (duration === "Half Day (PM)") {
-                  if (userTeacherSchedule.includes("Advisory")) finalPeriods.push("Advisory");
-              }
-          }
-
-          if (finalPeriods.length === 0) {
-              finalPeriods = activePeriods.map(String);
           }
 
           const blockContainer = document.getElementById(blockId);
@@ -2842,23 +2816,10 @@
           let finalPeriods = [];
           if (userTeacherSchedule && userTeacherSchedule.length > 0) {
               activePeriods.forEach(ap => {
-                  let strAp = String(ap);
-                  if (userTeacherSchedule.includes(strAp)) {
-                      finalPeriods.push(strAp);
+                  if (userTeacherSchedule.includes(ap)) {
+                      finalPeriods.push(String(ap));
                   }
               });
-              if (duration === "Full Day") {
-                  if (userTeacherSchedule.includes("0")) finalPeriods.push("0");
-                  if (userTeacherSchedule.includes("Advisory")) finalPeriods.push("Advisory");
-              } else if (duration === "Half Day (AM)") {
-                  if (userTeacherSchedule.includes("0")) finalPeriods.push("0");
-              } else if (duration === "Half Day (PM)") {
-                  if (userTeacherSchedule.includes("Advisory")) finalPeriods.push("Advisory");
-              }
-          }
-
-          if (finalPeriods.length === 0) {
-              finalPeriods = activePeriods.map(String);
           }
 
           document.querySelectorAll("#singleDatePeriodsBlock .period-cb").forEach(cb => {
@@ -2897,23 +2858,10 @@
           let finalPeriods = [];
           if (userTeacherSchedule && userTeacherSchedule.length > 0) {
               activePeriods.forEach(ap => {
-                  let strAp = String(ap);
-                  if (userTeacherSchedule.includes(strAp)) {
-                      finalPeriods.push(strAp);
+                  if (userTeacherSchedule.includes(ap)) {
+                      finalPeriods.push(String(ap));
                   }
               });
-              if (duration === "Full Day") {
-                  if (userTeacherSchedule.includes("0")) finalPeriods.push("0");
-                  if (userTeacherSchedule.includes("Advisory")) finalPeriods.push("Advisory");
-              } else if (duration === "Half Day (AM)") {
-                  if (userTeacherSchedule.includes("0")) finalPeriods.push("0");
-              } else if (duration === "Half Day (PM)") {
-                  if (userTeacherSchedule.includes("Advisory")) finalPeriods.push("Advisory");
-              }
-          }
-
-          if (finalPeriods.length === 0) {
-              finalPeriods = activePeriods.map(String);
           }
 
           const blockContainer = document.getElementById(blockId);
