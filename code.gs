@@ -156,8 +156,31 @@ function getSettings(ss) {
  * Serves the web app.
  */
 function doGet(e) {
+  var email = Session.getActiveUser().getEmail();
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var rosterSheet = ss.getSheetByName("Staff Roster");
+
+  var isAuthorized = false;
+  if (rosterSheet) {
+    var rosterData = rosterSheet.getDataRange().getValues();
+    var targetEmail = String(email).toLowerCase();
+    for (var i = 1; i < rosterData.length; i++) {
+      if (String(rosterData[i][1]).toLowerCase() === targetEmail) {
+        isAuthorized = true;
+        break;
+      }
+    }
+  }
+
+  if (!isAuthorized) {
+    var htmlOutput = HtmlService.createHtmlOutput('<div style="display:flex;justify-content:center;align-items:center;height:100vh;font-family:sans-serif;background-color:#f3f4f6;text-align:center;"><div style="background:white;padding:2rem;border-radius:8px;box-shadow:0 4px 6px rgba(0,0,0,0.1);"><h1 style="color:#e11d48;margin-top:0;">Access Denied</h1><p style="color:#4b5563;font-size:1.125rem;">Please Contact Technology@gocathedral.com</p></div></div>');
+    htmlOutput.setTitle('Access Denied');
+    htmlOutput.addMetaTag('viewport', 'width=device-width, initial-scale=1');
+    return htmlOutput;
+  }
+
   var template = HtmlService.createTemplateFromFile('Index');
-  template.userEmail = Session.getActiveUser().getEmail();
+  template.userEmail = email;
   
   var htmlOutput = template.evaluate();
   htmlOutput.setTitle('Cathedral Sub Coverage');
@@ -255,8 +278,8 @@ function getUserData(ss) {
   
   var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
   var rosterData = rosterSheet ? rosterSheet.getDataRange().getValues() : [];
-  var name = "Teacher"; 
-  var role = "Teacher";
+  var name = null;
+  var role = null;
   var targetEmail = String(email).toLowerCase();
   
   for (var i = 1; i < rosterData.length; i++) {
@@ -265,6 +288,10 @@ function getUserData(ss) {
       role = rosterData[i][2] ? String(rosterData[i][2]).trim() : "Teacher";
       break;
     }
+  }
+
+  if (!name) {
+    throw new Error("Access Denied: Please Contact Technology@gocathedral.com");
   }
   
   var settings = getSettings(ss);
@@ -2237,8 +2264,8 @@ function getInitialPayload() {
 
 
     // --- 2. Extract User Data ---
-    var name = "Teacher";
-    var role = "Teacher";
+    var name = null;
+    var role = null;
     for (var i = 1; i < rosterData.length; i++) {
       if (String(rosterData[i][1]).toLowerCase() === targetEmail) {
         name = rosterData[i][0];
@@ -2246,6 +2273,11 @@ function getInitialPayload() {
         break;
       }
     }
+
+    if (!name) {
+      throw new Error("Access Denied: Please Contact Technology@gocathedral.com");
+    }
+
     var userName = String(name).trim().toLowerCase();
     var lowerRole = String(role).toLowerCase();
 
