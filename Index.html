@@ -266,9 +266,22 @@
            showToast("No data to copy.", 'info');
            return;
         }
+
+        function sanitizeTSV(text) {
+           if (typeof text !== 'string') text = String(text || '');
+           if (/^[=+\-@\t\r]/.test(text)) {
+              return "'" + text;
+           }
+           return text;
+        }
+
         let tsvText = "LASTFIRST\tEMAIL_ADDR\tRole\tDuty\n";
         currentStaffRoster.forEach(staff => {
-           tsvText += `${staff.name}\t${staff.email}\t${staff.role || 'Teacher'}\t${staff.duty || ''}\n`;
+           const name = sanitizeTSV(staff.name);
+           const email = sanitizeTSV(staff.email);
+           const role = sanitizeTSV(staff.role || 'Teacher');
+           const duty = sanitizeTSV(staff.duty || '');
+           tsvText += `${name}\t${email}\t${role}\t${duty}\n`;
         });
         navigator.clipboard.writeText(tsvText).then(() => {
            showToast("Staff roster copied to clipboard as TSV!", 'info');
