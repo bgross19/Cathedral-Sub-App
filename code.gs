@@ -38,8 +38,7 @@ function notifyAdminOfError(funcName, e) {
       var body = "An error occurred in the Cathedral Sub App.\n\n" +
                  "Function: " + funcName + "\n" +
                  "User: " + Session.getActiveUser().getEmail() + "\n" +
-                 "Error Message: " + e.message + "\n\n" +
-                 "Stack Trace:\n" + e.stack;
+                 "Error Message: " + e.message;
 
       GmailApp.sendEmail(adminEmail, subject, body);
     }
