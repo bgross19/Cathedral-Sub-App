@@ -1471,7 +1471,7 @@ function submitAbsence(formData) {
                        "<p><strong>Instructions:</strong> " + (instructions ? instructions : "None") + "</p>" +
                        "<p><a href='" + appUrl + "'>Return to Cathedral Sub App</a></p>";
 
-    enqueueEmail(email, confSubject, confBody, { htmlBody: confHtmlBody });
+    enqueueEmail(submitterEmail, confSubject, confBody, { htmlBody: confHtmlBody });
 
         return {
       success: true };
