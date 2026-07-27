@@ -2181,6 +2181,12 @@
         window.absDatePicker = flatpickr("#absDate", {
             mode: "multiple",
             dateFormat: "Y-m-d",
+            disable: [
+                function(date) {
+                    // Disable weekends: 0 is Sunday, 6 is Saturday
+                    return (date.getDay() === 0 || date.getDay() === 6);
+                }
+            ],
             onChange: function(selectedDates, dateStr, instance) {
                 handleAbsDateChangeMulti(selectedDates);
             }
