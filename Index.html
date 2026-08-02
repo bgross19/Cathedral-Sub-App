@@ -2740,156 +2740,6 @@
           }
       }
 
-      function handleAbsDateChangeMulti(selectedDates) {
-          const singleBlock = document.getElementById("singleDatePeriodsBlock");
-          const multiContainer = document.getElementById("multiDatePeriodsContainer");
-          const maxDays = parseInt(document.getElementById("settingsMaxMultiDays")?.value || "5", 10);
-
-          if (selectedDates.length > maxDays) {
-              showToast("Maximum of " + maxDays + " days can be selected at once.", "warning");
-              window.absDatePicker.setDate(selectedDates.slice(0, maxDays));
-              return;
-          }
-
-          if (selectedDates.length <= 1) {
-              singleBlock.classList.remove("hidden");
-              multiContainer.classList.add("hidden");
-              multiContainer.innerHTML = "";
-              if (selectedDates.length === 1) {
-                  const dateStr = window.absDatePicker.formatDate(selectedDates[0], "Y-m-d");
-                  updatePeriodsForSingleDate(dateStr, document.getElementById("absDuration").value);
-              } else {
-                  document.getElementById("dayColorBadge").classList.add("hidden");
-              }
-              return;
-          }
-
-          // Multiple dates selected
-          singleBlock.classList.add("hidden");
-          multiContainer.classList.remove("hidden");
-          multiContainer.innerHTML = "";
-
-          const duration = document.getElementById("absDuration").value;
-
-          selectedDates.sort((a,b) => a - b).forEach(date => {
-              const dateStr = window.absDatePicker.formatDate(date, "Y-m-d");
-              const blockId = "multi_periods_" + dateStr;
-
-              // Create a block for each date
-              const block = document.createElement("div");
-              block.className = "border rounded-lg p-3 bg-gray-50";
-              block.innerHTML = `
-                  <div class="font-bold text-sm mb-2 flex justify-between">
-                     <span>${date.toLocaleDateString("en-US", {weekday: "short", month: "short", day: "numeric"})}</span>
-                     <span id="badge_${dateStr}" class="text-xs px-2 py-1 rounded border"></span>
-                  </div>
-                  <div class="grid grid-cols-5 gap-2" id="${blockId}">
-                    <label class="flex items-center gap-2 p-1 border rounded cursor-pointer hover:bg-white bg-white text-sm"><input type="checkbox" value="1" class="multi-period-cb h-3 w-3"> 1</label>
-                    <label class="flex items-center gap-2 p-1 border rounded cursor-pointer hover:bg-white bg-white text-sm"><input type="checkbox" value="2" class="multi-period-cb h-3 w-3"> 2</label>
-                    <label class="flex items-center gap-2 p-1 border rounded cursor-pointer hover:bg-white bg-white text-sm"><input type="checkbox" value="3" class="multi-period-cb h-3 w-3"> 3</label>
-                    <label class="flex items-center gap-2 p-1 border rounded cursor-pointer hover:bg-white bg-white text-sm"><input type="checkbox" value="4" class="multi-period-cb h-3 w-3"> 4</label>
-                    <label class="flex items-center gap-2 p-1 border rounded cursor-pointer hover:bg-white bg-white text-sm"><input type="checkbox" value="5" class="multi-period-cb h-3 w-3"> 5</label>
-                    <label class="flex items-center gap-2 p-1 border rounded cursor-pointer hover:bg-white bg-white text-sm"><input type="checkbox" value="6" class="multi-period-cb h-3 w-3"> 6</label>
-                    <label class="flex items-center gap-2 p-1 border rounded cursor-pointer hover:bg-white bg-white text-sm"><input type="checkbox" value="7" class="multi-period-cb h-3 w-3"> 7</label>
-                    <label class="flex items-center gap-2 p-1 border rounded cursor-pointer hover:bg-white bg-white text-sm"><input type="checkbox" value="8" class="multi-period-cb h-3 w-3"> 8</label>
-                    <label class="flex items-center gap-2 p-1 border rounded cursor-pointer hover:bg-white bg-white text-sm"><input type="checkbox" value="0" class="multi-period-cb h-3 w-3"> 0</label>
-                    <label class="flex items-center gap-2 p-1 border rounded cursor-pointer hover:bg-white bg-white text-sm"><input type="checkbox" value="Advisory" class="multi-period-cb h-3 w-3"> Adv</label>
-                  </div>
-              `;
-              multiContainer.appendChild(block);
-              updatePeriodsForMultiDateBlock(dateStr, duration, blockId, "badge_" + dateStr);
-          });
-      }
-
-      function updatePeriodsForSingleDate(dateStr, duration) {
-          if (!dateStr) {
-              document.getElementById("dayColorBadge").classList.add("hidden");
-              return;
-          }
-
-          let color = userDateColors[dateStr] || 'Red';
-          const badge = document.getElementById('dayColorBadge');
-          badge.classList.remove('hidden');
-          badge.innerText = color + ' Day';
-          badge.className = "ml-2 text-xs font-bold px-2 py-1 rounded border " +
-                          (color === "Green" ? "bg-green-100 text-green-800 border-green-300" :
-                           color === "Blue" ? "bg-blue-100 text-blue-800 border-blue-300" :
-                           color === "Gold" ? "bg-yellow-100 text-yellow-800 border-yellow-300" : "bg-gray-100 text-gray-800 border-gray-300");
-
-          let activePeriods = [];
-
-          if (color === "Green") {
-              if (duration === "Full Day") activePeriods = [1, 2, 3, 4, 5, 6, 7, 8];
-              else if (duration === "Half Day (AM)") activePeriods = [1, 2, 3, 4];
-              else if (duration === "Half Day (PM)") activePeriods = [5, 6, 7, 8];
-          } else if (color === "Blue") {
-              if (duration === "Full Day") activePeriods = [1, 2, 3, 4];
-              else if (duration === "Half Day (AM)") activePeriods = [1, 2];
-              else if (duration === "Half Day (PM)") activePeriods = [3, 4];
-          } else if (color === "Gold") {
-              if (duration === "Full Day") activePeriods = [5, 6, 7, 8];
-              else if (duration === "Half Day (AM)") activePeriods = [5, 6];
-              else if (duration === "Half Day (PM)") activePeriods = [7, 8];
-          }
-
-          let finalPeriods = [];
-          if (userTeacherSchedule && userTeacherSchedule.length > 0) {
-              activePeriods.forEach(ap => {
-                  if (userTeacherSchedule.includes(ap)) {
-                      finalPeriods.push(String(ap));
-                  }
-              });
-          }
-
-          document.querySelectorAll("#singleDatePeriodsBlock .period-cb").forEach(cb => {
-              cb.checked = finalPeriods.includes(cb.value);
-          });
-      }
-
-      function updatePeriodsForMultiDateBlock(dateStr, duration, blockId, badgeId) {
-          if (!dateStr) return;
-          let color = userDateColors[dateStr] || 'Red';
-          const badge = document.getElementById(badgeId);
-          if(badge) {
-              badge.innerText = color + " Day";
-              badge.className = "text-xs px-2 py-1 rounded border " +
-                              (color === "Green" ? "bg-green-100 text-green-800 border-green-300" :
-                               color === "Blue" ? "bg-blue-100 text-blue-800 border-blue-300" :
-                               color === "Gold" ? "bg-yellow-100 text-yellow-800 border-yellow-300" : "bg-gray-100 text-gray-800 border-gray-300");
-          }
-
-          let activePeriods = [];
-
-          if (color === "Green") {
-              if (duration === "Full Day") activePeriods = [1, 2, 3, 4, 5, 6, 7, 8];
-              else if (duration === "Half Day (AM)") activePeriods = [1, 2, 3, 4];
-              else if (duration === "Half Day (PM)") activePeriods = [5, 6, 7, 8];
-          } else if (color === "Blue") {
-              if (duration === "Full Day") activePeriods = [1, 2, 3, 4];
-              else if (duration === "Half Day (AM)") activePeriods = [1, 2];
-              else if (duration === "Half Day (PM)") activePeriods = [3, 4];
-          } else if (color === "Gold") {
-              if (duration === "Full Day") activePeriods = [5, 6, 7, 8];
-              else if (duration === "Half Day (AM)") activePeriods = [5, 6];
-              else if (duration === "Half Day (PM)") activePeriods = [7, 8];
-          }
-
-          let finalPeriods = [];
-          if (userTeacherSchedule && userTeacherSchedule.length > 0) {
-              activePeriods.forEach(ap => {
-                  if (userTeacherSchedule.includes(ap)) {
-                      finalPeriods.push(String(ap));
-                  }
-              });
-          }
-
-          const blockContainer = document.getElementById(blockId);
-          if(blockContainer) {
-              blockContainer.querySelectorAll(".multi-period-cb").forEach(cb => {
-                  cb.checked = finalPeriods.includes(cb.value);
-              });
-          }
-      }
 
       function checkSpecialReason() {
         const select = document.getElementById('absReason');
@@ -4915,19 +4765,27 @@
 
       document.getElementById('absenceForm').onsubmit = function(e) {
         e.preventDefault();
-        
-        const selectedPeriods = Array.from(document.querySelectorAll('.period-cb:checked'))
-                                     .map(cb => cb.value).join(', ');
 
-        if (!selectedPeriods) {
-          showToast("Please select at least one period for coverage.", 'error');
-          return;
-        }
+        const editId = document.getElementById('editAbsenceId').value;
+        const isMulti = window.absDatePicker && window.absDatePicker.selectedDates.length > 1;
+
+        let requests = [];
 
         const reasonSelect = document.getElementById('absReason');
         const reason = reasonSelect.value;
         const hrChecked = document.getElementById('hrConfirm').checked;
         const agreed = document.getElementById('agreement').checked;
+        const duration = document.getElementById('absDuration').value;
+        const urgency = document.getElementById('urgencyValue').value;
+        const specialInstructions = document.getElementById('specialInst').value;
+
+        const isHidden = document.getElementById('onBehalfSection').classList.contains('hidden');
+        const onBehalfTeacherName = isHidden ? null : document.getElementById('onBehalfTeacher').value;
+
+        if (!isHidden && !onBehalfTeacherName) {
+           showToast("Please enter the teacher's name.", 'error');
+           return;
+        }
 
         let hrRequired = false;
         if (reasonSelect.options.length > 0 && reasonSelect.selectedIndex > -1) {
@@ -4943,56 +4801,84 @@
           return;
         }
 
-        const editId = document.getElementById('editAbsenceId').value;
-        const newDateVal = document.getElementById('absDate').value;
+        if (isMulti && !editId) {
+            for (const date of window.absDatePicker.selectedDates) {
+                const dateStr = window.absDatePicker.formatDate(date, "Y-m-d");
+                const blockId = "multi_periods_" + dateStr;
+                const blockContainer = document.getElementById(blockId);
+
+                let selectedPeriods = "";
+                if (blockContainer) {
+                    selectedPeriods = Array.from(blockContainer.querySelectorAll('.multi-period-cb:checked'))
+                                         .map(cb => cb.value).join(', ');
+                }
+
+                if (!selectedPeriods) {
+                    showToast("Please select at least one period for coverage on " + dateStr + ".", 'error');
+                    return;
+                }
+
+                requests.push({
+                    date: dateStr,
+                    duration: duration,
+                    periods: selectedPeriods,
+                    reason: reason,
+                    urgency: urgency,
+                    specialInstructions: specialInstructions,
+                    hrConfirmed: hrChecked,
+                    onBehalfTeacher: onBehalfTeacherName
+                });
+            }
+        } else {
+            const selectedPeriods = Array.from(document.querySelectorAll('#singleDatePeriodsBlock .period-cb:checked'))
+                                         .map(cb => cb.value).join(', ');
+
+            if (!selectedPeriods) {
+              showToast("Please select at least one period for coverage.", 'error');
+              return;
+            }
+
+            const newDateVal = document.getElementById('absDate').value;
+
+            requests.push({
+                date: newDateVal,
+                duration: duration,
+                periods: selectedPeriods,
+                reason: reason,
+                urgency: urgency,
+                specialInstructions: specialInstructions,
+                hrConfirmed: hrChecked,
+                onBehalfTeacher: onBehalfTeacherName
+            });
+        }
 
         // Duplicate Request Check
         if (!editId) {
-          const duplicateIndex = myAbsencesData.findIndex(abs => {
-            let existingDate = "";
-            if (abs.formDateString) {
-              existingDate = abs.formDateString;
-            } else {
-              let d = new Date(abs.rawDateString);
-              let year = d.getFullYear();
-              let month = String(d.getMonth() + 1).padStart(2, '0');
-              let day = String(d.getDate()).padStart(2, '0');
-              existingDate = `${year}-${month}-${day}`;
-            }
-            return existingDate === newDateVal;
-          });
+            for (const req of requests) {
+                const duplicateIndex = myAbsencesData.findIndex(abs => {
+                    let existingDate = "";
+                    if (abs.formDateString) {
+                      existingDate = abs.formDateString;
+                    } else {
+                      let d = new Date(abs.rawDateString);
+                      let year = d.getFullYear();
+                      let month = String(d.getMonth() + 1).padStart(2, '0');
+                      let day = String(d.getDate()).padStart(2, '0');
+                      existingDate = `${year}-${month}-${day}`;
+                    }
+                    return existingDate === req.date;
+                });
 
-          if (duplicateIndex !== -1) {
-            showDuplicateWarning(duplicateIndex);
-            return;
-          }
+                if (duplicateIndex !== -1) {
+                    showDuplicateWarning(duplicateIndex);
+                    return;
+                }
+            }
         }
 
         const btn = document.getElementById('submitBtn');
         btn.disabled = true;
         btn.innerHTML = '<div class="flex items-center justify-center gap-2"><div class="w-6 h-6 rounded-full border-[3px] border-gray-100 border-t-[#00843D] animate-spin"></div> Sending...</div>';
-
-        const isHidden = document.getElementById('onBehalfSection').classList.contains('hidden');
-        const onBehalfTeacherName = isHidden ? null : document.getElementById('onBehalfTeacher').value;
-
-        if (!isHidden && !onBehalfTeacherName) {
-           showToast("Please enter the teacher's name.", 'error');
-           const btn = document.getElementById('submitBtn');
-           btn.disabled = false;
-           btn.innerHTML = 'Submit Request';
-           return;
-        }
-
-        const formData = {
-          date: newDateVal,
-          duration: document.getElementById('absDuration').value,
-          periods: selectedPeriods,
-          reason: reason,
-          urgency: document.getElementById('urgencyValue').value,
-          specialInstructions: document.getElementById('specialInst').value,
-          hrConfirmed: hrChecked,
-          onBehalfTeacher: onBehalfTeacherName
-        };
 
         if (editId) {
           google.script.run
@@ -5019,7 +4905,37 @@
               btn.disabled = false;
               btn.innerHTML = 'Save Changes';
             })
-            .updateAbsence(editId, formData);
+            .updateAbsence(editId, requests[0]);
+        } else if (requests.length > 1) {
+          google.script.run
+            .withSuccessHandler((result) => {
+              if (result && result.success) {
+                showToast("Requests Submitted Successfully!", 'success');
+                document.getElementById('absenceForm').reset();
+                setUrgency('Standard');
+                document.getElementById('hrSection').classList.add('hidden');
+                btn.disabled = false;
+                btn.innerHTML = 'Submit Request';
+                originalModalData = {};
+                toggleModal();
+                EventBus.publish('refresh_myAbsences');
+
+                if (!document.getElementById('adminSection').classList.contains('hidden')) {
+                  EventBus.publish('refresh_quickCover');
+                  EventBus.publish('refresh_adminData');
+                }
+              } else {
+                showToast(result ? result.error : "Database Error", 'error');
+                btn.disabled = false;
+                btn.innerHTML = 'Submit Request';
+              }
+            })
+            .withFailureHandler(err => {
+              showToast("Connection Error: " + err.message, 'error');
+              btn.disabled = false;
+              btn.innerHTML = 'Submit Request';
+            })
+            .submitMultipleAbsenceRequests(requests);
         } else {
           google.script.run
             .withSuccessHandler((result) => {
@@ -5049,7 +4965,7 @@
               btn.disabled = false;
               btn.innerHTML = 'Submit Request';
             })
-            .submitAbsence(formData);
+            .submitAbsence(requests[0]);
         }
       };
 
