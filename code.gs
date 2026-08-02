@@ -219,24 +219,6 @@ function getSheetOrThrow(ss, sheetName) {
   return sheet;
 }
 
-/**
- * Retrieves a sheet case-insensitively or throws an error if not found.
- * @param {SpreadsheetApp.Spreadsheet} ss - The spreadsheet object.
- * @param {string} sheetName - The name of the sheet (case-insensitive).
- * @returns {SpreadsheetApp.Sheet} The requested sheet.
- * @throws {Error} If the sheet is not found.
- */
-function getSheetCaseInsensitiveOrThrow(ss, sheetName) {
-  var allSheets = ss.getSheets();
-  var targetNameLower = sheetName.toLowerCase();
-  for (var i = 0; i < allSheets.length; i++) {
-    if (allSheets[i].getName().toLowerCase() === targetNameLower) {
-      return allSheets[i];
-    }
-  }
-  throw new Error(sheetName + " sheet not found.");
-}
-
 function assertRole(user, allowedRoles, customErrorMessage) {
   if (!user || !user.role) {
     throw new Error(customErrorMessage || "Unauthorized");

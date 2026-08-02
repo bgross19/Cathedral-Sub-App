@@ -2140,6 +2140,8 @@
       let globalDateColors = {};
       let hrDashboardLoaded = false;
       let hrCurrentView = 'absences'; // 'absences' or 'subs'
+      let currentUserPermissions = {};
+      let currentUserRole = '';
 
 
       function checkAppVersion() {
@@ -2289,6 +2291,7 @@
             // Toggle Navigation Buttons and Main Sections using permissions payload
             var perms = payload.permissions || {};
             currentUserPermissions = perms;
+            currentUserRole = lowerRole;
 
             if (perms["Add Request on Behalf"]) {
                document.getElementById('newAbsenceOnBehalfBtn').classList.remove('hidden');
