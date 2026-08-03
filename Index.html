@@ -4437,7 +4437,8 @@
 
       function toggleAvailability(dateStr) {
           const statuses = ['Available', 'AM Only', 'PM Only', 'Not Available'];
-          const currentStatus = subAvailabilityData[dateStr] || 'Not Available';
+          const originalStatus = subAvailabilityData[dateStr];
+          const currentStatus = originalStatus || 'Not Available';
 
           let nextIndex = (statuses.indexOf(currentStatus) + 1) % statuses.length;
           const nextStatus = statuses[nextIndex];
@@ -4455,7 +4456,13 @@
           google.script.run
             .withFailureHandler(err => {
                 showToast("Failed to save availability: " + err.message, "error");
-                // Revert locally (not implemented for simplicity, relying on user to fix)
+                // Revert locally
+                if (originalStatus === undefined) {
+                    delete subAvailabilityData[dateStr];
+                } else {
+                    subAvailabilityData[dateStr] = originalStatus;
+                }
+                renderAvailabilityCalendar();
             })
             .saveSubstituteAvailability(dateStr, nextStatus);
       }
