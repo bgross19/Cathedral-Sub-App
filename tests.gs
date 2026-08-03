@@ -374,6 +374,33 @@ function runTests() {
     });
   });
 
+  describe("getSubColumnIndex Tests", function() {
+    it("Valid periods - numbers 1-8", function() {
+      assert(getSubColumnIndex(1) === 10, "Period 1 should return 10");
+      assert(getSubColumnIndex("1") === 10, "String '1' should return 10");
+      assert(getSubColumnIndex(8) === 17, "Period 8 should return 17");
+      assert(getSubColumnIndex("  5  ") === 14, "Period 5 with whitespace should return 14");
+    });
+
+    it("Valid periods - special periods 0 and Advisory", function() {
+      assert(getSubColumnIndex(0) === 18, "Number 0 should return 18");
+      assert(getSubColumnIndex("0") === 18, "String '0' should return 18");
+      assert(getSubColumnIndex("a") === 19, "String 'a' should return 19");
+      assert(getSubColumnIndex("A") === 19, "String 'A' should return 19");
+      assert(getSubColumnIndex("advisory") === 19, "String 'advisory' should return 19");
+      assert(getSubColumnIndex("  Advisory  ") === 19, "String '  Advisory  ' should return 19");
+    });
+
+    it("Invalid periods", function() {
+      assert(getSubColumnIndex(9) === -1, "Period 9 should return -1");
+      assert(getSubColumnIndex(-1) === -1, "Period -1 should return -1");
+      assert(getSubColumnIndex(null) === -1, "null should return -1");
+      assert(getSubColumnIndex(undefined) === -1, "undefined should return -1");
+      assert(getSubColumnIndex("") === -1, "Empty string should return -1");
+      assert(getSubColumnIndex("invalid") === -1, "String 'invalid' should return -1");
+    });
+  });
+
   describe("Lookup Builders", function() {
     it("buildNameLookup - Empty array", function() {
       var result = buildNameLookup([]);
