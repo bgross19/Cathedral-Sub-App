@@ -1826,6 +1826,7 @@
               <label class="block text-sm font-bold mb-1">Teacher</label>
               <input type="text" id="onBehalfTeacher" list="allStaffDataList" placeholder="Select teacher..." class="w-full p-3 border rounded-xl focus:ring-2 focus:ring-[#00843D] outline-none">
               <datalist id="allStaffDataList"></datalist>
+              <datalist id="dynamicStaffDataList"></datalist>
             </div>
 
             <div class="grid grid-cols-2 gap-4">
@@ -3044,7 +3045,11 @@
                   }
               }
 
-              optionsHtml += `<option value="${escapeHtml(staff.display)}"></option>`;
+              let suggestionText = staff.name;
+              if (staff.duty) {
+                  suggestionText += " - " + staff.duty;
+              }
+              optionsHtml += `<option value="${escapeHtml(suggestionText)}"></option>`;
           });
 
           datalist.innerHTML = optionsHtml;
@@ -3059,13 +3064,6 @@
             }
 
             let html = '<div class="divide-y divide-gray-200">';
-
-            // Add a container for dynamic datalists at the top level of this section
-            if (!document.getElementById('dynamicStaffDataList')) {
-                const dynamicListEl = document.createElement('datalist');
-                dynamicListEl.id = 'dynamicStaffDataList';
-                document.body.appendChild(dynamicListEl);
-            }
 
             currentUnfilledData = unfilled;
             unfilled.forEach((req, index) => {
