@@ -50,9 +50,6 @@ function setupDatabase() {
       ["Max Multi-Select Days", "5"],
       ["Urgency Cutoff Time", "15"],
       ["Term ID", "3503"],
-      ["PS_CLIENT_ID", ""],
-      ["PS_CLIENT_SECRET", ""],
-      ["PS_URL", ""],
       ["Green Day Pay Rate", "10"],
       ["Blue/Gold Day Pay Rate", "20"],
       ["Absence Reasons", JSON.stringify([
