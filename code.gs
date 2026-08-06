@@ -304,8 +304,8 @@ function getUserData(ss) {
  * Helper to send emails based on the current Email Mode setting.
  * Handles "Live", "Redirect", and "Off" modes.
  */
-function sendEmailHelper(to, subject, body, options) {
-  var settings = getSettings();
+function sendEmailHelper(to, subject, body, options, optionalSettings) {
+  var settings = optionalSettings || getSettings();
   var mode = settings["Email Mode"] || "Live";
   var redirectEmail = settings["Redirect Email"] || "";
 
@@ -415,6 +415,7 @@ function processEmailQueue() {
 
     var statuses = [];
     var needsScheduleLookup = false;
+    var settings = getSettings(ss);
 
     // Check if any pending emails need schedule lookups
     for (var i = 1; i < data.length; i++) {
@@ -477,7 +478,7 @@ function processEmailQueue() {
         }
 
         try {
-          var result = sendEmailHelper(to, subject, body, options);
+          var result = sendEmailHelper(to, subject, body, options, settings);
           if (result === "SUPPRESSED") {
             statuses[i][0] = "Suppressed (Off)";
           } else {
