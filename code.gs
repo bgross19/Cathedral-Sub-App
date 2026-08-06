@@ -2037,42 +2037,82 @@ function assignSubToPeriod(absenceId, period, subName, forceOverride) {
         throw new Error("Sorry, this job was just filled by someone else!");
       }
 
-      // Check if the new sub is available based on Dates and SubstituteAvailability
+      // Get role of the assigned person
+      var newSubRole = "";
+      if (newSub !== "") {
+        for (var r = 1; r < rosterData.length; r++) {
+          if (String(rosterData[r][0]).trim() === newSub) {
+            newSubRole = String(rosterData[r][2]).trim(); // Role is at index 2
+            break;
+          }
+        }
+      }
+
+      // Check if the new sub is available based on Dates and SubstituteAvailability or Master Schedule
       if (newSub !== "" && !forceOverride) {
         var newSubEmail = (subEmailLookup[newSub] || "").toLowerCase();
         if (newSubEmail !== "") {
+           var isSubstitute = newSubRole.indexOf("Substitute") !== -1;
            var targetDateRaw = data[i][3];
            var targetDateStr = (targetDateRaw instanceof Date) ? Utilities.formatDate(targetDateRaw, Session.getScriptTimeZone(), "yyyy-MM-dd") : String(targetDateRaw).trim();
 
-           var allSubAvail = getAllSubstituteAvailability();
-           var subAvail = allSubAvail[newSubEmail] || {};
-           var availStatus = subAvail[targetDateStr] || "Not Available";
+           if (isSubstitute) {
+             // For substitutes, check SubstituteAvailability sheet
+             var allSubAvail = getAllSubstituteAvailability();
+             var subAvail = allSubAvail[newSubEmail] || {};
+             var availStatus = subAvail[targetDateStr] || "Not Available";
 
-           if (availStatus !== "Available" && availStatus !== "AM Only" && availStatus !== "PM Only") {
-               throw new Error(JSON.stringify({type: "AVAILABILITY_ERROR", message: "Sub not listed as available, proceed?"}));
-           }
-
-           // Fetch day color using cached payload optimization
-           var dayColor = "Green"; // default
-           try {
-             var payload = getInitialPayload();
-             if (payload.dateColors && payload.dateColors[targetDateStr]) {
-                dayColor = payload.dateColors[targetDateStr];
+             if (availStatus !== "Available" && availStatus !== "AM Only" && availStatus !== "PM Only") {
+                 throw new Error(JSON.stringify({type: "AVAILABILITY_ERROR", message: "Sub not listed as available, proceed?"}));
              }
-           } catch(e) {
-             console.error("Failed to fetch day color from payload cache: " + e.message);
-           }
 
-           var p = parseInt(period);
-           if (availStatus === "AM Only") {
-               if ((dayColor === "Green" && p > 4) || (dayColor === "Blue" && p > 2) || (dayColor === "Gold" && p > 6)) {
-                   throw new Error(JSON.stringify({type: "AVAILABILITY_ERROR", message: "Sub not listed as available, proceed?"}));
+             // Fetch day color using cached payload optimization
+             var dayColor = "Green"; // default
+             try {
+               var payload = getInitialPayload();
+               if (payload.dateColors && payload.dateColors[targetDateStr]) {
+                  dayColor = payload.dateColors[targetDateStr];
                }
-           }
-           if (availStatus === "PM Only") {
-               if ((dayColor === "Green" && p <= 4) || (dayColor === "Blue" && p <= 2) || (dayColor === "Gold" && p <= 6)) {
-                   throw new Error(JSON.stringify({type: "AVAILABILITY_ERROR", message: "Sub not listed as available, proceed?"}));
+             } catch(e) {
+               console.error("Failed to fetch day color from payload cache: " + e.message);
+             }
+
+             var p = parseInt(period);
+             if (availStatus === "AM Only") {
+                 if ((dayColor === "Green" && p > 4) || (dayColor === "Blue" && p > 2) || (dayColor === "Gold" && p > 6)) {
+                     throw new Error(JSON.stringify({type: "AVAILABILITY_ERROR", message: "Sub not listed as available, proceed?"}));
+                 }
+             }
+             if (availStatus === "PM Only") {
+                 if ((dayColor === "Green" && p <= 4) || (dayColor === "Blue" && p <= 2) || (dayColor === "Gold" && p <= 6)) {
+                     throw new Error(JSON.stringify({type: "AVAILABILITY_ERROR", message: "Sub not listed as available, proceed?"}));
+                 }
+             }
+           } else {
+             // For teachers/others, check master schedule
+             var scheduleData = getMasterScheduleData();
+             var teacherSchedule = [];
+             if (scheduleData && scheduleData.length > 0) {
+               var headers = scheduleData[0];
+               var emailIdx = headers.indexOf("EMAIL_ADDR");
+               var periodIdx = headers.indexOf("PERIOD");
+               if (emailIdx > -1 && periodIdx > -1) {
+                 for (var s = 1; s < scheduleData.length; s++) {
+                   if (String(scheduleData[s][emailIdx]).toLowerCase().trim() === newSubEmail) {
+                     var pVal = String(scheduleData[s][periodIdx]).trim();
+                     var joinP = getScheduleJoinPeriod(pVal);
+                     if (teacherSchedule.indexOf(joinP) === -1) {
+                       teacherSchedule.push(joinP);
+                     }
+                   }
+                 }
                }
+             }
+             var requestedJoinPeriod = getScheduleJoinPeriod(period);
+             if (teacherSchedule.indexOf(requestedJoinPeriod) !== -1) {
+                 // The teacher has a class during this period
+                 throw new Error(JSON.stringify({type: "AVAILABILITY_ERROR", message: "Sub not listed as available, proceed?"}));
+             }
            }
         }
       }
