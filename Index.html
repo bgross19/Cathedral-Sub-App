@@ -2954,13 +2954,19 @@
         btn.innerText = "Saving...";
 
         google.script.run
-          .withSuccessHandler(() => {
-            if (subName) {
-               showToast('Sub assigned successfully!', 'success');
+          .withSuccessHandler(result => {
+            if (result && result.success) {
+              if (subName) {
+                 showToast('Sub assigned successfully!', 'success');
+              } else {
+                 showToast('Sub Removed Successfully', 'success');
+              }
+              EventBus.publish('refresh_adminData', { renderAtAGlance: true });
             } else {
-               showToast('Sub Removed Successfully', 'success');
+              showToast(result ? result.error : "Unknown error", 'error');
+              btn.disabled = false;
+              btn.innerText = originalText;
             }
-            EventBus.publish('refresh_adminData', { renderAtAGlance: true });
           })
           .withFailureHandler(err => {
             if (err.message && err.message.includes('AVAILABILITY_ERROR')) {

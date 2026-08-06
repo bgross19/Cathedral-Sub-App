@@ -2138,6 +2138,9 @@ function assignSubToPeriod(absenceId, period, subName, forceOverride) {
 
     throw new Error("Absence Request ID not found.");
   } catch (err) {
+    if (err.message && err.message.indexOf("AVAILABILITY_ERROR") !== -1) {
+       throw err; // Re-throw to allow frontend withFailureHandler to catch it for the override confirmation
+    }
     return {
       success: false, error: err.message };
   } finally {
