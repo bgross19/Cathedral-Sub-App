@@ -129,7 +129,7 @@
 
           allRoles.forEach(r => {
               const isSelected = (role.toLowerCase() === r.toLowerCase()) ? 'selected' : '';
-              roleHtml += `<option value="${r}" ${isSelected}>${r}</option>`;
+              roleHtml += `<option value="${escapeHtml(r)}" ${isSelected}>${escapeHtml(r)}</option>`;
           });
 
           roleHtml += `</select>`;
@@ -152,7 +152,7 @@
           let dutyHtml = `
               <div class="relative inline-block text-left duty-dropdown-container">
                   <button type="button" onclick="toggleDutyDropdown('${dutyDropdownId}')" class="inline-flex justify-between w-full p-1 border rounded focus:ring-1 focus:ring-[#00843D] outline-none text-sm bg-white text-gray-700 hover:bg-gray-50">
-                      <span id="duty-display-${dutyDropdownId}">${dutyDisplay}</span>
+                      <span id="duty-display-${dutyDropdownId}">${escapeHtml(dutyDisplay)}</span>
                       <svg class="-mr-1 ml-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                           <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
                       </svg>
@@ -3432,7 +3432,7 @@
                                     <div class="font-bold text-yellow-800 cursor-pointer">Unassigned</div>
                                     <div class="text-gray-600 mt-1 cursor-pointer">${escapeHtml(pData.room)}</div>
                                     <div class="mt-2 text-center" onclick="event.stopPropagation()">
-                                        <a href="${quickCoverLink}" target="_blank" class="inline-block bg-[#00843D] text-white text-[10px] font-bold px-2 py-1 rounded no-underline hover:bg-green-700">Sign Me Up</a>
+                                        <a href="${escapeHtml(quickCoverLink)}" target="_blank" class="inline-block bg-[#00843D] text-white text-[10px] font-bold px-2 py-1 rounded no-underline hover:bg-green-700">Sign Me Up</a>
                                     </div>
                                  </td>`;
                     }
@@ -5061,7 +5061,7 @@
                  const isSelected = (idx === mostRecentCompletedIndex) ? "selected" : "";
                  if (isSelected) selectedIdx = idx;
 
-                 html += `<option value="${idx}" ${isSelected}>Pay Period ${pp.periodNumber} (${displayStart} - ${displayEnd})</option>`;
+                 html += `<option value="${idx}" ${isSelected}>Pay Period ${escapeHtml(pp.periodNumber)} (${escapeHtml(displayStart)} - ${escapeHtml(displayEnd)})</option>`;
               });
               
               ppSelect.innerHTML = html;
@@ -5314,7 +5314,7 @@
              if (label === "Professional Development") {
                  label = "PD";
              }
-             headerHtml += `<th class="p-3">${label}</th>`;
+             headerHtml += `<th class="p-3">${escapeHtml(label)}</th>`;
           });
 
           headerHtml += `<th class="p-3 text-right">Total Hours</th></tr>`;
