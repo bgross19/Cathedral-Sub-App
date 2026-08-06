@@ -496,3 +496,39 @@ function benchmarkEnqueueEmail() {
   var end = new Date().getTime();
   Logger.log("Execution time for 100 iterations: " + (end - start) + " ms");
 }
+
+/**
+ * Benchmark to measure the performance improvement of passing settings directly
+ * to sendEmailHelper rather than it calling getSettings() internally.
+ */
+function benchmarkSendEmailHelperLoop() {
+  var N = 1000;
+  var ss = getSS();
+
+  // Prime the cache
+  getSettings(ss);
+
+  var startOld = new Date().getTime();
+  for (var i = 0; i < N; i++) {
+    // Calling without pre-fetched settings (Simulating old behavior)
+    sendEmailHelper("test@example.com", "Subject", "Body");
+  }
+  var endOld = new Date().getTime();
+  var timeOld = endOld - startOld;
+  Logger.log("Unoptimized sendEmailHelper loop (" + N + " iterations): " + timeOld + " ms");
+
+  var startNew = new Date().getTime();
+  var preFetchedSettings = getSettings(ss);
+  for (var i = 0; i < N; i++) {
+    // Calling with pre-fetched settings (Optimized behavior)
+    sendEmailHelper("test@example.com", "Subject", "Body", null, preFetchedSettings);
+  }
+  var endNew = new Date().getTime();
+  var timeNew = endNew - startNew;
+  Logger.log("Optimized sendEmailHelper loop (" + N + " iterations): " + timeNew + " ms");
+
+  if (timeOld > 0) {
+    var improvement = ((timeOld - timeNew) / timeOld * 100).toFixed(2);
+    Logger.log("Performance Improvement: " + improvement + "%");
+  }
+}
