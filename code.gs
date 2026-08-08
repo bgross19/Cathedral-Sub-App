@@ -170,10 +170,10 @@ function doGet(e) {
   }
 
   if (!isAuthorized) {
-    var htmlOutput = HtmlService.createHtmlOutput('<div style="display:flex;justify-content:center;align-items:center;height:100vh;font-family:sans-serif;background-color:#f3f4f6;text-align:center;"><div style="background:white;padding:2rem;border-radius:8px;box-shadow:0 4px 6px rgba(0,0,0,0.1);"><h1 style="color:#e11d48;margin-top:0;">Access Denied</h1><p style="color:#4b5563;font-size:1.125rem;">Please Contact Technology@gocathedral.com</p></div></div>');
-    htmlOutput.setTitle('Access Denied');
-    htmlOutput.addMetaTag('viewport', 'width=device-width, initial-scale=1');
-    return htmlOutput;
+    var errorHtmlOutput = HtmlService.createHtmlOutput('<div style="display:flex;justify-content:center;align-items:center;height:100vh;font-family:sans-serif;background-color:#f3f4f6;text-align:center;"><div style="background:white;padding:2rem;border-radius:8px;box-shadow:0 4px 6px rgba(0,0,0,0.1);"><h1 style="color:#e11d48;margin-top:0;">Access Denied</h1><p style="color:#4b5563;font-size:1.125rem;">Please Contact Technology@gocathedral.com</p></div></div>');
+    errorHtmlOutput.setTitle('Access Denied');
+    errorHtmlOutput.addMetaTag('viewport', 'width=device-width, initial-scale=1');
+    return errorHtmlOutput;
   }
 
   var template = HtmlService.createTemplateFromFile('Index');
@@ -253,7 +253,7 @@ function assertPermission(user, viewName, customErrorMessage) {
 
 function getUserData(ss) {
   var email = Session.getActiveUser().getEmail();
-  var ss = ss || getSS();
+  ss = ss || getSS();
   
   var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
   var rosterData = rosterSheet ? rosterSheet.getDataRange().getValues() : [];
@@ -442,7 +442,7 @@ function processEmailQueue() {
     }
 
     // Helper to replace placeholders using regex
-    function replacePlaceholders(text) {
+    var replacePlaceholders = function(text) {
       if (!text || typeof text !== 'string') return text;
       return text.replace(/\{\{(ROOM|COURSE)\|([^}]+)\}\}/g, function(match, type, joinKey) {
         var val = "No Class Assigned";
@@ -453,12 +453,12 @@ function processEmailQueue() {
       });
     }
 
-    for (var i = 1; i < data.length; i++) {
-      if (data[i][5] === "Pending") {
-        var to = data[i][1];
-        var subject = data[i][2];
-        var body = data[i][3];
-        var optionsStr = data[i][4];
+    for (var j = 1; j < data.length; j++) {
+      if (data[j][5] === "Pending") {
+        var to = data[j][1];
+        var subject = data[j][2];
+        var body = data[j][3];
+        var optionsStr = data[j][4];
         var options = {};
 
         try {
@@ -477,13 +477,13 @@ function processEmailQueue() {
         try {
           var result = sendEmailHelper(to, subject, body, options, settings);
           if (result === "SUPPRESSED") {
-            statuses[i][0] = "Suppressed (Off)";
+            statuses[j][0] = "Suppressed (Off)";
           } else {
-            statuses[i][0] = "Sent";
+            statuses[j][0] = "Sent";
           }
         } catch (e) {
           console.error("Failed to send queued email to " + to + ": " + e.message);
-          statuses[i][0] = "Failed: " + e.message;
+          statuses[j][0] = "Failed: " + e.message;
         }
       }
     }
@@ -1150,7 +1150,7 @@ function updateSettings(newSettings) {
  */
 
 function getCoordinatorEmail(ss) {
-  var ss = ss || getSS();
+  ss = ss || getSS();
   var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
   if (!rosterSheet) return null;
 
