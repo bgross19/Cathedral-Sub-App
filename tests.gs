@@ -292,7 +292,8 @@ function runTests() {
       assert(call.to === "redirect@example.com", "Expected redirect recipient");
       assert(call.subject === "[REDIRECTED] Test Subject", "Expected modified subject");
       assert(call.body === "Test Body", "Expected unmodified body");
-      assert(call.options === undefined, "Expected no options");
+      assert(call.options !== undefined, "Expected options to be defined");
+      assert(call.options.name === "Cathedral Sub App", "Expected sender name");
     });
 
     it("sendEmailHelper - Redirect mode with options (CC and BCC)", function() {
@@ -351,7 +352,8 @@ function runTests() {
       assert(call.body.indexOf("User: user@example.com") !== -1, "Expected user email in body");
       assert(call.body.indexOf("Error Message: Test error message") !== -1, "Expected error message in body");
       assert(call.body.indexOf("Stack Trace:") === -1, "Expected no stack trace in body");
-      assert(call.options === undefined, "Expected no options passed to GmailApp.sendEmail for this function");
+      assert(call.options !== undefined, "Expected options to be passed to GmailApp.sendEmail for this function");
+      assert(call.options.name === "Cathedral Sub App", "Expected sender name");
 
       // Restore session
       if (typeof global !== 'undefined') {
