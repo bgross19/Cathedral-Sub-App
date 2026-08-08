@@ -34,6 +34,7 @@ function notifyAdminOfError(funcName, e) {
     var settings = getSettings();
     var adminEmail = settings["Redirect Email"];
     var senderName = settings["Email Sender Name"] || "Cathedral Sub App";
+    var replyToEmail = settings["Reply To Email"] || "";
     if (adminEmail && adminEmail.trim() !== "") {
       var subject = "Critical App Error: " + funcName;
       var body = "An error occurred in the Cathedral Sub App.\n\n" +
@@ -41,7 +42,9 @@ function notifyAdminOfError(funcName, e) {
                  "User: " + Session.getActiveUser().getEmail() + "\n" +
                  "Error Message: " + e.message;
 
-      GmailApp.sendEmail(adminEmail, subject, body, { name: senderName });
+      var options = { name: senderName };
+      if (replyToEmail && replyToEmail.trim() !== "") options.replyTo = replyToEmail.trim();
+      GmailApp.sendEmail(adminEmail, subject, body, options);
     }
   } catch (mailError) {
     console.error("Failed to send admin error email: " + mailError.message);
@@ -109,6 +112,7 @@ function getSettings(ss) {
   var defaults = {
     "Email Mode": "Live",
     "Redirect Email": "Bgross@gocathedral.com",
+    "Reply To Email": "",
     "App URL": DEFAULT_APP_URL,
     "Max Multi-Select Days": "5",
     "Urgency Cutoff Time": "15",
@@ -307,11 +311,15 @@ function sendEmailHelper(to, subject, body, options, optionalSettings) {
   var mode = settings["Email Mode"] || "Live";
   var redirectEmail = settings["Redirect Email"] || "";
   var senderName = settings["Email Sender Name"] || "Cathedral Sub App";
+  var replyToEmail = settings["Reply To Email"] || "";
 
   if (!options) {
     options = {};
   }
   options.name = senderName;
+  if (replyToEmail && replyToEmail.trim() !== "") {
+    options.replyTo = replyToEmail.trim();
+  }
 
   if (mode === "Off") {
     console.log("Email sending is turned Off. Suppressed email to: " + to);
