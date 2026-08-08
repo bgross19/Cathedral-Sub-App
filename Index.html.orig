@@ -817,11 +817,11 @@
     </nav>
 
     <main id="mainContent" class="w-full max-w-6xl mx-auto p-4 mt-4">
-      
+
       <div class="bg-white rounded-2xl shadow-sm p-6 mb-6 border-t-4 border-[#00843D]">
         <h2 class="text-2xl font-bold text-[#002147]">Welcome, <span id="welcomeName">Teacher</span>!</h2>
         <p id="welcomeDescription" class="text-gray-600 mt-1 mb-6">Need coverage for a class? Submit your request below.</p>
-        
+
         <div class="flex flex-col sm:flex-row gap-4">
           <button id="newAbsenceBtn" onclick="toggleModal()" class="w-full sm:w-auto bg-[#00843D] hover:bg-green-700 text-white font-bold py-3 px-8 rounded-xl transition-all transform hover:scale-105 shadow-md flex items-center justify-center gap-2">
             <span>➕</span> New Absence Request
@@ -1826,7 +1826,7 @@
 
           <form id="absenceForm" class="space-y-4 mt-4">
             <input type="hidden" id="editAbsenceId" value="">
-            
+
             <div id="onBehalfSection" class="hidden">
               <label class="block text-sm font-bold mb-1">Teacher</label>
               <input type="text" id="onBehalfTeacher" list="allStaffDataList" placeholder="Select teacher..." class="w-full p-3 border rounded-xl focus:ring-2 focus:ring-[#00843D] outline-none">
@@ -2249,7 +2249,7 @@
             document.getElementById('userName').innerText = data.name;
             document.getElementById('userName').dataset.role = data.role;
             document.getElementById('welcomeName').innerText = (data.name.split(',')[1] || data.name).trim();
-            
+
             if (data.appUrl) {
                 window.globalAppUrl = data.appUrl;
                 const footerLink = document.getElementById('atAGlanceFooterUrl');
@@ -2905,8 +2905,14 @@
                           if (isFromModal) {
                              closeAllModals();
                           }
-                          EventBus.publish('refresh_quickCover');
-                          updateLocalAdminData(absenceId, period, subName);
+                          google.script.run.withSuccessHandler(refreshed => {
+                             if (refreshed.quickCover) {
+                                renderQuickCover(refreshed.quickCover);
+                             }
+                             if (refreshed.adminData) {
+                                adminDataRaw = refreshed.adminData;
+                             }
+                          }).refreshData(['quickCover', 'adminData']);
                        }
                     })
                     .withFailureHandler(forceErr => {
@@ -2958,7 +2964,7 @@
               } else {
                  showToast('Sub Removed Successfully', 'success');
               }
-              updateLocalAdminData(absenceId, period, subName);
+              EventBus.publish('refresh_adminData', { renderAtAGlance: true });
             } else {
               showToast(result ? result.error : "Unknown error", 'error');
               btn.disabled = false;
@@ -2979,7 +2985,12 @@
                           } else {
                              showToast('Sub Removed Successfully', 'success');
                           }
-                          updateLocalAdminData(absenceId, period, subName);
+                          google.script.run.withSuccessHandler(refreshed => {
+                             if (refreshed.adminData) {
+                                adminDataRaw = refreshed.adminData;
+                                renderAtAGlanceTable(adminDataRaw);
+                             }
+                          }).refreshData(['adminData']);
                        }
                     })
                     .withFailureHandler(forceErr => {
@@ -3054,7 +3065,7 @@
 
       function renderQuickCover(unfilled) {
             const container = document.getElementById('quickCoverContainer');
-            
+
             if (!unfilled || !Array.isArray(unfilled) || unfilled.length === 0) {
               container.innerHTML = '<div class="p-8 text-center text-gray-500 font-medium flex flex-col items-center gap-2"><span class="text-3xl">🎉</span> All classes are covered for the next 2 days!</div>';
               return;
@@ -3091,7 +3102,7 @@
               `;
             });
             html += '</div>';
-            
+
             container.innerHTML = html;
           }
 
@@ -4199,8 +4210,8 @@
               if (isFromModal) {
                  closeDetailsModal();
               }
-              EventBus.publish('refresh_quickCover');
-              updateLocalAdminData(absenceId, period, subName);
+              EventBus.publish('refresh_quickCover'); // Refresh the list
+              EventBus.publish('refresh_adminData');
             } else {
               showToast(result ? result.error : "Unknown error", 'error');
               btn.disabled = false;
@@ -4228,8 +4239,14 @@
                           if (isFromModal) {
                              closeAllModals();
                           }
-                          EventBus.publish('refresh_quickCover');
-                          updateLocalAdminData(absenceId, period, subName);
+                          google.script.run.withSuccessHandler(refreshed => {
+                             if (refreshed.quickCover) {
+                                renderQuickCover(refreshed.quickCover);
+                             }
+                             if (refreshed.adminData) {
+                                adminDataRaw = refreshed.adminData;
+                             }
+                          }).refreshData(['quickCover', 'adminData']);
                        }
                     })
                     .withFailureHandler(forceErr => {
@@ -4377,7 +4394,7 @@
             absences.forEach((abs, index) => {
               let bgClass = abs.urgency === 'Urgent' ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200';
               let textClass = abs.urgency === 'Urgent' ? 'text-red-700' : 'text-[#002147]';
-              
+
               html += `
                 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 border rounded-xl shadow-sm ${bgClass} gap-4">
                   <div>
@@ -4400,7 +4417,7 @@
               `;
             });
             html += '</div>';
-            
+
             container.innerHTML = html;
             container.classList.remove('text-gray-400');
           }
@@ -5049,7 +5066,7 @@
 
                  html += `<option value="${idx}" ${isSelected}>Pay Period ${escapeHtml(pp.periodNumber)} (${escapeHtml(displayStart)} - ${escapeHtml(displayEnd)})</option>`;
               });
-              
+
               ppSelect.innerHTML = html;
 
               if (selectedIdx !== -1) {
