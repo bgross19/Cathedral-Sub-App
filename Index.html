@@ -1400,7 +1400,7 @@
             }
 
             let html = `
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label class="block text-sm font-bold mb-1">Email Mode</label>
                   <select id="settingsEmailMode" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none">
@@ -1413,8 +1413,12 @@
                   <label class="block text-sm font-bold mb-1">Redirect Email Address</label>
                   <input type="email" id="settingsRedirectEmail" value="${escapeHtml(settings["Redirect Email"] || "")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none">
                 </div>
+                <div>
+                  <label class="block text-sm font-bold mb-1">Email Sender Name</label>
+                  <input type="text" id="settingsEmailSenderName" value="${escapeHtml(settings["Email Sender Name"] || "Cathedral Sub App")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none">
+                </div>
               </div>
-                            <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label class="block text-sm font-bold mb-1">App URL</label>
                   <input type="text" id="settingsAppUrl" value="${escapeHtml(settings["App URL"] || "")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none">
@@ -1586,6 +1590,7 @@
         const newSettings = {
           "Email Mode": document.getElementById('settingsEmailMode').value,
           "Redirect Email": document.getElementById('settingsRedirectEmail').value,
+          "Email Sender Name": document.getElementById('settingsEmailSenderName').value,
           "App URL": document.getElementById('settingsAppUrl').value,
           "Max Multi-Select Days": document.getElementById('settingsMaxMultiDays').value,
           "Urgency Cutoff Time": document.getElementById('settingsUrgencyCutoff').value,

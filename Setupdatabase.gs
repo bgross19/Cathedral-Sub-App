@@ -46,6 +46,7 @@ function setupDatabase() {
     var defaultSettings = [
       ["Email Mode", "Live"],
       ["Redirect Email", "Bgross@gocathedral.com"],
+      ["Email Sender Name", "Cathedral Sub App"],
       ["App URL", DEFAULT_APP_URL],
       ["Max Multi-Select Days", "5"],
       ["Urgency Cutoff Time", "15"],

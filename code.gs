@@ -33,6 +33,7 @@ function notifyAdminOfError(funcName, e) {
   try {
     var settings = getSettings();
     var adminEmail = settings["Redirect Email"];
+    var senderName = settings["Email Sender Name"] || "Cathedral Sub App";
     if (adminEmail && adminEmail.trim() !== "") {
       var subject = "Critical App Error: " + funcName;
       var body = "An error occurred in the Cathedral Sub App.\n\n" +
@@ -40,7 +41,7 @@ function notifyAdminOfError(funcName, e) {
                  "User: " + Session.getActiveUser().getEmail() + "\n" +
                  "Error Message: " + e.message;
 
-      GmailApp.sendEmail(adminEmail, subject, body);
+      GmailApp.sendEmail(adminEmail, subject, body, { name: senderName });
     }
   } catch (mailError) {
     console.error("Failed to send admin error email: " + mailError.message);
@@ -305,6 +306,12 @@ function sendEmailHelper(to, subject, body, options, optionalSettings) {
   var settings = optionalSettings || getSettings();
   var mode = settings["Email Mode"] || "Live";
   var redirectEmail = settings["Redirect Email"] || "";
+  var senderName = settings["Email Sender Name"] || "Cathedral Sub App";
+
+  if (!options) {
+    options = {};
+  }
+  options.name = senderName;
 
   if (mode === "Off") {
     console.log("Email sending is turned Off. Suppressed email to: " + to);
