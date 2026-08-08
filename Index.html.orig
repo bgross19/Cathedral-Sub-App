@@ -817,11 +817,11 @@
     </nav>
 
     <main id="mainContent" class="w-full max-w-6xl mx-auto p-4 mt-4">
-      
+
       <div class="bg-white rounded-2xl shadow-sm p-6 mb-6 border-t-4 border-[#00843D]">
         <h2 class="text-2xl font-bold text-[#002147]">Welcome, <span id="welcomeName">Teacher</span>!</h2>
         <p id="welcomeDescription" class="text-gray-600 mt-1 mb-6">Need coverage for a class? Submit your request below.</p>
-        
+
         <div class="flex flex-col sm:flex-row gap-4">
           <button id="newAbsenceBtn" onclick="toggleModal()" class="w-full sm:w-auto bg-[#00843D] hover:bg-green-700 text-white font-bold py-3 px-8 rounded-xl transition-all transform hover:scale-105 shadow-md flex items-center justify-center gap-2">
             <span>➕</span> New Absence Request
@@ -1826,7 +1826,7 @@
 
           <form id="absenceForm" class="space-y-4 mt-4">
             <input type="hidden" id="editAbsenceId" value="">
-            
+
             <div id="onBehalfSection" class="hidden">
               <label class="block text-sm font-bold mb-1">Teacher</label>
               <input type="text" id="onBehalfTeacher" list="allStaffDataList" placeholder="Select teacher..." class="w-full p-3 border rounded-xl focus:ring-2 focus:ring-[#00843D] outline-none">
@@ -1898,11 +1898,6 @@
             <div>
               <label class="block text-sm font-bold mb-1">Special Instructions (Optional)</label>
               <textarea id="specialInst" rows="2" class="w-full p-3 border rounded-xl outline-none focus:ring-2 focus:ring-[#00843D]" placeholder="Any extra details..."></textarea>
-            </div>
-
-            <div>
-              <label class="block text-sm font-bold mb-1">Sub Plans Attachment (URL) (Optional)</label>
-              <input type="url" id="subPlanUrlInput" class="w-full p-3 border rounded-xl outline-none focus:ring-2 focus:ring-[#00843D]" placeholder="Paste a Google Doc or PDF link here...">
             </div>
 
             <div class="bg-gray-50 p-4 rounded-xl border border-gray-200">
@@ -2254,7 +2249,7 @@
             document.getElementById('userName').innerText = data.name;
             document.getElementById('userName').dataset.role = data.role;
             document.getElementById('welcomeName').innerText = (data.name.split(',')[1] || data.name).trim();
-            
+
             if (data.appUrl) {
                 window.globalAppUrl = data.appUrl;
                 const footerLink = document.getElementById('atAGlanceFooterUrl');
@@ -2443,7 +2438,6 @@
             reason: document.getElementById('absReason').value,
             urgency: document.getElementById('urgencyValue').value,
             specialInst: document.getElementById('specialInst').value,
-            subPlanUrl: document.getElementById('subPlanUrlInput').value,
             periods: checkedPeriods.join(',')
           };
         } else {
@@ -2475,14 +2469,13 @@
           const currentReason = document.getElementById('absReason').value;
           const currentUrgency = document.getElementById('urgencyValue').value;
           const currentSpecialInst = document.getElementById('specialInst').value;
-          const currentSubPlanUrl = document.getElementById('subPlanUrlInput').value;
           const currentPeriods = checkedPeriods.join(',');
 
           const isEdit = document.getElementById('editAbsenceId').value !== "";
 
           if (!isEdit) {
             // Adding new: if they typed *anything* that isn't default
-            if (currentDate || currentSpecialInst.trim() !== "" || currentSubPlanUrl.trim() !== "" || checkedPeriods.length > 0) return true;
+            if (currentDate || currentSpecialInst.trim() !== "" || checkedPeriods.length > 0) return true;
           } else {
             // Editing existing: compare to original state
             if (originalModalData.date !== undefined && (
@@ -2491,7 +2484,6 @@
                 currentReason !== originalModalData.reason ||
                 currentUrgency !== originalModalData.urgency ||
                 currentSpecialInst !== originalModalData.specialInst ||
-                currentSubPlanUrl !== originalModalData.subPlanUrl ||
                 currentPeriods !== originalModalData.periods)) {
                 return true;
             }
@@ -2913,8 +2905,14 @@
                           if (isFromModal) {
                              closeAllModals();
                           }
-                          EventBus.publish('refresh_quickCover');
-                          updateLocalAdminData(absenceId, period, subName);
+                          google.script.run.withSuccessHandler(refreshed => {
+                             if (refreshed.quickCover) {
+                                renderQuickCover(refreshed.quickCover);
+                             }
+                             if (refreshed.adminData) {
+                                adminDataRaw = refreshed.adminData;
+                             }
+                          }).refreshData(['quickCover', 'adminData']);
                        }
                     })
                     .withFailureHandler(forceErr => {
@@ -2966,7 +2964,7 @@
               } else {
                  showToast('Sub Removed Successfully', 'success');
               }
-              updateLocalAdminData(absenceId, period, subName);
+              EventBus.publish('refresh_adminData', { renderAtAGlance: true });
             } else {
               showToast(result ? result.error : "Unknown error", 'error');
               btn.disabled = false;
@@ -2987,7 +2985,12 @@
                           } else {
                              showToast('Sub Removed Successfully', 'success');
                           }
-                          updateLocalAdminData(absenceId, period, subName);
+                          google.script.run.withSuccessHandler(refreshed => {
+                             if (refreshed.adminData) {
+                                adminDataRaw = refreshed.adminData;
+                                renderAtAGlanceTable(adminDataRaw);
+                             }
+                          }).refreshData(['adminData']);
                        }
                     })
                     .withFailureHandler(forceErr => {
@@ -3062,7 +3065,7 @@
 
       function renderQuickCover(unfilled) {
             const container = document.getElementById('quickCoverContainer');
-            
+
             if (!unfilled || !Array.isArray(unfilled) || unfilled.length === 0) {
               container.innerHTML = '<div class="p-8 text-center text-gray-500 font-medium flex flex-col items-center gap-2"><span class="text-3xl">🎉</span> All classes are covered for the next 2 days!</div>';
               return;
@@ -3099,7 +3102,7 @@
               `;
             });
             html += '</div>';
-            
+
             container.innerHTML = html;
           }
 
@@ -3893,14 +3896,6 @@
                <p class="font-bold text-sm text-gray-700">Special Instructions</p>
                <p class="text-gray-600 bg-white p-3 border rounded-lg">${escapeHtml(req.instructions) || 'None provided'}</p>
              </div>
-             ${req.subPlanUrl ? `
-             <div>
-               <p class="font-bold text-sm text-gray-700">Sub Plan</p>
-               <p class="text-gray-600 bg-white p-3 border rounded-lg">
-                 <a href="${escapeHtml(req.subPlanUrl)}" target="_blank" class="text-blue-600 hover:underline">View Attachment</a>
-               </p>
-             </div>
-             ` : ''}
           </div>
 
           <div class="mt-6 border-t pt-4">
@@ -4146,14 +4141,6 @@
                <p class="font-bold text-sm text-gray-700">Special Instructions</p>
                <p class="text-gray-600 bg-white p-3 border rounded-lg">${escapeHtml(req.instructions) || 'None provided'}</p>
              </div>
-             ${req.subPlanUrl ? `
-             <div>
-               <p class="font-bold text-sm text-gray-700">Sub Plan</p>
-               <p class="text-gray-600 bg-white p-3 border rounded-lg">
-                 <a href="${escapeHtml(req.subPlanUrl)}" target="_blank" class="text-blue-600 hover:underline">View Attachment</a>
-               </p>
-             </div>
-             ` : ''}
           </div>
 
           <div class="mt-6 border-t pt-4">
@@ -4223,8 +4210,8 @@
               if (isFromModal) {
                  closeDetailsModal();
               }
-              EventBus.publish('refresh_quickCover');
-              updateLocalAdminData(absenceId, period, subName);
+              EventBus.publish('refresh_quickCover'); // Refresh the list
+              EventBus.publish('refresh_adminData');
             } else {
               showToast(result ? result.error : "Unknown error", 'error');
               btn.disabled = false;
@@ -4252,8 +4239,14 @@
                           if (isFromModal) {
                              closeAllModals();
                           }
-                          EventBus.publish('refresh_quickCover');
-                          updateLocalAdminData(absenceId, period, subName);
+                          google.script.run.withSuccessHandler(refreshed => {
+                             if (refreshed.quickCover) {
+                                renderQuickCover(refreshed.quickCover);
+                             }
+                             if (refreshed.adminData) {
+                                adminDataRaw = refreshed.adminData;
+                             }
+                          }).refreshData(['quickCover', 'adminData']);
                        }
                     })
                     .withFailureHandler(forceErr => {
@@ -4346,14 +4339,6 @@
                <p class="font-bold text-sm text-gray-700">Special Instructions</p>
                <p class="text-gray-600 bg-white p-3 border rounded-lg">${escapeHtml(req.instructions) || 'None provided'}</p>
              </div>
-             ${req.subPlanUrl ? `
-             <div>
-               <p class="font-bold text-sm text-gray-700">Sub Plan</p>
-               <p class="text-gray-600 bg-white p-3 border rounded-lg">
-                 <a href="${escapeHtml(req.subPlanUrl)}" target="_blank" class="text-blue-600 hover:underline">View Attachment</a>
-               </p>
-             </div>
-             ` : ''}
           </div>
         `;
 
@@ -4409,7 +4394,7 @@
             absences.forEach((abs, index) => {
               let bgClass = abs.urgency === 'Urgent' ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200';
               let textClass = abs.urgency === 'Urgent' ? 'text-red-700' : 'text-[#002147]';
-              
+
               html += `
                 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 border rounded-xl shadow-sm ${bgClass} gap-4">
                   <div>
@@ -4432,7 +4417,7 @@
               `;
             });
             html += '</div>';
-            
+
             container.innerHTML = html;
             container.classList.remove('text-gray-400');
           }
@@ -4656,8 +4641,6 @@
         }
         document.getElementById('specialInst').value = inst;
 
-        document.getElementById('subPlanUrlInput').value = abs.subPlanUrl || "";
-
         if (hrConfirmed && !document.getElementById('hrSection').classList.contains('hidden')) {
            document.getElementById('hrConfirm').checked = true;
         } else {
@@ -4713,8 +4696,6 @@
             inst = inst.replace("[HR Docs Provided] ", "");
          }
          document.getElementById('specialInst').value = inst;
-
-         document.getElementById('subPlanUrlInput').value = req.subPlanUrl || "";
 
          if (hrConfirmed && !document.getElementById('hrSection').classList.contains('hidden')) {
             document.getElementById('hrConfirm').checked = true;
@@ -4808,7 +4789,6 @@
         const duration = document.getElementById('absDuration').value;
         const urgency = document.getElementById('urgencyValue').value;
         const specialInstructions = document.getElementById('specialInst').value;
-        const subPlanUrl = document.getElementById('subPlanUrlInput').value;
 
         const isHidden = document.getElementById('onBehalfSection').classList.contains('hidden');
         const onBehalfTeacherName = isHidden ? null : document.getElementById('onBehalfTeacher').value;
@@ -4856,7 +4836,6 @@
                     reason: reason,
                     urgency: urgency,
                     specialInstructions: specialInstructions,
-                    subPlanUrl: subPlanUrl,
                     hrConfirmed: hrChecked,
                     onBehalfTeacher: onBehalfTeacherName
                 });
@@ -4879,7 +4858,6 @@
                 reason: reason,
                 urgency: urgency,
                 specialInstructions: specialInstructions,
-                subPlanUrl: subPlanUrl,
                 hrConfirmed: hrChecked,
                 onBehalfTeacher: onBehalfTeacherName
             });
@@ -5088,7 +5066,7 @@
 
                  html += `<option value="${idx}" ${isSelected}>Pay Period ${escapeHtml(pp.periodNumber)} (${escapeHtml(displayStart)} - ${escapeHtml(displayEnd)})</option>`;
               });
-              
+
               ppSelect.innerHTML = html;
 
               if (selectedIdx !== -1) {
