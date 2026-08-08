@@ -1442,17 +1442,17 @@
               <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label class="block text-sm font-bold mb-1">PowerSchool API URL</label>
-                  <input type="text" id="settingsPsUrl" value="${escapeHtml(settings["PS_URL"] || "")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none">
+                  <input type="text" id="settingsPsUrl" value="${escapeHtml(settings.PS_URL || "")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none">
                 </div>
               </div>
               <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label class="block text-sm font-bold mb-1">PowerSchool Client ID</label>
-                  <input type="text" id="settingsPsClientId" value="${escapeHtml(settings["PS_CLIENT_ID"] || "")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none">
+                  <input type="text" id="settingsPsClientId" value="${escapeHtml(settings.PS_CLIENT_ID || "")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none">
                 </div>
                 <div>
                   <label class="block text-sm font-bold mb-1">PowerSchool Client Secret</label>
-                  <input type="text" id="settingsPsClientSecret" value="${escapeHtml(settings["PS_CLIENT_SECRET"] || "")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none">
+                  <input type="text" id="settingsPsClientSecret" value="${escapeHtml(settings.PS_CLIENT_SECRET || "")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none">
                 </div>
               </div>
 
@@ -1482,7 +1482,7 @@
             container.innerHTML = html;
             renderAbsenceReasons();
             try {
-                 const savedMatrix = JSON.parse(settings['RolePermissions'] || '{}');
+                 const savedMatrix = JSON.parse(settings.RolePermissions || '{}');
                  const defaultMatrix = {
                     "admin": { "Admin Dashboard": true, "HR Dashboard": true, "Today at a Glance": true, "My Upcoming Sub Duties": true, "Today's Open Jobs": true, "My Past Absences": true, "Settings": true, "Add Request on Behalf": true },
                     "hr": { "Admin Dashboard": false, "HR Dashboard": true, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Open Jobs": false, "My Past Absences": true, "Settings": true, "Add Request on Behalf": true },
@@ -5690,7 +5690,12 @@
       }
 
       // Override attemptCloseAllModals to use showConfirm
-      const oldAttemptCloseAllModals = attemptCloseAllModals.toString();
+      let oldAttemptCloseAllModals = "";
+      try {
+        oldAttemptCloseAllModals = attemptCloseAllModals.toString();
+      } catch(e) {
+        console.warn("SecurityError caught: ", e);
+      }
       // Wait, we need to inject this properly. Let's do it via regex on the actual function body later.
     </script>
 
