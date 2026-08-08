@@ -2645,7 +2645,8 @@ function getInitialPayload() {
               assignedSub: String(row[getSubColumnIndex(p) - 1] || "").trim(),
               reason: String(row[5] || "").trim(),
               duration: String(row[6] || "").trim(),
-              instructions: String(row[8] || "").trim()
+              instructions: String(row[8] || "").trim(),
+              subPlanUrl: String(row[20] || "").trim()
             });
           }
         }
