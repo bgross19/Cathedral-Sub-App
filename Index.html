@@ -1150,7 +1150,7 @@
       <div id="generalSettingsTab" class="settings-tab-content bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8 block">
 
         <h3 class="text-xl font-bold text-[#002147] mb-4 border-b pb-2">General Settings</h3>
-        <div id="generalSettingsContainer" class="space-y-4">
+        <div id="generalSettingsContainer">
            <!-- Dynamic content injected here -->
            <p class="text-gray-400 italic">Loading settings...</p>
         </div>
@@ -1400,93 +1400,108 @@
             }
 
             let html = `
-              <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <label class="block text-sm font-bold mb-1">Email Mode</label>
-                  <select id="settingsEmailMode" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none">
-                    <option value="Live" ${settings["Email Mode"] === "Live" ? "selected" : ""}>Live (Normal Operation)</option>
-                    <option value="Redirect" ${settings["Email Mode"] === "Redirect" ? "selected" : ""}>Redirect (Beta Testing)</option>
-                    <option value="Off" ${settings["Email Mode"] === "Off" ? "selected" : ""}>Off (No Emails)</option>
-                  </select>
-                </div>
-                <div>
-                  <label class="block text-sm font-bold mb-1">Redirect Email Address</label>
-                  <input type="email" id="settingsRedirectEmail" value="${escapeHtml(settings["Redirect Email"] || "")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none">
-                </div>
-                <div>
-                  <label class="block text-sm font-bold mb-1">Email Sender Name</label>
-                  <input type="text" id="settingsEmailSenderName" value="${escapeHtml(settings["Email Sender Name"] || "Cathedral Sub App")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none">
-                </div>
-              </div>
-              <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label class="block text-sm font-bold mb-1">Reply To Email</label>
-                  <input type="email" id="settingsReplyToEmail" value="${escapeHtml(settings["Reply To Email"] || "")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none" placeholder="Default: account running the script">
-                </div>
-                <div>
-                  <label class="block text-sm font-bold mb-1">App URL</label>
-                  <input type="text" id="settingsAppUrl" value="${escapeHtml(settings["App URL"] || "")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none">
-                </div>
-              </div>
-              <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label class="block text-sm font-bold mb-1">Max Multi-Select Days</label>
-                  <input type="number" id="settingsMaxMultiDays" min="1" max="14" value="${escapeHtml(settings["Max Multi-Select Days"] || "5")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none" title="Maximum number of days a teacher can select at once.">
-                </div>
-              </div>
-              <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label class="block text-sm font-bold mb-1">Urgency Cutoff Time (24h format)</label>
-                  <input type="number" id="settingsUrgencyCutoff" min="0" max="23" value="${escapeHtml(settings["Urgency Cutoff Time"] || "15")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none" title="Hour of the day after which next-day absences become urgent. (e.g. 15 = 3 PM)">
-                </div>
-              <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label class="block text-sm font-bold mb-1">Term ID</label>
-                  <input type="number" id="settingsTermId" value="${escapeHtml(settings["Term ID"] || "3503")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none">
-                </div>
-                <div>
-                  <label class="block text-sm font-bold mb-1">Data Fetch Window (Days)</label>
-                  <input type="number" id="settingsFetchWindow" min="1" value="${escapeHtml(settings["Data Fetch Window (Days)"] || "30")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none" title="Number of past days to load data for. Defaults to 30.">
-                </div>
-              </div>
-              <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label class="block text-sm font-bold mb-1">PowerSchool API URL</label>
-                  <input type="text" id="settingsPsUrl" value="${escapeHtml(settings.PS_URL || "")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none">
-                </div>
-              </div>
-              <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label class="block text-sm font-bold mb-1">PowerSchool Client ID</label>
-                  <input type="text" id="settingsPsClientId" value="${escapeHtml(settings.PS_CLIENT_ID || "")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none">
-                </div>
-                <div>
-                  <label class="block text-sm font-bold mb-1">PowerSchool Client Secret</label>
-                  <input type="text" id="settingsPsClientSecret" value="${escapeHtml(settings.PS_CLIENT_SECRET || "")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none">
-                </div>
+              <div class="border bg-gray-50 rounded-lg p-5 mb-8">
+                  <h4 class="text-md font-bold text-[#002147] mb-4">Email Configurations</h4>
+                  <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                    <div>
+                      <label class="block text-sm font-bold mb-1">Email Mode</label>
+                      <select id="settingsEmailMode" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none bg-white">
+                        <option value="Live" ${settings["Email Mode"] === "Live" ? "selected" : ""}>Live (Normal Operation)</option>
+                        <option value="Redirect" ${settings["Email Mode"] === "Redirect" ? "selected" : ""}>Redirect (Beta Testing)</option>
+                        <option value="Off" ${settings["Email Mode"] === "Off" ? "selected" : ""}>Off (No Emails)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label class="block text-sm font-bold mb-1">Redirect Email Address</label>
+                      <input type="email" id="settingsRedirectEmail" value="${escapeHtml(settings["Redirect Email"] || "")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none bg-white">
+                    </div>
+                    <div>
+                      <label class="block text-sm font-bold mb-1">Email Sender Name</label>
+                      <input type="text" id="settingsEmailSenderName" value="${escapeHtml(settings["Email Sender Name"] || "Cathedral Sub App")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none bg-white">
+                    </div>
+                  </div>
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label class="block text-sm font-bold mb-1">Reply To Email</label>
+                      <input type="email" id="settingsReplyToEmail" value="${escapeHtml(settings["Reply To Email"] || "")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none bg-white" placeholder="Default: account running the script">
+                    </div>
+                  </div>
               </div>
 
-              <div class="mt-6 border-t pt-4">
-                 <div class="flex justify-between items-center mb-2">
-                    <label class="block text-sm font-bold">Absence Reasons</label>
+              <div class="border bg-gray-50 rounded-lg p-5 mb-8">
+                  <h4 class="text-md font-bold text-[#002147] mb-4">Application Settings</h4>
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div>
+                      <label class="block text-sm font-bold mb-1">App URL</label>
+                      <input type="text" id="settingsAppUrl" value="${escapeHtml(settings["App URL"] || "")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none bg-white">
+                    </div>
+                    <div>
+                      <label class="block text-sm font-bold mb-1">Max Multi-Select Days</label>
+                      <input type="number" id="settingsMaxMultiDays" min="1" max="14" value="${escapeHtml(settings["Max Multi-Select Days"] || "5")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none bg-white" title="Maximum number of days a teacher can select at once.">
+                    </div>
+                  </div>
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div>
+                      <label class="block text-sm font-bold mb-1">Urgency Cutoff Time (24h format)</label>
+                      <input type="number" id="settingsUrgencyCutoff" min="0" max="23" value="${escapeHtml(settings["Urgency Cutoff Time"] || "15")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none bg-white" title="Hour of the day after which next-day absences become urgent. (e.g. 15 = 3 PM)">
+                    </div>
+                    <div>
+                      <label class="block text-sm font-bold mb-1">Data Fetch Window (Days)</label>
+                      <input type="number" id="settingsFetchWindow" min="1" value="${escapeHtml(settings["Data Fetch Window (Days)"] || "30")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none bg-white" title="Number of past days to load data for. Defaults to 30.">
+                    </div>
+                  </div>
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label class="block text-sm font-bold mb-1">Term ID</label>
+                      <input type="number" id="settingsTermId" value="${escapeHtml(settings["Term ID"] || "3503")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none bg-white">
+                    </div>
+                  </div>
+              </div>
+
+              <div class="border bg-gray-50 rounded-lg p-5 mb-8">
+                  <h4 class="text-md font-bold text-[#002147] mb-4">PowerSchool API Integration</h4>
+                  <div class="grid grid-cols-1 gap-4 mb-4">
+                    <div>
+                      <label class="block text-sm font-bold mb-1">PowerSchool API URL</label>
+                      <input type="text" id="settingsPsUrl" value="${escapeHtml(settings.PS_URL || "")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none bg-white">
+                    </div>
+                  </div>
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label class="block text-sm font-bold mb-1">PowerSchool Client ID</label>
+                      <input type="text" id="settingsPsClientId" value="${escapeHtml(settings.PS_CLIENT_ID || "")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none bg-white">
+                    </div>
+                    <div>
+                      <label class="block text-sm font-bold mb-1">PowerSchool Client Secret</label>
+                      <input type="text" id="settingsPsClientSecret" value="${escapeHtml(settings.PS_CLIENT_SECRET || "")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none bg-white">
+                    </div>
+                  </div>
+              </div>
+
+              <div class="border bg-gray-50 rounded-lg p-5 mb-8">
+                 <div class="flex justify-between items-center mb-4">
+                    <h4 class="text-md font-bold text-[#002147]">Absence Reasons</h4>
                     <button onclick="addAbsenceReasonRow()" class="bg-gray-200 hover:bg-gray-300 text-gray-800 text-xs font-bold py-1 px-3 rounded transition-colors">Add Reason</button>
                  </div>
                  <div id="absenceReasonsContainer" class="space-y-2 max-h-60 overflow-y-auto pr-2">
                  </div>
               </div>
 
-              <div class="mt-6 flex justify-between items-center">
-                <div class="flex gap-2">
-                  <button id="clearCacheBtn" onclick="clearMasterScheduleCacheClient()" class="bg-red-100 hover:bg-red-200 text-red-700 font-bold py-2 px-4 rounded-lg transition-colors shadow-sm text-sm border border-red-200">
-                    Clear Master Schedule Cache
-                  </button>
-                  <button id="refreshCacheBtn" onclick="refreshMasterScheduleCacheClient()" class="bg-blue-100 hover:bg-blue-200 text-blue-700 font-bold py-2 px-4 rounded-lg transition-colors shadow-sm text-sm border border-blue-200">
-                    Refresh Master Schedule Cache
-                  </button>
-                </div>
-                <button id="saveSettingsBtn" onclick="saveSettings()" class="bg-[#002147] hover:bg-blue-900 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-md">
-                  Save General Settings
-                </button>
+              <div class="border bg-gray-50 rounded-lg p-5 mb-8">
+                  <h4 class="text-md font-bold text-[#002147] mb-4">System Actions</h4>
+                  <div class="flex flex-col sm:flex-row justify-between items-center gap-4">
+                    <div class="flex gap-2 w-full sm:w-auto">
+                      <button id="clearCacheBtn" onclick="clearMasterScheduleCacheClient()" class="w-full sm:w-auto bg-red-100 hover:bg-red-200 text-red-700 font-bold py-2 px-4 rounded-lg transition-colors shadow-sm text-sm border border-red-200">
+                        Clear Master Schedule Cache
+                      </button>
+                      <button id="refreshCacheBtn" onclick="refreshMasterScheduleCacheClient()" class="w-full sm:w-auto bg-blue-100 hover:bg-blue-200 text-blue-700 font-bold py-2 px-4 rounded-lg transition-colors shadow-sm text-sm border border-blue-200">
+                        Refresh Master Schedule Cache
+                      </button>
+                    </div>
+                    <button id="saveSettingsBtn" onclick="saveSettings()" class="w-full sm:w-auto bg-[#002147] hover:bg-blue-900 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-md">
+                      Save General Settings
+                    </button>
+                  </div>
               </div>
             `;
             container.innerHTML = html;
