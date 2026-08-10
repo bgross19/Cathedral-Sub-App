@@ -366,7 +366,9 @@ function enqueueEmail(to, subject, body, options) {
     try {
       var rosterData = getRosterDataCached(ss);
       var targetEmail = String(to).toLowerCase().trim();
+
       for (var i = 1; i < rosterData.length; i++) {
+
         if (String(rosterData[i][1]).toLowerCase().trim() === targetEmail) {
           recipientName = String(rosterData[i][0]).trim();
           break;
@@ -2315,15 +2317,23 @@ function getInitialPayload() {
       if (emailIdx > -1 && periodIdx > -1) {
         for (var s = 1; s < scheduleData.length; s++) {
           if (String(scheduleData[s][emailIdx]).toLowerCase().trim() === targetEmail) {
-            var p = parseInt(scheduleData[s][periodIdx], 10);
-            if (!isNaN(p) && p >= 1 && p <= 8 && teacherSchedule.indexOf(p) === -1) {
-              teacherSchedule.push(p);
+            var pVal = String(scheduleData[s][periodIdx]).trim();
+            var joinP = getScheduleJoinPeriod(pVal);
+            if (joinP && teacherSchedule.indexOf(joinP) === -1) {
+              teacherSchedule.push(joinP);
             }
           }
         }
       }
     }
-    teacherSchedule.sort(function(a, b) { return a - b; });
+    teacherSchedule.sort(function(a, b) {
+      var numA = parseInt(a, 10);
+      var numB = parseInt(b, 10);
+      if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+      if (a < b) return -1;
+      if (a > b) return 1;
+      return 0;
+    });
 
     var appUrl = settings["App URL"] || DEFAULT_APP_URL;
     var urgencyCutoffTime = settings["Urgency Cutoff Time"] || "15";
@@ -2522,6 +2532,39 @@ function getInitialPayload() {
       var staffList = [];
       var allSubAvail = getAllSubstituteAvailability();
 
+      // Pre-calculate all staff schedules
+      var allSchedules = {};
+      if (scheduleData && scheduleData.length > 0) {
+        var headers = scheduleData[0];
+        var emailIdx = headers.indexOf("EMAIL_ADDR");
+        var periodIdx = headers.indexOf("PERIOD");
+        if (emailIdx > -1 && periodIdx > -1) {
+          for (var s = 1; s < scheduleData.length; s++) {
+            var sEmail = String(scheduleData[s][emailIdx]).toLowerCase().trim();
+            var pVal = String(scheduleData[s][periodIdx]).trim();
+            var joinP = getScheduleJoinPeriod(pVal);
+            if (joinP) {
+              if (!allSchedules[sEmail]) allSchedules[sEmail] = [];
+              if (allSchedules[sEmail].indexOf(joinP) === -1) {
+                allSchedules[sEmail].push(joinP);
+              }
+            }
+          }
+          for (var e in allSchedules) {
+            allSchedules[e].sort(function(a, b) {
+              var numA = parseInt(a, 10);
+              var numB = parseInt(b, 10);
+              if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+              if (a < b) return -1;
+              if (a > b) return 1;
+              return 0;
+            });
+          }
+        }
+      }
+
+
+
       for (var i = 1; i < rosterData.length; i++) {
         var staffName = String(rosterData[i][0]).trim();
         var staffEmail = String(rosterData[i][1]).toLowerCase().trim();
@@ -2537,7 +2580,8 @@ function getInitialPayload() {
              duty: duty,
              role: staffRole,
              email: staffEmail,
-             availability: allSubAvail[staffEmail] || {}
+             availability: allSubAvail[staffEmail] || {},
+             teacherSchedule: allSchedules[staffEmail] || []
           });
         }
       }

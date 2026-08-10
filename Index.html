@@ -34,6 +34,26 @@
 
       let userDateColors = {};
       let userTeacherSchedule = [];
+      // Return the schedule to use for pre-selection
+      function getActiveTeacherSchedule() {
+          const onBehalfSection = document.getElementById('onBehalfSection');
+          if (onBehalfSection && !onBehalfSection.classList.contains('hidden')) {
+              const onBehalfInput = document.getElementById('onBehalfTeacher');
+              if (onBehalfInput) {
+                  const selectedName = onBehalfInput.value.trim().toLowerCase();
+                  if (selectedName) {
+                      const teacher = staffList.find(s => s.name.toLowerCase() === selectedName);
+                      if (teacher && teacher.teacherSchedule) {
+                          return teacher.teacherSchedule;
+                      }
+                      return []; // If not found, return empty schedule
+                  } else {
+                      return []; // Empty input, return empty schedule
+                  }
+              }
+          }
+          return userTeacherSchedule;
+      }
 
       // === Mobile Navigation Menu ===
       function toggleMobileMenu() {
@@ -1851,7 +1871,7 @@
             
             <div id="onBehalfSection" class="hidden">
               <label class="block text-sm font-bold mb-1">Teacher</label>
-              <input type="text" id="onBehalfTeacher" list="allStaffDataList" placeholder="Select teacher..." class="w-full p-3 border rounded-xl focus:ring-2 focus:ring-[#00843D] outline-none">
+              <input type="text" id="onBehalfTeacher" list="allStaffDataList" placeholder="Select teacher..." oninput="handleOnBehalfTeacherChange()" onchange="handleOnBehalfTeacherChange()" class="w-full p-3 border rounded-xl focus:ring-2 focus:ring-[#00843D] outline-none">
               <datalist id="allStaffDataList"></datalist>
               <datalist id="dynamicStaffDataList"></datalist>
             </div>
@@ -2689,6 +2709,22 @@
           });
       }
 
+      function handleOnBehalfTeacherChange() {
+          if (window.absDatePicker && window.absDatePicker.selectedDates.length > 0) {
+              // It's multi-date or single date
+              if (window.absDatePicker.config.mode === 'multiple' && window.absDatePicker.selectedDates.length > 1) {
+                  handleAbsDateChangeMulti(window.absDatePicker.selectedDates);
+              } else {
+                  const dateStr = document.getElementById('absDate').value;
+                  const duration = document.getElementById('absDuration').value;
+                  updatePeriodsForSingleDate(dateStr, duration);
+              }
+          } else {
+              const dateStr = document.getElementById('absDate').value;
+              const duration = document.getElementById('absDuration').value;
+              updatePeriodsForSingleDate(dateStr, duration);
+          }
+      }
       function updatePeriodsForSingleDate(dateStr, duration) {
           if (!dateStr) {
               document.getElementById("dayColorBadge").classList.add("hidden");
@@ -2721,9 +2757,13 @@
           }
 
           let finalPeriods = [];
-          if (userTeacherSchedule && userTeacherSchedule.length > 0) {
+          let scheduleToUse = getActiveTeacherSchedule();
+          if (scheduleToUse && scheduleToUse.length > 0) {
               activePeriods.forEach(ap => {
-                  if (userTeacherSchedule.includes(ap)) {
+                  // scheduleToUse may contain strings ('9' for 0, '10' for Advisory, or ints)
+                  // So we should convert everything to string to check properly, but activePeriods
+                  // contains ints from the color logic (e.g. [1,2,3,4]).
+                  if (scheduleToUse.includes(ap) || scheduleToUse.includes(String(ap))) {
                       finalPeriods.push(String(ap));
                   }
               });
@@ -2763,9 +2803,13 @@
           }
 
           let finalPeriods = [];
-          if (userTeacherSchedule && userTeacherSchedule.length > 0) {
+          let scheduleToUse = getActiveTeacherSchedule();
+          if (scheduleToUse && scheduleToUse.length > 0) {
               activePeriods.forEach(ap => {
-                  if (userTeacherSchedule.includes(ap)) {
+                  // scheduleToUse may contain strings ('9' for 0, '10' for Advisory, or ints)
+                  // So we should convert everything to string to check properly, but activePeriods
+                  // contains ints from the color logic (e.g. [1,2,3,4]).
+                  if (scheduleToUse.includes(ap) || scheduleToUse.includes(String(ap))) {
                       finalPeriods.push(String(ap));
                   }
               });
