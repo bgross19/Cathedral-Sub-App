@@ -1045,6 +1045,9 @@
                      <button onclick="copyHRData()" class="bg-white hover:bg-gray-100 text-[#002147] text-sm font-bold py-1.5 px-4 rounded border border-[#002147] transition-colors shadow-sm flex items-center gap-2">
                          <span>📋</span> Copy this data
                      </button>
+                     <button id="btnApprovePayPeriod" onclick="handleApprovePayPeriod()" class="bg-[#00843D] hover:bg-green-700 text-white text-sm font-bold py-1.5 px-4 rounded border border-[#00843D] transition-colors shadow-sm flex items-center gap-2 hidden disabled:opacity-50 disabled:cursor-not-allowed">
+                         <span>✅</span> Approve Pay Period
+                     </button>
                   </div>
                </div>
             </div>
@@ -1965,9 +1968,9 @@
     <script>
 
 
-      function exportToCSV(filename, tableId) {
+      function generateCSVString(tableId) {
         const table = document.getElementById(tableId);
-        if (!table) return;
+        if (!table) return '';
 
         let csv = '';
 
@@ -5152,7 +5155,9 @@
                  const isSelected = (idx === mostRecentCompletedIndex) ? "selected" : "";
                  if (isSelected) selectedIdx = idx;
 
-                 html += `<option value="${idx}" ${isSelected}>Pay Period ${escapeHtml(pp.periodNumber)} (${escapeHtml(displayStart)} - ${escapeHtml(displayEnd)})</option>`;
+                 const approvalCheck = pp.approved ? " ✅" : "";
+
+                 html += `<option value="${idx}" ${isSelected}>Pay Period ${escapeHtml(pp.periodNumber)} (${escapeHtml(displayStart)} - ${escapeHtml(displayEnd)})${approvalCheck}</option>`;
               });
               
               ppSelect.innerHTML = html;
@@ -5226,6 +5231,80 @@
          }
          applyHRFilters();
       }
+
+      function checkPayPeriodApprovalState() {
+          const btn = document.getElementById('btnApprovePayPeriod');
+          const ppSelect = document.getElementById('hrPayPeriodSelect');
+          if (!btn || !ppSelect) return;
+
+          // Only show button if user has Sub Coordinator or HR role (determined by having HR Dashboard access)
+          if (!currentUserPermissions["HR Dashboard"]) {
+              btn.classList.add('hidden');
+              return;
+          }
+          btn.classList.remove('hidden');
+
+          const val = ppSelect.value;
+          if (val === "custom") {
+              btn.disabled = true;
+              btn.title = "Cannot approve a custom date range";
+              btn.innerHTML = `<span>❌</span> Custom Range`;
+          } else if (hrPayPeriods[val]) {
+              const isApproved = hrPayPeriods[val].approved === true || hrPayPeriods[val].approved === 'TRUE' || String(hrPayPeriods[val].approved).toLowerCase() === 'true';
+              if (isApproved) {
+                  btn.disabled = true;
+                  btn.title = "This pay period is already approved";
+                  btn.innerHTML = `<span>✅</span> Approved`;
+              } else {
+                  btn.disabled = false;
+                  btn.title = "Click to approve this pay period";
+                  btn.innerHTML = `<span>✅</span> Approve Pay Period`;
+              }
+          }
+      }
+
+      function handleApprovePayPeriod() {
+          const ppSelect = document.getElementById('hrPayPeriodSelect');
+          const val = ppSelect.value;
+          if (val === "custom" || !hrPayPeriods[val]) return;
+
+          const selectedPP = hrPayPeriods[val];
+
+          showConfirm(`Are you sure you want to approve Pay Period ${selectedPP.periodNumber} (${selectedPP.startDate} to ${selectedPP.endDate})? This will email the current CSV data to HR and Sub Coordinators.`, () => {
+              const btn = document.getElementById('btnApprovePayPeriod');
+              btn.disabled = true;
+              btn.innerHTML = `<span>⏳</span> Approving...`;
+
+              const csvString = generateCSVString('hrDashboardTable');
+              const rangeString = `${selectedPP.startDate} to ${selectedPP.endDate}`;
+
+              google.script.run
+                  .withSuccessHandler(res => {
+                      if (res.success) {
+                          showToast(`Pay Period ${selectedPP.periodNumber} approved successfully!`, "success");
+                          // Update local state
+                          hrPayPeriods[val].approved = true;
+
+                          // Update dropdown option text
+                          const option = ppSelect.options[ppSelect.selectedIndex];
+                          if (!option.text.includes("✅")) {
+                              option.text = option.text + " ✅";
+                          }
+
+                          checkPayPeriodApprovalState();
+                      } else {
+                          showToast("Failed to approve pay period: " + res.error, "error");
+                          checkPayPeriodApprovalState(); // reset button state
+                      }
+                  })
+                  .withFailureHandler(err => {
+                      showToast("Connection Error: " + err.message, "error");
+                      checkPayPeriodApprovalState(); // reset button state
+                  })
+                  .approvePayPeriod(selectedPP.periodNumber, rangeString, csvString);
+          });
+      }
+
 
       function applyHRFilters() {
         const startDateStr = document.getElementById('hrFilterStartDate').value;
