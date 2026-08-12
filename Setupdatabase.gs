@@ -81,7 +81,7 @@ function setupDatabase() {
   if (!payPeriodsSheet) {
     payPeriodsSheet = ss.insertSheet("PayPeriods");
   }
-  var payPeriodsHeaders = ["Period Number", "Start Date", "End Date"];
+  var payPeriodsHeaders = ["Period Number", "Start Date", "End Date", "Approved"];
   payPeriodsSheet.getRange(1, 1, 1, payPeriodsHeaders.length).setValues([payPeriodsHeaders]);
   payPeriodsSheet.getRange(1, 1, 1, payPeriodsHeaders.length).setFontWeight("bold");
 }

@@ -2738,11 +2738,13 @@ function getInitialPayload() {
             (function(){ try { return Utilities.formatDate(new Date(startDateRaw), Session.getScriptTimeZone(), "yyyy-MM-dd"); } catch(e) { console.error("Error formatting date: " + e.message); return String(startDateRaw); } })();
           var endFormatted = endDateRaw instanceof Date ? Utilities.formatDate(endDateRaw, Session.getScriptTimeZone(), "yyyy-MM-dd") :
             (function(){ try { return Utilities.formatDate(new Date(endDateRaw), Session.getScriptTimeZone(), "yyyy-MM-dd"); } catch(e) { console.error("Error formatting date: " + e.message); return String(endDateRaw); } })();
+          var approved = String(payPeriodsData[p][3] || "").toLowerCase().trim() === "true";
 
           payPeriods.push({
             periodNumber: periodNum,
             startDate: startFormatted,
-            endDate: endFormatted
+            endDate: endFormatted,
+            approved: approved
           });
         }
       }
@@ -3019,6 +3021,75 @@ function getAuditLogs(startDateStr, endDateStr) {
 }
 
 
+function approvePayPeriod(periodNumber, rangeString, csvString) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+  } catch (e) {
+    notifyAdminOfError("approvePayPeriod_lock", e);
+    return { success: false, error: "The server is currently busy. Please try again." };
+  }
+
+  try {
+    var ss = getSS();
+    var user = getUserData(ss);
+    assertPermission(user, "HR Dashboard");
+
+    var payPeriodsSheet = getSheetOrThrow(ss, "PayPeriods");
+    var payPeriodsData = payPeriodsSheet.getDataRange().getValues();
+    var rowIndex = -1;
+
+    for (var i = 1; i < payPeriodsData.length; i++) {
+      if (String(payPeriodsData[i][0]).trim() === String(periodNumber).trim()) {
+        rowIndex = i + 1; // 1-based index
+        break;
+      }
+    }
+
+    if (rowIndex === -1) {
+      return { success: false, error: "Pay period not found." };
+    }
+
+    // Set approved to true in the 4th column
+    payPeriodsSheet.getRange(rowIndex, 4).setValue(true);
+
+    // Get emails
+    var hrEmails = getEmailsByRole(ss, "hr");
+    var subCoordinatorEmails = getEmailsByRole(ss, "sub coordinator");
+
+    if (hrEmails.length === 0 && subCoordinatorEmails.length === 0) {
+       return { success: true, message: "Pay period approved, but no HR or Sub Coordinator emails found to notify." };
+    }
+
+    var subject = "Pay Period " + periodNumber + " with the date range approved";
+    var body = user.name + " has approved the payroll for the subs for Pay Period " + periodNumber + " (" + rangeString + "). Please reach out with any questions.";
+
+    var blob = Utilities.newBlob(csvString, MimeType.CSV, "Pay_Period_" + periodNumber + ".csv");
+
+    var options = {
+       attachments: [blob]
+    };
+
+    if (subCoordinatorEmails.length > 0) {
+       options.cc = subCoordinatorEmails.join(",");
+    }
+
+    // Ensure there is at least one "To" recipient. If HR is empty, use sub coordinator as fallback if possible.
+    var toEmail = hrEmails.length > 0 ? hrEmails.join(",") : subCoordinatorEmails.join(",");
+
+    sendEmailHelper(toEmail, subject, body, options);
+
+    logAuditAction("PAY_PERIOD_APPROVED", "Period " + periodNumber, user.name + " approved pay period " + periodNumber);
+
+    return { success: true };
+  } catch (err) {
+    notifyAdminOfError("approvePayPeriod", err);
+    return { success: false, error: err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 function bulkUpsertPayPeriods(updates) {
   var lock = LockService.getScriptLock();
   try {
@@ -3040,12 +3111,12 @@ function bulkUpsertPayPeriods(updates) {
     var newRows = [];
     for (var i = 0; i < updates.length; i++) {
        var u = updates[i];
-       newRows.push([u.period, u.start, u.end]);
+       newRows.push([u.period, u.start, u.end, "FALSE"]); // Default approved to FALSE
     }
 
     if (newRows.length > 0) {
        var startRow = sheet.getLastRow() + 1;
-       sheet.getRange(startRow, 1, newRows.length, 3).setValues(newRows);
+       sheet.getRange(startRow, 1, newRows.length, 4).setValues(newRows);
     }
 
     logAuditAction("PAY_PERIODS_BULK_UPLOAD", "Multiple", "Added " + newRows.length + " pay periods");
@@ -3084,7 +3155,7 @@ function deleteAllPayPeriods() {
     var lastRow = sheet.getLastRow();
 
     if (lastRow > 1) {
-       sheet.getRange(2, 1, lastRow - 1, 3).clearContent();
+       sheet.getRange(2, 1, lastRow - 1, 4).clearContent();
     }
 
     logAuditAction("PAY_PERIODS_DELETE_ALL", "All", "Deleted all pay periods");
@@ -3116,11 +3187,13 @@ function loadPayPeriodsSettings() {
             var periodNum = String(row[0]).trim();
             var startFormatted = row[1] instanceof Date ? Utilities.formatDate(row[1], Session.getScriptTimeZone(), "yyyy-MM-dd") : String(row[1]);
             var endFormatted = row[2] instanceof Date ? Utilities.formatDate(row[2], Session.getScriptTimeZone(), "yyyy-MM-dd") : String(row[2]);
+            var approved = String(row[3] || "").toLowerCase().trim() === "true";
 
             payPeriods.push({
                 period: periodNum,
                 start: startFormatted,
-                end: endFormatted
+                end: endFormatted,
+                approved: approved
             });
         }
     }
