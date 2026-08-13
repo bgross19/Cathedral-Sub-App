@@ -5219,6 +5219,7 @@
                  ppSelect.value = "custom";
              }
          }
+         checkPayPeriodApprovalState();
          applyHRFilters();
       }
 
@@ -5229,6 +5230,7 @@
              document.getElementById('hrFilterStartDate').value = hrPayPeriods[val].startDate;
              document.getElementById('hrFilterEndDate').value = hrPayPeriods[val].endDate;
          }
+         checkPayPeriodApprovalState();
          applyHRFilters();
       }
 
