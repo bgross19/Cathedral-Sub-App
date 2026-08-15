@@ -1534,8 +1534,8 @@
                  const defaultMatrix = {
                     "admin": { "Admin Dashboard": true, "HR Dashboard": true, "Today at a Glance": true, "My Upcoming Sub Duties": true, "Today's Open Jobs": true, "My Past Absences": true, "Settings": true, "Add Request on Behalf": true },
                     "hr": { "Admin Dashboard": false, "HR Dashboard": true, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Open Jobs": false, "My Past Absences": true, "Settings": true, "Add Request on Behalf": true },
-                    "sub coordinator": { "Admin Dashboard": true, "HR Dashboard": false, "Today at a Glance": true, "My Upcoming Sub Duties": true, "Today's Open Jobs": true, "My Past Absences": true, "Settings": false, "Add Request on Behalf": true },
-                    "principal": { "Admin Dashboard": true, "HR Dashboard": true, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Open Jobs": false, "My Past Absences": true, "Settings": false, "Add Request on Behalf": true },
+                    "sub coordinator": { "Admin Dashboard": true, "HR Dashboard": false, "Today at a Glance": true, "My Upcoming Sub Duties": true, "Today's Open Jobs": true, "My Past Absences": true, "Settings": true, "Add Request on Behalf": true },
+                    "principal": { "Admin Dashboard": true, "HR Dashboard": true, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Open Jobs": false, "My Past Absences": true, "Settings": true, "Add Request on Behalf": true },
                     "teacher": { "Admin Dashboard": false, "HR Dashboard": false, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Open Jobs": true, "My Past Absences": true, "Settings": false, "Add Request on Behalf": false },
                     "substitute": { "Admin Dashboard": false, "HR Dashboard": false, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Open Jobs": false, "My Past Absences": false, "Settings": false, "Add Request on Behalf": false }
                  };
@@ -1562,7 +1562,13 @@
             }
           })
           .withFailureHandler(err => {
-            document.getElementById('generalSettingsContainer').innerHTML = `<p class="text-red-600 font-bold">Failed to load settings: ${escapeHtml(err.message)}</p>`;
+            const container = document.getElementById('generalSettingsContainer');
+            if (container) {
+                container.innerHTML = `<p class=\"text-red-600 font-bold\">Failed to load settings: ${escapeHtml(err.message)}</p>`;
+            }
+            if (err.message && err.message.toLowerCase().includes('unauthorized')) {
+                showToast(\"Unauthorized: You do not have permission to view Settings.\", \"error\");
+            }
           })
           .getSettingsForFrontend();
       }
@@ -3303,10 +3309,10 @@
           settingsView.classList.remove('hidden');
 
           // load Settings Data
-          if (userRole === 'admin') {
+          if (userRole !== 'teacher' && userRole !== 'substitute') {
              loadSettingsData();
           }
-          if (userRole === 'admin' || userRole === 'hr') {
+          if (userRole !== 'teacher' && userRole !== 'substitute') {
              if (typeof loadPayPeriodsSettings === 'function') {
                 loadPayPeriodsSettings();
              }
