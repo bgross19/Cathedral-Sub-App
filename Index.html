@@ -3126,6 +3126,9 @@
               }
 
               let suggestionText = staff.name;
+              if (staff.role === 'substitute') {
+                  suggestionText += " - s";
+              }
               if (staff.duty) {
                   suggestionText += " - " + staff.duty;
               }
