@@ -1580,10 +1580,10 @@
           .withFailureHandler(err => {
             const container = document.getElementById('generalSettingsContainer');
             if (container) {
-                container.innerHTML = `<p class=\"text-red-600 font-bold\">Failed to load settings: ${escapeHtml(err.message)}</p>`;
+                container.innerHTML = `<p class="text-red-600 font-bold">Failed to load settings: ${escapeHtml(err.message)}</p>`;
             }
             if (err.message && err.message.toLowerCase().includes('unauthorized')) {
-                showToast(\"Unauthorized: You do not have permission to view Settings.\", \"error\");
+                showToast("Unauthorized: You do not have permission to view Settings.", "error");
             }
           })
           .getSettingsForFrontend();
