@@ -601,6 +601,17 @@
             tbody.innerHTML = `<tr><td colspan="3" class="p-8 text-center text-red-600 font-bold">Failed to load pay periods: ${escapeHtml(err.message)}</td></tr>`;
           })
           .loadPayPeriodsSettings();
+
+        // Also set default date for Principal's Digest to next Friday
+        const today = new Date();
+        const nextFriday = new Date(today);
+        nextFriday.setDate(today.getDate() + (5 + 7 - today.getDay()) % 7);
+        if (today.getDay() === 5) {
+           nextFriday.setDate(today.getDate() + 7);
+        }
+        const offset = nextFriday.getTimezoneOffset() * 60000;
+        const localFriday = new Date(nextFriday - offset);
+        document.getElementById('principalsDigestDate').value = localFriday.toISOString().split('T')[0];
       }
 
       function renderPayPeriodsTable() {
@@ -1337,6 +1348,20 @@
            <button onclick="deleteAllPayPeriodsClient()" class="bg-red-100 hover:bg-red-200 text-red-700 font-bold py-1.5 px-4 rounded-lg transition-colors text-sm flex items-center gap-2 border border-red-200">
                <span>🗑️</span> Delete All Pay Periods
            </button>
+        </div>
+
+        <div class="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+           <h4 class="text-md font-bold text-[#002147] mb-2">Principal's Digest</h4>
+           <p class="text-sm text-gray-600 mb-4">Preview the automated weekly digest sent to principals.</p>
+           <div class="flex flex-col md:flex-row gap-4 items-end">
+               <div class="w-full md:w-auto">
+                 <label class="block text-sm font-bold mb-1">Target Date (e.g. Next Friday)</label>
+                 <input type="date" id="principalsDigestDate" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none text-sm">
+               </div>
+               <button onclick="previewPrincipalsDigest()" class="bg-[#002147] hover:bg-blue-900 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-md text-sm w-full md:w-auto">
+                  Preview Digest
+               </button>
+           </div>
         </div>
 
         <div class="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
@@ -5927,6 +5952,30 @@
       </div>
     </div>
 
+    <!-- Principals Digest Preview Modal -->
+    <div id="principalsDigestModal" class="modal transition-opacity duration-[250ms] ease-in-out opacity-0 pointer-events-none fixed w-full h-full top-0 left-0 flex items-center justify-center z-[250]" onclick="if(event.target === this) closePrincipalsDigestModal()">
+      <div class="modal-overlay absolute w-full h-full bg-gray-900 opacity-50" onclick="closePrincipalsDigestModal()"></div>
+      <div class="modal-container bg-white w-11/12 md:max-w-2xl mx-auto rounded-2xl shadow-2xl z-[260] overflow-y-auto max-h-[90vh]">
+        <div class="p-6">
+          <div class="flex justify-between items-center mb-4 border-b pb-2">
+            <p class="text-xl font-bold text-[#002147]">Principal's Digest Preview</p>
+            <div onclick="closePrincipalsDigestModal()" class="cursor-pointer z-50 p-2 hover:bg-gray-100 rounded-full">
+              <svg class="fill-current text-black" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 18 18"><path d="M14.53 4.53l-1.06-1.06L9 7.94 4.53 3.47 3.47 4.53 7.94 9l-4.47 4.47 1.06 1.06L9 10.06l4.47 4.47 1.06-1.06L10.06 9z"></path></svg>
+            </div>
+          </div>
+          <div class="mt-4">
+             <div id="principalsDigestContent" class="bg-gray-50 border border-gray-200 p-4 rounded-lg overflow-x-auto text-sm">
+                <!-- HTML injected here -->
+             </div>
+             <div class="flex justify-end gap-3 mt-6">
+                <button onclick="closePrincipalsDigestModal()" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold rounded-lg transition-colors">Close</button>
+                <button onclick="copyPrincipalsDigest()" class="px-4 py-2 bg-[#00843D] hover:bg-green-700 text-white font-bold rounded-lg transition-colors flex items-center gap-2"><span>📋</span> Copy to Clipboard</button>
+             </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Custom Confirm Modal -->
     <div id="customConfirmModal" class="modal transition-opacity duration-[250ms] ease-in-out opacity-0 pointer-events-none fixed w-full h-full top-0 left-0 flex items-center justify-center z-[250]" onclick="if(event.target === this) closeCustomConfirm()">
       <div class="modal-overlay absolute w-full h-full bg-gray-900 opacity-50" onclick="closeCustomConfirm()"></div>
@@ -5951,6 +6000,49 @@
     <script>
       let currentConfirmCallback = null;
       let originalConfirmModalData = null; // Stash existing state if we open over another modal
+
+      function previewPrincipalsDigest() {
+          const dateStr = document.getElementById('principalsDigestDate').value;
+          const btn = document.querySelector('button[onclick="previewPrincipalsDigest()"]');
+          const originalText = btn.innerHTML;
+          btn.innerHTML = `<span class="inline-block animate-spin mr-2">↻</span> Loading...`;
+          btn.disabled = true;
+
+          google.script.run
+              .withSuccessHandler(function(html) {
+                  document.getElementById('principalsDigestContent').innerHTML = html;
+                  document.getElementById('principalsDigestModal').classList.remove('opacity-0', 'pointer-events-none');
+                  btn.innerHTML = originalText;
+                  btn.disabled = false;
+              })
+              .withFailureHandler(function(err) {
+                  showToast("Failed to generate preview: " + err.message, "error");
+                  btn.innerHTML = originalText;
+                  btn.disabled = false;
+              })
+              .generatePrincipalsDigestPreview(dateStr);
+      }
+
+      function closePrincipalsDigestModal() {
+          document.getElementById('principalsDigestModal').classList.add('opacity-0', 'pointer-events-none');
+      }
+
+      function copyPrincipalsDigest() {
+          const content = document.getElementById('principalsDigestContent');
+
+          try {
+              const selection = window.getSelection();
+              const range = document.createRange();
+              range.selectNodeContents(content);
+              selection.removeAllRanges();
+              selection.addRange(range);
+              document.execCommand('copy');
+              selection.removeAllRanges();
+              showToast("Digest copied to clipboard!", "success");
+          } catch (err) {
+              showToast("Failed to copy text. Please select and copy manually.", "error");
+          }
+      }
 
       function showConfirm(message, callback) {
         document.getElementById('confirmModalMessage').innerText = message;
