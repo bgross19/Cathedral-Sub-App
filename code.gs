@@ -3326,12 +3326,12 @@ function generatePrincipalsDigestHTML(dateObj) {
 
   // Resolve target dates
   var refDate = dateObj ? new Date(dateObj) : new Date();
-
+  
   // Calculate Monday to Friday of the CURRENT week (assuming refDate is Friday)
   var currentWeekMonday = new Date(refDate);
   currentWeekMonday.setDate(refDate.getDate() - (refDate.getDay() === 0 ? 6 : refDate.getDay() - 1));
   currentWeekMonday.setHours(0, 0, 0, 0);
-
+  
   var currentWeekFriday = new Date(currentWeekMonday);
   currentWeekFriday.setDate(currentWeekMonday.getDate() + 4);
   currentWeekFriday.setHours(23, 59, 59, 999);
@@ -3381,11 +3381,14 @@ function generatePrincipalsDigestHTML(dateObj) {
   for (var i = 1; i < absenceData.length; i++) {
     var row = absenceData[i];
     var status = String(row[19] || "").trim();
-    if (status !== "Approved") continue; // Only approved requests
+    if (status.toLowerCase() !== "approved") continue; // Only approved requests
 
-    var dateStr = String(row[3]).trim();
-    var dateObjRow = new Date(dateStr);
-    if (isNaN(dateObjRow.getTime())) continue;
+    var dateVal = row[3];
+    var dateObjRow = new Date(dateVal);
+    if (isNaN(dateObjRow.getTime())) {
+      dateObjRow = new Date(String(dateVal).trim());
+      if (isNaN(dateObjRow.getTime())) continue;
+    }
 
     var teacherEmail = String(row[2]).toLowerCase().trim();
     var teacherName = nameLookup[teacherEmail] || teacherEmail;
@@ -3423,7 +3426,7 @@ function generatePrincipalsDigestHTML(dateObj) {
           if (assignedSubRaw && String(assignedSubRaw).trim() !== "") {
             // Trim suffix if exists (e.g. 'Name - Duty')
             var assignedSub = String(assignedSubRaw).trim().replace(/\s+-\s+.*$/, "");
-
+            
             // Check if sub is dedicated substitute or teacher. Calculate pay only for teachers (not role substitute).
             // (Assuming teachers are handled with hrRates based on day color. We need to know if the person is a sub or teacher)
             var subEmailLookup = "";
@@ -3433,7 +3436,7 @@ function generatePrincipalsDigestHTML(dateObj) {
                     break;
                 }
             }
-
+            
             var isSubstituteRole = false;
             var isDuty = String(assignedSubRaw).toLowerCase().includes("- duty");
 
@@ -3538,7 +3541,7 @@ function sendPrincipalsDigest(dateObj) {
   var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
   var rosterData = rosterSheet.getDataRange().getValues();
   var principals = [];
-
+  
   for (var i = 1; i < rosterData.length; i++) {
     var email = String(rosterData[i][1]).toLowerCase().trim();
     var roles = String(rosterData[i][2]).toLowerCase();
@@ -3546,12 +3549,12 @@ function sendPrincipalsDigest(dateObj) {
       if (principals.indexOf(email) === -1) principals.push(email);
     }
   }
-
+  
   if (principals.length === 0) {
     console.log("No principals found in Staff Roster to send digest to.");
     return;
   }
-
+  
   var settings = getSettings();
   var options = { htmlBody: htmlBody };
   if (settings["Email Sender Name"]) {
