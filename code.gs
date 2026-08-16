@@ -3381,11 +3381,14 @@ function generatePrincipalsDigestHTML(dateObj) {
   for (var i = 1; i < absenceData.length; i++) {
     var row = absenceData[i];
     var status = String(row[19] || "").trim();
-    if (status !== "Approved") continue; // Only approved requests
+    if (status.toLowerCase() !== "approved") continue; // Only approved requests
 
-    var dateStr = String(row[3]).trim();
-    var dateObjRow = new Date(dateStr);
-    if (isNaN(dateObjRow.getTime())) continue;
+    var dateVal = row[3];
+    var dateObjRow = new Date(dateVal);
+    if (isNaN(dateObjRow.getTime())) {
+      dateObjRow = new Date(String(dateVal).trim());
+      if (isNaN(dateObjRow.getTime())) continue;
+    }
 
     var teacherEmail = String(row[2]).toLowerCase().trim();
     var teacherName = nameLookup[teacherEmail] || teacherEmail;
