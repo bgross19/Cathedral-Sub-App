@@ -3366,9 +3366,12 @@ function generatePrincipalsDigestHTML(dateObj) {
   var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
   var rosterData = rosterSheet.getDataRange().getValues();
   var nameLookup = {};
+  var dutyLookup = {};
   for (var i = 1; i < rosterData.length; i++) {
     var e = String(rosterData[i][1]).toLowerCase().trim();
-    if (e) nameLookup[e] = String(rosterData[i][0]).trim();
+    var name = String(rosterData[i][0]).trim();
+    if (e) nameLookup[e] = name;
+    dutyLookup[name] = String(rosterData[i][3] || "").trim();
   }
 
   var absenceSheet = getSheetOrThrow(ss, "Absence Requests");
@@ -3438,7 +3441,9 @@ function generatePrincipalsDigestHTML(dateObj) {
             }
             
             var isSubstituteRole = false;
-            var isDuty = String(assignedSubRaw).toLowerCase().includes("- duty");
+            var teacherDuty = dutyLookup[assignedSub];
+            var teacherDutyArr = teacherDuty ? String(teacherDuty).split(',').map(function(d){return d.trim();}) : [];
+            var isDuty = teacherDutyArr.includes(String(p));
 
             if (subEmailLookup) {
                 for (var r = 1; r < rosterData.length; r++) {
