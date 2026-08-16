@@ -3381,7 +3381,7 @@ function generatePrincipalsDigestHTML(dateObj) {
   for (var i = 1; i < absenceData.length; i++) {
     var row = absenceData[i];
     var status = String(row[19] || "").trim();
-    if (status.toLowerCase() !== "approved") continue; // Only approved requests
+    if (status.toLowerCase() !== "active") continue; // Only active requests
 
     var dateVal = row[3];
     var dateObjRow = new Date(dateVal);
