@@ -59,6 +59,12 @@ To enable the application to process and send automated email notifications in t
 2. Select the `setupEmailQueueTrigger` function.
 3. Click the **Run** button to create a time-driven trigger that processes the 'Email Queue' sheet every minute.
 
+### 6. Principal's Digest Trigger
+To enable the application to send automated weekly summaries to principals:
+1. Open `code.gs` in the editor.
+2. Select the `setupPrincipalsDigestTrigger` function.
+3. Click the **Run** button to create a time-driven trigger that runs every Friday around 12 PM.
+
 ## Architecture & Code Structure
 The application is structured into the following key files:
 *   **`Index.html`**: The frontend UI of the web application. It handles routing, rendering dashboards, modals, and user interactions using vanilla JavaScript and Tailwind CSS.

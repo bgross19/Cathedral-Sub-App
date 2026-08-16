@@ -561,6 +561,30 @@ function setupEmailQueueTrigger() {
 }
 
 /**
+ * Sets up a time-driven trigger to send the Principal's Digest email every Friday at 12 PM.
+ * Note: This function is meant to be run manually from the Apps Script editor
+ * exactly once during the initial setup of the application.
+ */
+function setupPrincipalsDigestTrigger() {
+  // First, remove any existing triggers for this function to avoid duplicates
+  var triggers = ScriptApp.getProjectTriggers();
+  for (var i = 0; i < triggers.length; i++) {
+    if (triggers[i].getHandlerFunction() === 'runPrincipalsDigestWeekly') {
+      ScriptApp.deleteTrigger(triggers[i]);
+    }
+  }
+
+  // Create a new trigger to run every Friday at 12 PM
+  ScriptApp.newTrigger('runPrincipalsDigestWeekly')
+    .timeBased()
+    .onWeekDay(ScriptApp.WeekDay.FRIDAY)
+    .atHour(12)
+    .create();
+
+  console.log("Principal's Digest trigger created successfully to run every Friday around 12 PM.");
+}
+
+/**
  * Helper to build a name lookup dictionary from Staff Roster data.
  */
 function buildNameLookup(rosterData) {
@@ -3294,4 +3318,258 @@ function _formatDateToYYYYMMDD(dateObj) {
   var dd = String(dateObj.getDate());
   if (dd.length < 2) dd = '0' + dd;
   return yyyy + '-' + mm + '-' + dd;
+}
+function generatePrincipalsDigestHTML(dateObj) {
+  var ss = getSS();
+  var settings = getSettings();
+  var appUrl = settings["App URL"] || DEFAULT_APP_URL;
+
+  // Resolve target dates
+  var refDate = dateObj ? new Date(dateObj) : new Date();
+
+  // Calculate Monday to Friday of the CURRENT week (assuming refDate is Friday)
+  var currentWeekMonday = new Date(refDate);
+  currentWeekMonday.setDate(refDate.getDate() - (refDate.getDay() === 0 ? 6 : refDate.getDay() - 1));
+  currentWeekMonday.setHours(0, 0, 0, 0);
+
+  var currentWeekFriday = new Date(currentWeekMonday);
+  currentWeekFriday.setDate(currentWeekMonday.getDate() + 4);
+  currentWeekFriday.setHours(23, 59, 59, 999);
+
+  // Calculate Monday to Friday of the NEXT week
+  var nextWeekMonday = new Date(currentWeekMonday);
+  nextWeekMonday.setDate(currentWeekMonday.getDate() + 7);
+  var nextWeekFriday = new Date(nextWeekMonday);
+  nextWeekFriday.setDate(nextWeekMonday.getDate() + 4);
+  nextWeekFriday.setHours(23, 59, 59, 999);
+
+  // Extract HR rates
+  var hrRates = {
+    green: parseFloat(settings["Green Day Pay Rate"] || "10"),
+    blueGold: parseFloat(settings["Blue/Gold Day Pay Rate"] || "20")
+  };
+
+  // Get data
+  var dateColors = {};
+  var datesSheet = ss.getSheetByName("Dates");
+  if (datesSheet) {
+    var datesRaw = datesSheet.getDataRange().getValues();
+    for (var i = 1; i < datesRaw.length; i++) {
+        var dStr = datesRaw[i][0];
+        if (dStr) {
+           var formatted = dStr instanceof Date ? Utilities.formatDate(dStr, Session.getScriptTimeZone(), "yyyy-MM-dd") : String(dStr).trim();
+           dateColors[formatted] = String(datesRaw[i][1]).trim();
+        }
+    }
+  }
+
+  var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
+  var rosterData = rosterSheet.getDataRange().getValues();
+  var nameLookup = {};
+  for (var i = 1; i < rosterData.length; i++) {
+    var e = String(rosterData[i][1]).toLowerCase().trim();
+    if (e) nameLookup[e] = String(rosterData[i][0]).trim();
+  }
+
+  var absenceSheet = getSheetOrThrow(ss, "Absence Requests");
+  var absenceData = absenceSheet.getDataRange().getValues();
+
+  var currentWeekAbsences = {};
+  var currentWeekCoverage = {};
+  var nextWeekAbsences = {};
+
+  for (var i = 1; i < absenceData.length; i++) {
+    var row = absenceData[i];
+    var status = String(row[19] || "").trim();
+    if (status !== "Approved") continue; // Only approved requests
+
+    var dateStr = String(row[3]).trim();
+    var dateObjRow = new Date(dateStr);
+    if (isNaN(dateObjRow.getTime())) continue;
+
+    var teacherEmail = String(row[2]).toLowerCase().trim();
+    var teacherName = nameLookup[teacherEmail] || teacherEmail;
+
+    var isCurrentWeek = dateObjRow >= currentWeekMonday && dateObjRow <= currentWeekFriday;
+    var isNextWeek = dateObjRow >= nextWeekMonday && dateObjRow <= nextWeekFriday;
+
+    if (!isCurrentWeek && !isNextWeek) continue;
+
+    var duration = String(row[6]).trim();
+    var periodsStr = String(row[4]).trim();
+    var periods = periodsStr ? periodsStr.split(',').map(function(p){return p.trim();}) : [];
+
+    var daysAbsent = 0;
+    if (duration.toLowerCase().includes("full")) daysAbsent = 1;
+    else if (duration.toLowerCase().includes("half")) daysAbsent = 0.5;
+
+    var targetAbsences = isCurrentWeek ? currentWeekAbsences : nextWeekAbsences;
+    if (!targetAbsences[teacherName]) {
+      targetAbsences[teacherName] = { days: 0, periods: 0 };
+    }
+    targetAbsences[teacherName].days += daysAbsent;
+    targetAbsences[teacherName].periods += periods.length;
+
+    if (isCurrentWeek) {
+      var dateFormatted = Utilities.formatDate(dateObjRow, Session.getScriptTimeZone(), "yyyy-MM-dd");
+      var dayColor = dateColors[dateFormatted] || "Green";
+
+      for (var j = 0; j < periods.length; j++) {
+        var p = periods[j];
+        if (!p) continue;
+        var subColIdx = getSubColumnIndex(p);
+        if (subColIdx > 0 && subColIdx <= row.length) {
+          var assignedSubRaw = row[subColIdx - 1];
+          if (assignedSubRaw && String(assignedSubRaw).trim() !== "") {
+            // Trim suffix if exists (e.g. 'Name - Duty')
+            var assignedSub = String(assignedSubRaw).trim().replace(/\s+-\s+.*$/, "");
+
+            // Check if sub is dedicated substitute or teacher. Calculate pay only for teachers (not role substitute).
+            // (Assuming teachers are handled with hrRates based on day color. We need to know if the person is a sub or teacher)
+            var subEmailLookup = "";
+            for (var r = 1; r < rosterData.length; r++) {
+                if (String(rosterData[r][0]).trim() === assignedSub) {
+                    subEmailLookup = String(rosterData[r][1]).toLowerCase().trim();
+                    break;
+                }
+            }
+
+            var isSubstituteRole = false;
+            var isDuty = String(assignedSubRaw).toLowerCase().includes("- duty");
+
+            if (subEmailLookup) {
+                for (var r = 1; r < rosterData.length; r++) {
+                    if (String(rosterData[r][1]).toLowerCase().trim() === subEmailLookup) {
+                         var roles = String(rosterData[r][2]).toLowerCase();
+                         if (roles.includes("substitute")) {
+                             isSubstituteRole = true;
+                         }
+                         break;
+                    }
+                }
+            }
+
+            if (!currentWeekCoverage[assignedSub]) {
+              currentWeekCoverage[assignedSub] = { periods: 0, pay: 0 };
+            }
+            currentWeekCoverage[assignedSub].periods += 1;
+
+            if (!isSubstituteRole) {
+               if (!isDuty) {
+                   if (dayColor.toLowerCase() === "blue" || dayColor.toLowerCase() === "gold") {
+                       currentWeekCoverage[assignedSub].pay += hrRates.blueGold;
+                   } else {
+                       currentWeekCoverage[assignedSub].pay += hrRates.green;
+                   }
+               }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Format HTML
+  var html = "<div style='font-family: sans-serif; color: #333;'>";
+  html += "<p>Hello Principals,</p>";
+  html += "<p>Here is your weekly digest of substitute coverage and absences.</p>";
+
+  // SECTION 1
+  html += "<h3 style='color: #002147; border-bottom: 1px solid #ccc; padding-bottom: 5px;'>Absences This Week (" + Utilities.formatDate(currentWeekMonday, Session.getScriptTimeZone(), "MMM d") + " - " + Utilities.formatDate(currentWeekFriday, Session.getScriptTimeZone(), "MMM d") + ")</h3>";
+  var sec1 = false;
+  html += "<ul>";
+  for (var name in currentWeekAbsences) {
+    if (currentWeekAbsences[name].days > 0 || currentWeekAbsences[name].periods > 0) {
+      sec1 = true;
+      var text = [];
+      if (currentWeekAbsences[name].days > 0) text.push(currentWeekAbsences[name].days + " days");
+      if (currentWeekAbsences[name].periods > 0) text.push(currentWeekAbsences[name].periods + " periods");
+      html += "<li><strong>" + name + "</strong>: " + text.join(" and ") + "</li>";
+    }
+  }
+  if (!sec1) html += "<li>No absences this week.</li>";
+  html += "</ul>";
+
+  // SECTION 2
+  html += "<h3 style='color: #002147; border-bottom: 1px solid #ccc; padding-bottom: 5px;'>Coverage This Week</h3>";
+  var sec2 = false;
+  html += "<ul>";
+  for (var name in currentWeekCoverage) {
+    if (currentWeekCoverage[name].periods > 0) {
+      sec2 = true;
+      var pText = currentWeekCoverage[name].periods + (currentWeekCoverage[name].periods === 1 ? " class" : " classes");
+      var payText = currentWeekCoverage[name].pay > 0 ? " ($" + currentWeekCoverage[name].pay.toFixed(2) + " extra pay)" : "";
+      html += "<li><strong>" + name + "</strong>: covered " + pText + payText + "</li>";
+    }
+  }
+  if (!sec2) html += "<li>No classes covered this week.</li>";
+  html += "</ul>";
+
+  // SECTION 3
+  html += "<h3 style='color: #002147; border-bottom: 1px solid #ccc; padding-bottom: 5px;'>Upcoming Absences Next Week (" + Utilities.formatDate(nextWeekMonday, Session.getScriptTimeZone(), "MMM d") + " - " + Utilities.formatDate(nextWeekFriday, Session.getScriptTimeZone(), "MMM d") + ")</h3>";
+  var sec3 = false;
+  html += "<ul>";
+  for (var name in nextWeekAbsences) {
+    if (nextWeekAbsences[name].days > 0 || nextWeekAbsences[name].periods > 0) {
+      sec3 = true;
+      var text = [];
+      if (nextWeekAbsences[name].days > 0) text.push(nextWeekAbsences[name].days + " days");
+      if (nextWeekAbsences[name].periods > 0) text.push(nextWeekAbsences[name].periods + " periods");
+      html += "<li><strong>" + name + "</strong>: " + text.join(" and ") + "</li>";
+    }
+  }
+  if (!sec3) html += "<li>No upcoming absences next week.</li>";
+  html += "</ul>";
+
+  html += "<p style='margin-top: 20px;'>For more information, go to the <a href='" + appUrl + "'>Cathedral Sub App</a>.</p>";
+  html += "<p>Best,<br>Cathedral Sub App</p>";
+  html += "</div>";
+
+  return html;
+}
+
+function runPrincipalsDigestWeekly() {
+  sendPrincipalsDigest(new Date());
+}
+
+function sendPrincipalsDigest(dateObj) {
+  var htmlBody = generatePrincipalsDigestHTML(dateObj);
+  var ss = getSS();
+  var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
+  var rosterData = rosterSheet.getDataRange().getValues();
+  var principals = [];
+
+  for (var i = 1; i < rosterData.length; i++) {
+    var email = String(rosterData[i][1]).toLowerCase().trim();
+    var roles = String(rosterData[i][2]).toLowerCase();
+    if (roles.includes("principal") && email) {
+      if (principals.indexOf(email) === -1) principals.push(email);
+    }
+  }
+
+  if (principals.length === 0) {
+    console.log("No principals found in Staff Roster to send digest to.");
+    return;
+  }
+
+  var settings = getSettings();
+  var options = { htmlBody: htmlBody };
+  if (settings["Email Sender Name"]) {
+      options.name = settings["Email Sender Name"];
+  }
+  if (settings["Reply To Email"]) {
+      options.replyTo = settings["Reply To Email"];
+  }
+
+  var subject = "Weekly Principal's Digest - " + Utilities.formatDate(dateObj ? new Date(dateObj) : new Date(), Session.getScriptTimeZone(), "MM/dd/yyyy");
+
+  for (var j = 0; j < principals.length; j++) {
+    sendEmailHelper(principals[j], subject, "", options, settings);
+  }
+  console.log("Sent Principal's Digest to " + principals.join(", "));
+}
+
+function generatePrincipalsDigestPreview(dateStr) {
+  var dateObj = dateStr ? new Date(dateStr) : new Date();
+  return generatePrincipalsDigestHTML(dateObj);
 }
