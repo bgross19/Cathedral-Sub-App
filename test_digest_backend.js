@@ -20,7 +20,7 @@ const mockSS = {
                     ["Name", "Email", "Role", "Duty"],
                     ["Principal Bob", "bob@school.edu", "Principal", ""],
                     ["Teacher Ann", "ann@school.edu", "Teacher", ""],
-                    ["Teacher Dan", "dan@school.edu", "Teacher", ""],
+                    ["Teacher Dan", "dan@school.edu", "Teacher", "2"],
                     ["Sub Sally", "sally@school.edu", "Substitute", ""]
                 ]
             })
@@ -30,9 +30,9 @@ const mockSS = {
                 getValues: () => [
                     // ID, Timestamp, Email, Date, Periods, Reason, Duration, Urgency, Instructions, P1, P2, P3, P4, P5, P6, P7, P8, P0, Adv, Status
                     ["Headers...", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
-                    ["1", "ts", "ann@school.edu", "2023-10-17", "1, 2", "Sick", "Half Day (AM)", "High", "", "Sub Sally", "Teacher Dan - Duty", "", "", "", "", "", "", "", "", "Approved"],
-                    ["2", "ts", "dan@school.edu", "2023-10-19", "3, 4", "Personal", "Full Day", "Low", "", "", "", "Teacher Ann", "Sub Sally", "", "", "", "", "", "", "Approved"],
-                    ["3", "ts", "ann@school.edu", "2023-10-25", "1, 2", "Sick", "Full Day", "High", "", "Sub Sally", "Teacher Dan", "", "", "", "", "", "", "", "", "Approved"] // Next week
+                    ["1", "ts", "ann@school.edu", "2023-10-17", "1, 2", "Sick", "Half Day (AM)", "High", "", "Sub Sally", "Teacher Dan - Duty", "", "", "", "", "", "", "", "", "Active"],
+                    ["2", "ts", "dan@school.edu", "2023-10-19", "3, 4", "Personal", "Full Day", "Low", "", "", "", "Teacher Ann", "Sub Sally", "", "", "", "", "", "", "Active"],
+                    ["3", "ts", "ann@school.edu", "2023-10-25", "1, 2", "Sick", "Full Day", "High", "", "Sub Sally", "Teacher Dan", "", "", "", "", "", "", "", "", "Active"] // Next week
                 ]
             })
         };
