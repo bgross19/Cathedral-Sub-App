@@ -2695,17 +2695,6 @@ const data = payload.userData;
               document.getElementById('subAvailabilitySection').classList.remove('hidden');
               renderSubAvailabilityDashboard();
             }
-          })
-          .withFailureHandler(err => {
-            console.error(err);
-            document.getElementById('userName').innerText = "Authentication Error";
-
-            // Also notify parts that failed to load
-            document.getElementById('myAbsences').innerHTML = `<div class="text-red-600 font-bold">Failed to load absences: ${escapeHtml(err.message)}</div>`;
-            document.getElementById('mySubDuties').innerHTML = `<div class="p-8 text-center text-red-600 font-bold">Failed to load sub-duties: ${escapeHtml(err.message)}</div>`;
-            document.getElementById('todaysOpenJobs').innerHTML = `<div class="text-red-600 font-bold">Failed to load open jobs: ${escapeHtml(err.message)}</div>`;
-          })
-          .getInitialPayload();
       }
 
       function renderStaffList(list) {
