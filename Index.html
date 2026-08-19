@@ -2497,7 +2497,7 @@
         let serverEmail = "<?= userEmail ?>".trim().toLowerCase();
         let storedEmail = localStorage.getItem('subAppEmail');
         
-        if (serverEmail && serverEmail !== "undefined" && serverEmail !== "" && !serverEmail.includes("<?=")) {
+        if (serverEmail && serverEmail !== "undefined" && serverEmail !== "" && !serverEmail.includes("<" + "?=")) {
              window.activeUserEmail = serverEmail;
              localStorage.setItem('subAppEmail', serverEmail);
         } else if (storedEmail) {
