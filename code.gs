@@ -2069,13 +2069,13 @@ function assignSubToPeriod(absenceId, period, subName, forceOverride) {
       }
 
       // Double check for race condition
-      if (existingSub !== "" && newSub !== "") {
+      if (existingSub !== "" && existingSub !== "No Sub Needed" && newSub !== "") {
         throw new Error("Sorry, this job was just filled by someone else!");
       }
 
       // Get role of the assigned person
       var newSubRole = "";
-      if (newSub !== "") {
+      if (newSub !== "" && newSub !== "No Sub Needed") {
         for (var r = 1; r < rosterData.length; r++) {
           if (String(rosterData[r][0]).trim() === newSub) {
             newSubRole = String(rosterData[r][2]).trim(); // Role is at index 2
@@ -2085,7 +2085,7 @@ function assignSubToPeriod(absenceId, period, subName, forceOverride) {
       }
 
       // Check if the new sub is available based on Dates and SubstituteAvailability or Master Schedule
-      if (newSub !== "" && !forceOverride) {
+      if (newSub !== "" && newSub !== "No Sub Needed" && !forceOverride) {
         var newSubEmail = (subEmailLookup[newSub] || "").toLowerCase();
         if (newSubEmail !== "") {
            var isSubstitute = newSubRole.indexOf("Substitute") !== -1;
@@ -2154,7 +2154,7 @@ function assignSubToPeriod(absenceId, period, subName, forceOverride) {
       }
 
       // Check if the new sub is absent for a full day on the same date
-      if (newSub !== "") {
+      if (newSub !== "" && newSub !== "No Sub Needed") {
         var targetDateRaw = data[i][3]; // Date object or string
         var targetDateStr = (targetDateRaw instanceof Date) ? Utilities.formatDate(targetDateRaw, Session.getScriptTimeZone(), "yyyy-MM-dd") : String(targetDateRaw).trim();
         var newSubEmail = (subEmailLookup[newSub] || "").toLowerCase();
@@ -2185,7 +2185,7 @@ function assignSubToPeriod(absenceId, period, subName, forceOverride) {
       }
 
       // Cancel existing sub if there is one (and we are clearing it)
-      if (existingSub) {
+      if (existingSub && existingSub !== "No Sub Needed") {
          var existingEmail = subEmailLookup[existingSub];
          if (existingEmail) {
             var scheduleLookup = null; // Deferred to email queue to save time
@@ -2199,7 +2199,7 @@ function assignSubToPeriod(absenceId, period, subName, forceOverride) {
       logAuditAction("SUB_ASSIGNED", absenceId, "Assigned " + (newSub || "NO ONE") + " to period " + period);
 
       // Notify new sub if there is one
-      if (newSub) {
+      if (newSub && newSub !== "No Sub Needed") {
          var newEmail = subEmailLookup[newSub];
          if (newEmail) {
             var scheduleLookup = null; // Deferred to email queue to save time

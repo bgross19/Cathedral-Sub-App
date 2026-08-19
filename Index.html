@@ -3066,12 +3066,12 @@
 
         let subName = input.value.trim();
 
-        if (subName) {
+        if (subName && subName !== "No Sub Needed") {
            subName = subName.replace(/\s+-\s+.*$/, '');
         }
 
         // Optional validation like in assignSubFromAdmin
-        if (subName && !staffList.some(s => s.name === subName)) {
+        if (subName && subName !== "No Sub Needed" && !staffList.some(s => s.name === subName)) {
             const isConfirmed = confirm('The name "' + subName + '" is not in the staff roster. Do you still want to assign them?');
             if (!isConfirmed) return;
         }
@@ -3182,6 +3182,8 @@
               optionsHtml += `<option value="${escapeHtml(suggestionText)}"></option>`;
           });
 
+          optionsHtml += `<option value="No Sub Needed"></option>`;
+
           datalist.innerHTML = optionsHtml;
       }
 
@@ -3216,6 +3218,9 @@
                   </div>
                   <div class="flex items-center gap-2 w-full sm:w-auto" onclick="event.stopPropagation()">
                     <input type="text" id="${escapeHtml(assignId)}" list="dynamicStaffDataList" onfocus="updateDynamicStaffList('${escapeJs(req.formDateString)}', '${escapeJs(req.period)}')" placeholder="Enter sub name..." class="flex-1 sm:w-48 p-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#00843D] bg-white">
+                    <button onclick="handleNoSubNeeded('${escapeJs(req.id)}', '${escapeJs(req.period)}', '${escapeJs(assignId)}')" class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-2 px-4 rounded-lg text-sm transition-colors shadow-sm whitespace-nowrap border border-gray-300">
+                      No Sub Needed
+                    </button>
                     <button onclick="handleAssign('${escapeJs(req.id)}', '${escapeJs(req.period)}', '${escapeJs(assignId)}')" class="bg-[#00843D] hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg text-sm transition-colors shadow-sm">
                       Assign
                     </button>
@@ -3981,6 +3986,7 @@
             }
 
             let assignIdMobile = `inline-assign-mobile-${req.id}-${req.period}`;
+            let subClassMobile = req.assignedSub === 'No Sub Needed' ? 'text-gray-500 bg-gray-100 italic' : (req.assignedSub ? 'text-green-700 font-bold' : 'text-gray-400 italic');
             let subHtmlMobile = `<input type="text" id="${escapeHtml(assignIdMobile)}" list="dynamicStaffDataList"
                                onfocus="updateDynamicStaffList('${escapeJs(req.formDateString || req.date)}', '${escapeJs(req.period)}')"
                                data-original-value="${escapeHtml(req.assignedSub) || ''}"
@@ -3988,9 +3994,10 @@
                                onblur="handleInlineAdminAssign('${escapeJs(req.id)}', '${escapeJs(req.period)}', '${escapeJs(assignIdMobile)}')"
                                onkeydown="if(event.key === 'Enter') { this.blur(); }"
                                placeholder="Unassigned"
-                               class="w-full sm:w-32 md:w-40 p-1 border border-transparent hover:border-gray-300 rounded text-sm outline-none focus:border-[#00843D] focus:ring-1 focus:ring-[#00843D] bg-transparent focus:bg-white transition-all ${req.assignedSub ? 'text-green-700 font-bold' : 'text-gray-400 italic'}">`;
+                               class="w-full sm:w-32 md:w-40 p-1 border border-transparent hover:border-gray-300 rounded text-sm outline-none focus:border-[#00843D] focus:ring-1 focus:ring-[#00843D] bg-transparent focus:bg-white transition-all ${subClassMobile}">`;
 
             let assignIdDesktop = `inline-assign-desktop-${req.id}-${req.period}`;
+            let subClassDesktop = req.assignedSub === 'No Sub Needed' ? 'text-gray-500 bg-gray-100 italic' : (req.assignedSub ? 'text-green-700 font-bold' : 'text-gray-400 italic');
             let subHtmlDesktop = `<input type="text" id="${escapeHtml(assignIdDesktop)}" list="dynamicStaffDataList"
                                onfocus="updateDynamicStaffList('${escapeJs(req.formDateString || req.date)}', '${escapeJs(req.period)}')"
                                data-original-value="${escapeHtml(req.assignedSub) || ''}"
@@ -3998,7 +4005,7 @@
                                onblur="handleInlineAdminAssign('${escapeJs(req.id)}', '${escapeJs(req.period)}', '${escapeJs(assignIdDesktop)}')"
                                onkeydown="if(event.key === 'Enter') { this.blur(); }"
                                placeholder="Unassigned"
-                               class="w-full sm:w-32 md:w-40 p-1 border border-transparent hover:border-gray-300 rounded text-sm outline-none focus:border-[#00843D] focus:ring-1 focus:ring-[#00843D] bg-transparent focus:bg-white transition-all ${req.assignedSub ? 'text-green-700 font-bold' : 'text-gray-400 italic'}">`;
+                               class="w-full sm:w-32 md:w-40 p-1 border border-transparent hover:border-gray-300 rounded text-sm outline-none focus:border-[#00843D] focus:ring-1 focus:ring-[#00843D] bg-transparent focus:bg-white transition-all ${subClassDesktop}">`;
 
             html += `
               <tr class="hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0 cursor-pointer" onclick="openDetailsModalForAdmin(${rawIdx})">
@@ -4139,7 +4146,10 @@
           <div class="mt-6 border-t pt-4">
              <p class="font-bold text-sm text-gray-700 mb-2">Assign/Edit Substitute</p>
              <div class="flex items-center gap-2">
-                <input type="text" id="${escapeHtml(assignId)}" list="dynamicStaffDataList" onfocus="updateDynamicStaffList('${escapeJs(req.formDateString || req.date)}', '${escapeJs(req.period)}')" value="${escapeHtml(req.assignedSub) || ''}" placeholder="Enter sub name..." class="flex-1 p-3 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#00843D] bg-white">
+                <input type="text" id="${escapeHtml(assignId)}" list="dynamicStaffDataList" onfocus="updateDynamicStaffList('${escapeJs(req.formDateString || req.date)}', '${escapeJs(req.period)}')" value="${escapeHtml(req.assignedSub) || ''}" placeholder="Enter sub name..." class="flex-1 p-3 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#00843D] bg-white ${req.assignedSub === 'No Sub Needed' ? 'text-gray-500 bg-gray-100' : ''}">
+                <button onclick="handleAdminNoSubNeeded('${escapeJs(req.id)}', '${escapeJs(req.period)}', '${escapeJs(assignId)}')" class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-3 px-4 rounded-lg transition-colors shadow-sm border border-gray-300 whitespace-nowrap">
+                  No Sub Needed
+                </button>
                 <button onclick="handleAdminAssign('${escapeJs(req.id)}', '${escapeJs(req.period)}', '${escapeJs(assignId)}')" class="bg-[#00843D] hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg transition-colors shadow-sm">
                   Save
                 </button>
@@ -4166,16 +4176,17 @@
         let subName = selectEl.value; // It can be empty to unassign!
 
         // Strip out duty suffix if present: "Name - Duty" -> "Name"
-        if (subName) {
+        if (subName && subName !== "No Sub Needed") {
            subName = subName.replace(/\s+-\s+.*$/, '');
         }
 
-        if (subName && !staffList.some(s => s.name === subName)) {
+        if (subName && subName !== "No Sub Needed" && !staffList.some(s => s.name === subName)) {
           showToast("Please enter a valid staff name from the list, or leave it blank to clear.", 'error');
           return;
         }
 
-        const btn = selectEl.nextElementSibling;
+        const parentDiv = selectEl.closest('div');
+        const btn = parentDiv.querySelector('button.bg-\\[\\#00843D\\]') || selectEl.nextElementSibling;
         const originalText = btn.innerText;
         btn.disabled = true;
         btn.innerText = "Saving...";
@@ -4251,7 +4262,7 @@
 
         let subName = inputEl.value;
 
-        if (subName) {
+        if (subName && subName !== "No Sub Needed") {
            subName = subName.replace(/\s+-\s+.*$/, '');
         }
 
@@ -4260,7 +4271,7 @@
            return;
         }
 
-        if (subName && !staffList.some(s => s.name === subName)) {
+        if (subName && subName !== "No Sub Needed" && !staffList.some(s => s.name === subName)) {
           showToast("Please enter a valid staff name from the list, or leave it blank to clear.", 'error');
           inputEl.value = originalValue;
           return;
@@ -4316,11 +4327,14 @@
                           inputEl.classList.remove('bg-[#f3f4f6]', 'opacity-70');
                           inputEl.disabled = false;
 
-                          if (subName) {
+                          if (subName === "No Sub Needed") {
+                             inputEl.classList.add('text-gray-500', 'bg-gray-100', 'italic');
+                             inputEl.classList.remove('text-green-700', 'font-bold', 'text-gray-400');
+                          } else if (subName) {
                              inputEl.classList.add('text-green-700', 'font-bold');
-                             inputEl.classList.remove('text-gray-400', 'italic');
+                             inputEl.classList.remove('text-gray-400', 'italic', 'text-gray-500', 'bg-gray-100');
                           } else {
-                             inputEl.classList.remove('text-green-700', 'font-bold');
+                             inputEl.classList.remove('text-green-700', 'font-bold', 'text-gray-500', 'bg-gray-100');
                              inputEl.classList.add('text-gray-400', 'italic');
                           }
                           updateLocalAdminData(absenceId, period, subName);
@@ -4393,6 +4407,9 @@
              <p class="font-bold text-sm text-gray-700 mb-2">Assign Substitute</p>
              <div class="flex items-center gap-2">
                 <input type="text" id="${escapeHtml(assignId)}" list="dynamicStaffDataList" onfocus="updateDynamicStaffList('${escapeJs(req.formDateString || req.date)}', '${escapeJs(req.period)}')" placeholder="Enter sub name..." class="flex-1 p-3 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#00843D] bg-white">
+                <button onclick="handleNoSubNeeded('${escapeJs(req.id)}', '${escapeJs(req.period)}', '${escapeJs(assignId)}', true)" class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-3 px-4 rounded-lg transition-colors shadow-sm border border-gray-300 whitespace-nowrap">
+                  No Sub Needed
+                </button>
                 <button onclick="handleAssign('${escapeJs(req.id)}', '${escapeJs(req.period)}', '${escapeJs(assignId)}', true)" class="bg-[#00843D] hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg transition-colors shadow-sm">
                   Assign
                 </button>
@@ -4425,21 +4442,38 @@
         body.classList.remove('overflow-hidden');
       }
 
+      function handleNoSubNeeded(absenceId, period, selectElementId, isFromModal = false) {
+        const selectEl = document.getElementById(selectElementId);
+        if (selectEl) {
+           selectEl.value = "No Sub Needed";
+        }
+        handleAssign(absenceId, period, selectElementId, isFromModal);
+      }
+
+      function handleAdminNoSubNeeded(absenceId, period, selectElementId) {
+        const selectEl = document.getElementById(selectElementId);
+        if (selectEl) {
+           selectEl.value = "No Sub Needed";
+        }
+        handleAdminAssign(absenceId, period, selectElementId);
+      }
+
       function handleAssign(absenceId, period, selectElementId, isFromModal = false) {
         const selectEl = document.getElementById(selectElementId);
         let subName = selectEl.value;
 
         // Strip out duty suffix if present: "Name - Duty" -> "Name"
-        if (subName) {
+        if (subName && subName !== "No Sub Needed") {
            subName = subName.replace(/\s+-\s+.*$/, '');
         }
 
-        if (subName && !staffList.some(s => s.name === subName)) {
+        if (subName && subName !== "No Sub Needed" && !staffList.some(s => s.name === subName)) {
           showToast("Please enter a valid staff name from the list, or leave it blank to clear.", 'error');
           return;
         }
 
-        const btn = selectEl.nextElementSibling;
+        const parentDiv = selectEl.closest('div');
+        const btn = parentDiv.querySelector('button.bg-\\[\\#00843D\\]') || selectEl.nextElementSibling;
         const originalText = btn.innerText;
         btn.disabled = true;
         btn.innerText = "Saving...";
