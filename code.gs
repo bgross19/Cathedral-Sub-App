@@ -1,4 +1,16 @@
 
+function getActiveUserEmail(clientEmail) {
+  if (clientEmail && typeof clientEmail === 'string' && clientEmail.indexOf('@') > 0) {
+    return clientEmail.trim().toLowerCase();
+  }
+  try {
+    return Session.getActiveUser().getEmail().toLowerCase();
+  } catch(e) {
+    return "";
+  }
+}
+
+
 /**
  * Helper to get the 1-based column index for a given period.
  * 0-based array index is one less.
@@ -39,7 +51,7 @@ function notifyAdminOfError(funcName, e) {
       var subject = "Critical App Error: " + funcName;
       var body = "An error occurred in the Cathedral Sub App.\n\n" +
                  "Function: " + funcName + "\n" +
-                 "User: " + Session.getActiveUser().getEmail() + "\n" +
+                 "User: " + getActiveUserEmail(typeof clientEmail !== 'undefined' ? clientEmail : undefined) + "\n" +
                  "Error Message: " + e.message;
 
       var options = { name: senderName };
@@ -158,7 +170,7 @@ function getSettings(ss) {
  * Serves the web app.
  */
 function doGet(e) {
-  var email = Session.getActiveUser().getEmail();
+  var email = getActiveUserEmail(typeof clientEmail !== 'undefined' ? clientEmail : undefined);
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var rosterSheet = ss.getSheetByName("Staff Roster");
 
@@ -174,12 +186,7 @@ function doGet(e) {
     }
   }
 
-  if (!isAuthorized) {
-    var errorHtmlOutput = HtmlService.createHtmlOutput('<div style="display:flex;justify-content:center;align-items:center;height:100vh;font-family:sans-serif;background-color:#f3f4f6;text-align:center;"><div style="background:white;padding:2rem;border-radius:8px;box-shadow:0 4px 6px rgba(0,0,0,0.1);"><h1 style="color:#e11d48;margin-top:0;">Access Denied</h1><p style="color:#4b5563;font-size:1.125rem;">Please Contact Technology@gocathedral.com</p></div></div>');
-    errorHtmlOutput.setTitle('Access Denied');
-    errorHtmlOutput.addMetaTag('viewport', 'width=device-width, initial-scale=1');
-    return errorHtmlOutput;
-  }
+  // Access Denied check moved to frontend to allow custom login
 
   var template = HtmlService.createTemplateFromFile('Index');
   template.userEmail = email;
@@ -193,7 +200,7 @@ function doGet(e) {
 
 /**
  * Asserts that a user has one of the allowed roles.
- * @param {Object} user - The user object returned by getUserData().
+ * @param {Object} user - The user object returned by getUserData(undefined, typeof clientEmail !== 'undefined' ? clientEmail : undefined).
  * @param {string|string[]} allowedRoles - A single role or an array of allowed roles.
  * @param {string} [customErrorMessage="Unauthorized"] - Optional custom error message.
  * @throws {Error} If the user's role is not in the allowed list.
@@ -256,8 +263,8 @@ function assertPermission(user, viewName, customErrorMessage) {
   }
 }
 
-function getUserData(ss) {
-  var email = Session.getActiveUser().getEmail();
+function getUserData(ss, clientEmail, clientEmail) {
+  var email = getActiveUserEmail(typeof clientEmail !== 'undefined' ? clientEmail : undefined);
   ss = ss || getSS();
   
   var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
@@ -631,10 +638,10 @@ function buildScheduleLookup(scheduleData) {
 /**
  * Fetches the staff roster for the Admin Settings dashboard.
  */
-function getStaffRosterForAdmin() {
+function getStaffRosterForAdmin(clientEmail, clientEmail) {
   try {
     var ss = getSS();
-    var user = getUserData(ss);
+    var user = getUserData(ss, typeof clientEmail !== 'undefined' ? clientEmail : undefined);
     assertPermission(user, "Settings");
 
     var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
@@ -712,7 +719,7 @@ function clearRosterCache() {
 /**
  * Updates a staff member's role inline from the admin settings dashboard.
  */
-function updateStaffRoleInlineAdmin(email, newRole) {
+function updateStaffRoleInlineAdmin(email, newRole, clientEmail, clientEmail) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
@@ -723,7 +730,7 @@ function updateStaffRoleInlineAdmin(email, newRole) {
 
   try {
     var ss = getSS();
-    var user = getUserData(ss);
+    var user = getUserData(ss, typeof clientEmail !== 'undefined' ? clientEmail : undefined);
     assertPermission(user, "Settings");
 
     var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
@@ -761,7 +768,7 @@ function updateStaffRoleInlineAdmin(email, newRole) {
 /**
  * Updates a staff member's duty inline from the admin settings dashboard.
  */
-function updateStaffDutyInlineAdmin(email, newDuty) {
+function updateStaffDutyInlineAdmin(email, newDuty, clientEmail, clientEmail) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
@@ -772,7 +779,7 @@ function updateStaffDutyInlineAdmin(email, newDuty) {
 
   try {
     var ss = getSS();
-    var user = getUserData(ss);
+    var user = getUserData(ss, typeof clientEmail !== 'undefined' ? clientEmail : undefined);
     assertPermission(user, "Settings");
 
     var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
@@ -810,7 +817,7 @@ function updateStaffDutyInlineAdmin(email, newDuty) {
 /**
  * Saves a staff member (creates or updates) for the Admin Settings dashboard.
  */
-function saveStaffMemberAdmin(staffData) {
+function saveStaffMemberAdmin(staffData, clientEmail, clientEmail) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
@@ -822,7 +829,7 @@ function saveStaffMemberAdmin(staffData) {
 
   try {
     var ss = getSS();
-    var user = getUserData(ss);
+    var user = getUserData(ss, typeof clientEmail !== 'undefined' ? clientEmail : undefined);
     assertPermission(user, "Settings");
 
     var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
@@ -883,7 +890,7 @@ function saveStaffMemberAdmin(staffData) {
 /**
  * Deletes a staff member from the roster.
  */
-function deleteStaffMemberAdmin(email) {
+function deleteStaffMemberAdmin(email, clientEmail, clientEmail) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
@@ -895,7 +902,7 @@ function deleteStaffMemberAdmin(email) {
 
   try {
     var ss = getSS();
-    var user = getUserData(ss);
+    var user = getUserData(ss, typeof clientEmail !== 'undefined' ? clientEmail : undefined);
     assertPermission(user, "Settings");
 
     var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
@@ -932,7 +939,7 @@ function deleteStaffMemberAdmin(email) {
 /**
  * Clears all duties from the Staff Roster.
  */
-function clearAllStaffDuties() {
+function clearAllStaffDuties(clientEmail, clientEmail) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
@@ -944,7 +951,7 @@ function clearAllStaffDuties() {
 
   try {
     var ss = getSS();
-    var user = getUserData(ss);
+    var user = getUserData(ss, typeof clientEmail !== 'undefined' ? clientEmail : undefined);
     assertPermission(user, "Settings");
 
     var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
@@ -972,7 +979,7 @@ function clearAllStaffDuties() {
 /**
  * Processes a bulk upload/update of staff roster records.
  */
-function bulkUpsertStaffRoster(updates) {
+function bulkUpsertStaffRoster(updates, clientEmail, clientEmail) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
@@ -984,7 +991,7 @@ function bulkUpsertStaffRoster(updates) {
 
   try {
     var ss = getSS();
-    var user = getUserData(ss);
+    var user = getUserData(ss, typeof clientEmail !== 'undefined' ? clientEmail : undefined);
     assertPermission(user, "Settings");
 
     var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
@@ -1066,10 +1073,10 @@ function bulkUpsertStaffRoster(updates) {
 }
 
 
-function refreshMasterScheduleCache() {
+function refreshMasterScheduleCache(clientEmail, clientEmail) {
   try {
     var ss = getSS();
-    var user = getUserData(ss);
+    var user = getUserData(ss, typeof clientEmail !== 'undefined' ? clientEmail : undefined);
     assertPermission(user, "Settings");
 
     // Warm it immediately
@@ -1097,10 +1104,10 @@ function refreshMasterScheduleCache() {
 /**
  * Fetches settings for the frontend.
  */
-function getSettingsForFrontend() {
+function getSettingsForFrontend(clientEmail, clientEmail) {
   try {
     var ss = getSS();
-    var user = getUserData(ss);
+    var user = getUserData(ss, typeof clientEmail !== 'undefined' ? clientEmail : undefined);
     assertPermission(user, "Settings");
     return getSettings();
   } catch (err) {
@@ -1111,10 +1118,10 @@ function getSettingsForFrontend() {
 /**
  * Updates settings in the Settings sheet.
  */
-function updateSettings(newSettings) {
+function updateSettings(newSettings, clientEmail, clientEmail) {
   try {
     var ss = getSS();
-    var user = getUserData(ss);
+    var user = getUserData(ss, typeof clientEmail !== 'undefined' ? clientEmail : undefined);
     assertPermission(user, "Settings");
 
     var settingsSheet = getSheetOrThrow(ss, "Settings");
@@ -1298,7 +1305,7 @@ function sendUrgentCoverageEmail(ss, teacherName, formData, instructions) {
   }
 }
 
-function submitMultipleAbsenceRequests(requestsToSubmit) {
+function submitMultipleAbsenceRequests(requestsToSubmit, clientEmail, clientEmail) {
   var results = [];
   var failedCount = 0;
   var lastError = "";
@@ -1322,7 +1329,7 @@ function submitMultipleAbsenceRequests(requestsToSubmit) {
   return { success: true, count: results.length };
 }
 
-function submitAbsence(formData) {
+function submitAbsence(formData, clientEmail, clientEmail) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
@@ -1337,8 +1344,8 @@ function submitAbsence(formData) {
     var mainSheet = getSheetOrThrow(ss, "Absence Requests");
     
     var timestamp = new Date();
-    var submitterEmail = Session.getActiveUser().getEmail();
-    var submitterData = getUserData(ss);
+    var submitterEmail = getActiveUserEmail(typeof clientEmail !== 'undefined' ? clientEmail : undefined);
+    var submitterData = getUserData(ss, typeof clientEmail !== 'undefined' ? clientEmail : undefined);
 
     var targetEmail = submitterEmail;
     var teacherName = submitterData.name;
@@ -1502,7 +1509,7 @@ function submitAbsence(formData) {
 /**
  * Cancels a single assigned sub duty by the sub themselves.
  */
-function cancelMySubDuty(absenceId, period) {
+function cancelMySubDuty(absenceId, period, clientEmail, clientEmail) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
@@ -1516,8 +1523,8 @@ function cancelMySubDuty(absenceId, period) {
     var ss = getSS();
     var sheet = getSheetOrThrow(ss, "Absence Requests");
 
-    var userEmail = Session.getActiveUser().getEmail().toLowerCase();
-    var userData = getUserData(ss);
+    var userEmail = getActiveUserEmail(typeof clientEmail !== 'undefined' ? clientEmail : undefined).toLowerCase();
+    var userData = getUserData(ss, typeof clientEmail !== 'undefined' ? clientEmail : undefined);
     var userName = String(userData.name).trim();
 
     var data = sheet.getDataRange().getValues();
@@ -1632,7 +1639,7 @@ function getAbsenceDetailsLocal(row, period, scheduleLookup, nameLookup) {
   };
 }
 
-function cancelAbsence(absenceId) {
+function cancelAbsence(absenceId, clientEmail, clientEmail) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
@@ -1667,11 +1674,11 @@ function cancelAbsence(absenceId) {
 
     if (targetIndex !== -1) {
       var i = targetIndex;
-      var currentUserEmail = Session.getActiveUser().getEmail().toLowerCase();
+      var currentUserEmail = getActiveUserEmail(typeof clientEmail !== 'undefined' ? clientEmail : undefined).toLowerCase();
       var teacherEmail = String(data[i][2]).toLowerCase();
 
       if (currentUserEmail !== teacherEmail) {
-        var user = getUserData(ss);
+        var user = getUserData(ss, typeof clientEmail !== 'undefined' ? clientEmail : undefined);
         assertPermission(user, "Admin Dashboard", "Unauthorized to cancel this absence.");
       }
 
@@ -1731,7 +1738,7 @@ function cancelAbsence(absenceId) {
 /**
  * Updates an absence request.
  */
-function updateAbsence(absenceId, formData) {
+function updateAbsence(absenceId, formData, clientEmail, clientEmail) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
@@ -1766,11 +1773,11 @@ function updateAbsence(absenceId, formData) {
 
     if (targetIndex !== -1) {
       var i = targetIndex;
-      var currentUserEmail = Session.getActiveUser().getEmail().toLowerCase();
+      var currentUserEmail = getActiveUserEmail(typeof clientEmail !== 'undefined' ? clientEmail : undefined).toLowerCase();
       var teacherEmail = String(data[i][2]).toLowerCase();
 
       if (currentUserEmail !== teacherEmail) {
-        var user = getUserData(ss);
+        var user = getUserData(ss, typeof clientEmail !== 'undefined' ? clientEmail : undefined);
         assertPermission(user, "Admin Dashboard", "Unauthorized to modify this absence.");
       }
 
@@ -1919,7 +1926,7 @@ function updateAbsence(absenceId, formData) {
 var _cachedNameLookup = null;
 var _cachedScheduleLookup = null;
 
-function getAbsenceDetails(absenceId, period, optionalData) {
+function getAbsenceDetails(absenceId, period, optionalData, clientEmail, clientEmail) {
   var ss = getSS();
   var data;
 
@@ -2016,7 +2023,7 @@ function sendSubNotification(subEmail, type, details) {
 /**
  * Assigns a substitute to a specific period for an absence request.
  */
-function assignSubToPeriod(absenceId, period, subName, forceOverride) {
+function assignSubToPeriod(absenceId, period, subName, forceOverride, clientEmail, clientEmail) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
@@ -2105,7 +2112,7 @@ function assignSubToPeriod(absenceId, period, subName, forceOverride) {
              // Fetch day color using cached payload optimization
              var dayColor = "Green"; // default
              try {
-               var payload = getInitialPayload();
+               var payload = getInitialPayload(typeof clientEmail !== 'undefined' ? clientEmail : undefined);
                if (payload.dateColors && payload.dateColors[targetDateStr]) {
                   dayColor = payload.dateColors[targetDateStr];
                }
@@ -2172,7 +2179,7 @@ function assignSubToPeriod(absenceId, period, subName, forceOverride) {
               var rowDateStr = (rowDateRaw instanceof Date) ? Utilities.formatDate(rowDateRaw, Session.getScriptTimeZone(), "yyyy-MM-dd") : String(rowDateRaw).trim();
 
               if (rowDateStr === targetDateStr) {
-                var currentUserEmail = (Session.getActiveUser().getEmail() || "").toLowerCase();
+                var currentUserEmail = (getActiveUserEmail(typeof clientEmail !== 'undefined' ? clientEmail : undefined) || "").toLowerCase();
                 if (currentUserEmail === newSubEmail) {
                   throw new Error("Cannot sign up due to your own absence.");
                 } else {
@@ -2270,10 +2277,10 @@ function hasPermission(role, view, rolePermissionsStr) {
   }
 }
 
-function getInitialPayload() {
+function getInitialPayload(clientEmail, clientEmail) {
   try {
     var ss = getSS();
-    var email = Session.getActiveUser().getEmail();
+    var email = getActiveUserEmail(typeof clientEmail !== 'undefined' ? clientEmail : undefined);
     var targetEmail = String(email).toLowerCase();
 
     // 1. Fetch all required sheets
@@ -2838,10 +2845,10 @@ function getInitialPayload() {
  * Clears the Master Schedule cache from the Script Cache.
  * Returns a success object.
  */
-function clearMasterScheduleCache() {
+function clearMasterScheduleCache(clientEmail, clientEmail) {
   try {
     var ss = getSS();
-    var user = getUserData(ss);
+    var user = getUserData(ss, typeof clientEmail !== 'undefined' ? clientEmail : undefined);
     assertPermission(user, "Settings");
 
     var sheet = ss.getSheetByName("Master Schedule Cache");
@@ -2867,9 +2874,9 @@ function clearMasterScheduleCache() {
  * @param {Array<string>} components - The components to fetch (e.g. ['myAbsences', 'quickCover'])
  * @returns {Object} The requested data.
  */
-function refreshData(components) {
+function refreshData(components, clientEmail, clientEmail) {
   try {
-    var payload = getInitialPayload();
+    var payload = getInitialPayload(typeof clientEmail !== 'undefined' ? clientEmail : undefined);
     var response = {};
     for (var i = 0; i < components.length; i++) {
         var comp = components[i];
@@ -2898,7 +2905,7 @@ function logAuditAction(actionType, targetId, details) {
     if (!auditSheet) return; // Fail silently if not set up
 
     var timestamp = new Date();
-    var actor = Session.getActiveUser().getEmail() || "Unknown";
+    var actor = getActiveUserEmail(typeof clientEmail !== 'undefined' ? clientEmail : undefined) || "Unknown";
 
     // Sanitize inputs for appendRow
     var safeActionType = String(actionType != null ? actionType : "");
@@ -2918,10 +2925,10 @@ function logAuditAction(actionType, targetId, details) {
 /**
  * Exports all absence requests as a JSON string to be converted to CSV on the frontend.
  */
-function exportAllAbsenceRequests() {
+function exportAllAbsenceRequests(clientEmail, clientEmail) {
   try {
     var ss = getSS();
-    var user = getUserData(ss);
+    var user = getUserData(ss, typeof clientEmail !== 'undefined' ? clientEmail : undefined);
     assertRole(user, "admin");
 
     var sheet = getSheetOrThrow(ss, "Absence Requests");
@@ -2937,7 +2944,7 @@ function exportAllAbsenceRequests() {
 /**
  * Archives absence requests before the given date cutoff.
  */
-function archiveAbsenceRequests(cutoffDateStr) {
+function archiveAbsenceRequests(cutoffDateStr, clientEmail, clientEmail) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
@@ -2949,7 +2956,7 @@ function archiveAbsenceRequests(cutoffDateStr) {
 
   try {
     var ss = getSS();
-    var user = getUserData(ss);
+    var user = getUserData(ss, typeof clientEmail !== 'undefined' ? clientEmail : undefined);
     assertRole(user, "admin");
 
     var mainSheet = getSheetOrThrow(ss, "Absence Requests");
@@ -3005,10 +3012,10 @@ function archiveAbsenceRequests(cutoffDateStr) {
   }
 }
 
-function getAuditLogs(startDateStr, endDateStr) {
+function getAuditLogs(startDateStr, endDateStr, clientEmail, clientEmail) {
   try {
     var ss = getSS();
-    var user = getUserData(ss);
+    var user = getUserData(ss, typeof clientEmail !== 'undefined' ? clientEmail : undefined);
     assertPermission(user, "Settings");
 
     var auditSheet = ss.getSheetByName("Audit Log");
@@ -3045,7 +3052,7 @@ function getAuditLogs(startDateStr, endDateStr) {
 }
 
 
-function approvePayPeriod(periodNumber, rangeString, csvString) {
+function approvePayPeriod(periodNumber, rangeString, csvString, clientEmail, clientEmail) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
@@ -3056,7 +3063,7 @@ function approvePayPeriod(periodNumber, rangeString, csvString) {
 
   try {
     var ss = getSS();
-    var user = getUserData(ss);
+    var user = getUserData(ss, typeof clientEmail !== 'undefined' ? clientEmail : undefined);
     assertPermission(user, "HR Dashboard");
 
     var payPeriodsSheet = getSheetOrThrow(ss, "PayPeriods");
@@ -3114,7 +3121,7 @@ function approvePayPeriod(periodNumber, rangeString, csvString) {
   }
 }
 
-function bulkUpsertPayPeriods(updates) {
+function bulkUpsertPayPeriods(updates, clientEmail, clientEmail) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
@@ -3126,7 +3133,7 @@ function bulkUpsertPayPeriods(updates) {
 
   try {
     var ss = getSS();
-    var user = getUserData(ss);
+    var user = getUserData(ss, typeof clientEmail !== 'undefined' ? clientEmail : undefined);
     assertPermission(user, "HR Dashboard");
 
     var sheet = getSheetOrThrow(ss, "PayPeriods");
@@ -3160,7 +3167,7 @@ function bulkUpsertPayPeriods(updates) {
   }
 }
 
-function deleteAllPayPeriods() {
+function deleteAllPayPeriods(clientEmail, clientEmail) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
@@ -3172,7 +3179,7 @@ function deleteAllPayPeriods() {
 
   try {
     var ss = getSS();
-    var user = getUserData(ss);
+    var user = getUserData(ss, typeof clientEmail !== 'undefined' ? clientEmail : undefined);
     assertPermission(user, "HR Dashboard");
 
     var sheet = getSheetOrThrow(ss, "PayPeriods");
@@ -3195,10 +3202,10 @@ function deleteAllPayPeriods() {
   }
 }
 
-function loadPayPeriodsSettings() {
+function loadPayPeriodsSettings(clientEmail, clientEmail) {
   try {
     var ss = getSS();
-    var user = getUserData(ss);
+    var user = getUserData(ss, typeof clientEmail !== 'undefined' ? clientEmail : undefined);
     assertPermission(user, "HR Dashboard");
 
     var sheet = getSheetOrThrow(ss, "PayPeriods");
@@ -3231,7 +3238,7 @@ function loadPayPeriodsSettings() {
  * Returns the current backend app version for frontend polling.
  * @returns {string} The APP_VERSION.
  */
-function getAppVersion() {
+function getAppVersion(clientEmail, clientEmail) {
   return APP_VERSION;
 }
 
@@ -3254,8 +3261,8 @@ function getSubstituteAvailability(email) {
   return availability;
 }
 
-function saveSubstituteAvailability(dateStr, status) {
-  var email = Session.getActiveUser().getEmail();
+function saveSubstituteAvailability(dateStr, status, clientEmail, clientEmail) {
+  var email = getActiveUserEmail(typeof clientEmail !== 'undefined' ? clientEmail : undefined);
   var targetEmail = String(email).toLowerCase();
   var ss = getSS();
   var subAvailSheet = ss.getSheetByName("SubstituteAvailability");

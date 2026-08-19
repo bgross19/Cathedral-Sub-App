@@ -7,7 +7,118 @@
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
+
+
+
       // === Globals ===
+      window.activeUserEmail = "";
+
+      function handleLogout() {
+          localStorage.removeItem('subAppEmail');
+          window.location.reload();
+      }
+
+      function handleCustomLogin(e) {
+          e.preventDefault();
+          const emailInput = document.getElementById('loginEmailInput').value.trim().toLowerCase();
+          if (!emailInput) return;
+
+          const btn = document.getElementById('loginBtn');
+          const originalText = btn.innerHTML;
+          btn.disabled = true;
+          btn.innerHTML = '<span class="inline-block animate-spin mr-2">↻</span> Authenticating...';
+
+          // Verify with backend
+          google.script.run
+              .withSuccessHandler(payload => {
+                  if (payload && payload.userData && payload.userData.name) {
+                      // Success
+                      localStorage.setItem('subAppEmail', emailInput);
+                      window.activeUserEmail = emailInput;
+                      document.getElementById('loginView').classList.add('hidden');
+                      finishInitApp(payload);
+                  }
+              })
+              .withFailureHandler(err => {
+                  alert("Access Denied: " + err.message);
+                  btn.disabled = false;
+                  btn.innerHTML = originalText;
+              })
+              .getInitialPayload(emailInput);
+      }
+
+      window.activeUserEmail = "";
+
+      function handleLogout() {
+          localStorage.removeItem('subAppEmail');
+          window.location.reload();
+      }
+
+      function handleCustomLogin(e) {
+          e.preventDefault();
+          const emailInput = document.getElementById('loginEmailInput').value.trim().toLowerCase();
+          if (!emailInput) return;
+
+          const btn = document.getElementById('loginBtn');
+          const originalText = btn.innerHTML;
+          btn.disabled = true;
+          btn.innerHTML = '<span class="inline-block animate-spin mr-2">↻</span> Authenticating...';
+
+          // Verify with backend
+          google.script.run
+              .withSuccessHandler(payload => {
+                  if (payload && payload.userData && payload.userData.name) {
+                      // Success
+                      localStorage.setItem('subAppEmail', emailInput);
+                      window.activeUserEmail = emailInput;
+                      document.getElementById('loginView').classList.add('hidden');
+                      finishInitApp(payload);
+                  }
+              })
+              .withFailureHandler(err => {
+                  alert("Access Denied: " + err.message);
+                  btn.disabled = false;
+                  btn.innerHTML = originalText;
+              })
+              .getInitialPayload(emailInput);
+      }
+
+      window.activeUserEmail = "";
+
+      function handleLogout() {
+          localStorage.removeItem('subAppEmail');
+          window.location.reload();
+      }
+
+      function handleCustomLogin(e) {
+          e.preventDefault();
+          const emailInput = document.getElementById('loginEmailInput').value.trim().toLowerCase();
+          if (!emailInput) return;
+
+          const btn = document.getElementById('loginBtn');
+          const originalText = btn.innerHTML;
+          btn.disabled = true;
+          btn.innerHTML = '<span class="inline-block animate-spin mr-2">↻</span> Authenticating...';
+
+          // Verify with backend
+          google.script.run
+              .withSuccessHandler(payload => {
+                  if (payload && payload.userData && payload.userData.name) {
+                      // Success
+                      localStorage.setItem('subAppEmail', emailInput);
+                      window.activeUserEmail = emailInput;
+                      document.getElementById('loginView').classList.add('hidden');
+                      finishInitApp(payload);
+                  }
+              })
+              .withFailureHandler(err => {
+                  alert("Access Denied: " + err.message);
+                  btn.disabled = false;
+                  btn.innerHTML = originalText;
+              })
+              .getInitialPayload(emailInput);
+      }
+
       function parseCsvLine(text, delimiter) {
          const result = [];
          let current = '';
@@ -128,7 +239,7 @@
           .withFailureHandler(err => {
             tbody.innerHTML = `<tr><td colspan="4" class="p-8 text-center text-red-600 font-bold">Failed to load roster: ${escapeHtml(err.message)}</td></tr>`;
           })
-          .getStaffRosterForAdmin();
+          .getStaffRosterForAdmin(window.activeUserEmail);
       }
 
       function renderStaffRosterTable() {
@@ -216,7 +327,7 @@
                   showToast("Connection Error: " + err.message, 'error');
                   loadStaffRosterSettings(); // revert
               })
-              .updateStaffRoleInlineAdmin(email, newRole);
+              .updateStaffRoleInlineAdmin(email, newRole, window.activeUserEmail, window.activeUserEmail, window.activeUserEmail);
       }
 
       function updateStaffDutyInline(email, newDuty) {
@@ -234,7 +345,7 @@
                   showToast("Connection Error: " + err.message, 'error');
                   loadStaffRosterSettings(); // revert
               })
-              .updateStaffDutyInlineAdmin(email, newDuty);
+              .updateStaffDutyInlineAdmin(email, newDuty, window.activeUserEmail, window.activeUserEmail, window.activeUserEmail);
       }
 
       function toggleDutyDropdown(dropdownId) {
@@ -362,7 +473,7 @@
              btn.innerText = originalText;
              showToast("Connection Error: " + err.message, 'error');
           })
-          .saveStaffMemberAdmin(staffData);
+          .saveStaffMemberAdmin(staffData, window.activeUserEmail, window.activeUserEmail, window.activeUserEmail);
       }
 
       function deleteStaffMember(email) {
@@ -378,7 +489,7 @@
           .withFailureHandler(err => {
              showToast("Connection Error: " + err.message, 'error');
           })
-          .deleteStaffMemberAdmin(email);
+          .deleteStaffMemberAdmin(email, window.activeUserEmail, window.activeUserEmail, window.activeUserEmail);
       });
       }
 
@@ -405,7 +516,7 @@
               btn.innerHTML = originalText;
               showToast("Error: " + err.message, "error");
             })
-            .clearAllStaffDuties();
+            .clearAllStaffDuties(window.activeUserEmail);
         });
       }
 
@@ -542,7 +653,7 @@
             .withFailureHandler(err => {
                showToast("Connection Error: " + err.message, 'error');
             })
-            .bulkUpsertStaffRoster(updates);
+            .bulkUpsertStaffRoster(updates, window.activeUserEmail, window.activeUserEmail, window.activeUserEmail);
          });
       }
 
@@ -576,7 +687,7 @@
              btn.innerText = originalText;
              showToast("Error: " + err.message, "error");
           })
-          .updateSettings(newSettings);
+          .updateSettings(newSettings, window.activeUserEmail, window.activeUserEmail, window.activeUserEmail);
       }
 
       function loadPayPeriodsSettings() {
@@ -588,7 +699,7 @@
                 document.getElementById('settingsBlueGoldDayRate').value = settings["Blue/Gold Day Pay Rate"] || "20";
              }
           })
-          .getSettingsForFrontend();
+          .getSettingsForFrontend(window.activeUserEmail);
 
         const tbody = document.getElementById('payPeriodsTableBody');
         tbody.innerHTML = '<tr><td colspan="3" class="p-8 text-center text-gray-400 italic">Loading pay periods...</td></tr>';
@@ -600,7 +711,7 @@
           .withFailureHandler(err => {
             tbody.innerHTML = `<tr><td colspan="3" class="p-8 text-center text-red-600 font-bold">Failed to load pay periods: ${escapeHtml(err.message)}</td></tr>`;
           })
-          .loadPayPeriodsSettings();
+          .loadPayPeriodsSettings(window.activeUserEmail);
 
         // Also set default date for Principal's Digest to next Friday
         const today = new Date();
@@ -648,7 +759,7 @@
             .withFailureHandler(err => {
                showToast("Connection Error: " + err.message, 'error');
             })
-            .deleteAllPayPeriods();
+            .deleteAllPayPeriods(window.activeUserEmail);
         });
       }
 
@@ -727,7 +838,7 @@
             .withFailureHandler(err => {
                showToast("Connection Error: " + err.message, 'error');
             })
-            .bulkUpsertPayPeriods(updates);
+            .bulkUpsertPayPeriods(updates, window.activeUserEmail, window.activeUserEmail, window.activeUserEmail);
          });
       }
 
@@ -806,6 +917,66 @@
 
   <body class="bg-gray-100 font-sans text-gray-800" onload="initApp()">
 
+
+    <!-- Custom Login Overlay -->
+    <div id="loginView" class="fixed inset-0 bg-gray-100 flex items-center justify-center z-[1000] hidden">
+       <div class="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full text-center">
+           <img src="https://resources.finalsite.net/images/f_auto,q_auto/v1553625096/cathedralirish/xl1l6hclrbcymjwwyuqi/CHS_CelticCross-large.jpg" alt="Logo" class="mx-auto h-20 w-20 mb-6 rounded-full shadow-sm object-cover">
+           <h2 class="text-2xl font-bold text-[#002147] mb-2">Welcome</h2>
+           <p class="text-gray-600 mb-6 text-sm">Please log in to the Cathedral Sub App using your staff email address.</p>
+
+           <form onsubmit="handleCustomLogin(event)" class="text-left space-y-4">
+               <div>
+                   <label class="block text-sm font-bold text-gray-700 mb-1">Email Address</label>
+                   <input type="email" id="loginEmailInput" required placeholder="e.g. jsmith@gocathedral.com" class="w-full p-3 border rounded-xl focus:ring-2 focus:ring-[#00843D] outline-none">
+               </div>
+               <button type="submit" id="loginBtn" class="w-full bg-[#002147] hover:bg-blue-900 text-white font-bold py-3 rounded-xl transition-all shadow-md">
+                   Login
+               </button>
+           </form>
+       </div>
+    </div>
+
+
+    <!-- Custom Login Overlay -->
+    <div id="loginView" class="fixed inset-0 bg-gray-100 flex items-center justify-center z-[1000] hidden">
+       <div class="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full text-center">
+           <img src="https://resources.finalsite.net/images/f_auto,q_auto/v1553625096/cathedralirish/xl1l6hclrbcymjwwyuqi/CHS_CelticCross-large.jpg" alt="Logo" class="mx-auto h-20 w-20 mb-6 rounded-full shadow-sm object-cover">
+           <h2 class="text-2xl font-bold text-[#002147] mb-2">Welcome</h2>
+           <p class="text-gray-600 mb-6 text-sm">Please log in to the Cathedral Sub App using your staff email address.</p>
+
+           <form onsubmit="handleCustomLogin(event)" class="text-left space-y-4">
+               <div>
+                   <label class="block text-sm font-bold text-gray-700 mb-1">Email Address</label>
+                   <input type="email" id="loginEmailInput" required placeholder="e.g. jsmith@gocathedral.com" class="w-full p-3 border rounded-xl focus:ring-2 focus:ring-[#00843D] outline-none">
+               </div>
+               <button type="submit" id="loginBtn" class="w-full bg-[#002147] hover:bg-blue-900 text-white font-bold py-3 rounded-xl transition-all shadow-md">
+                   Login
+               </button>
+           </form>
+       </div>
+    </div>
+
+
+    <!-- Custom Login Overlay -->
+    <div id="loginView" class="fixed inset-0 bg-gray-100 flex items-center justify-center z-[1000] hidden">
+       <div class="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full text-center">
+           <img src="https://resources.finalsite.net/images/f_auto,q_auto/v1553625096/cathedralirish/xl1l6hclrbcymjwwyuqi/CHS_CelticCross-large.jpg" alt="Logo" class="mx-auto h-20 w-20 mb-6 rounded-full shadow-sm object-cover">
+           <h2 class="text-2xl font-bold text-[#002147] mb-2">Welcome</h2>
+           <p class="text-gray-600 mb-6 text-sm">Please log in to the Cathedral Sub App using your staff email address.</p>
+
+           <form onsubmit="handleCustomLogin(event)" class="text-left space-y-4">
+               <div>
+                   <label class="block text-sm font-bold text-gray-700 mb-1">Email Address</label>
+                   <input type="email" id="loginEmailInput" required placeholder="e.g. jsmith@gocathedral.com" class="w-full p-3 border rounded-xl focus:ring-2 focus:ring-[#00843D] outline-none">
+               </div>
+               <button type="submit" id="loginBtn" class="w-full bg-[#002147] hover:bg-blue-900 text-white font-bold py-3 rounded-xl transition-all shadow-md">
+                   Login
+               </button>
+           </form>
+       </div>
+    </div>
+
     <nav class="bg-[#002147] text-white p-4 shadow-lg sticky top-0 z-50">
        <div class="w-full flex justify-between items-center relative">
            <div class="flex items-center gap-4 cursor-pointer hover:opacity-80 transition-opacity" onclick="if(window.globalAppUrl){ window.top.location.href = window.globalAppUrl; } else { window.top.location.href = '<?= ScriptApp.getService().getUrl() ?>'; }">
@@ -837,6 +1008,21 @@
                </button>
                <button id="navSettingsBtn" onclick="toggleSettingsDashboard(); closeMobileMenu();" class="hidden w-full lg:w-auto text-left lg:text-center bg-white/5 hover:bg-white/20 lg:bg-white/20 lg:hover:bg-white/30 text-white text-sm font-semibold py-3 px-4 lg:py-1.5 lg:rounded-full transition-colors flex items-center gap-2 border-b border-white/10 lg:border-none">
                    <span>⚙️</span> Settings
+               </button>
+
+
+               <button id="navLogoutBtn" onclick="handleLogout(); closeMobileMenu();" class="hidden w-full lg:w-auto text-left lg:text-center bg-white/5 hover:bg-white/20 lg:bg-white/20 lg:hover:bg-white/30 text-white text-sm font-semibold py-3 px-4 lg:py-1.5 lg:rounded-full transition-colors flex items-center gap-2 border-b border-white/10 lg:border-none">
+                   <span>🚪</span> Log Out
+               </button>
+
+
+               <button id="navLogoutBtn" onclick="handleLogout(); closeMobileMenu();" class="hidden w-full lg:w-auto text-left lg:text-center bg-white/5 hover:bg-white/20 lg:bg-white/20 lg:hover:bg-white/30 text-white text-sm font-semibold py-3 px-4 lg:py-1.5 lg:rounded-full transition-colors flex items-center gap-2 border-b border-white/10 lg:border-none">
+                   <span>🚪</span> Log Out
+               </button>
+
+
+               <button id="navLogoutBtn" onclick="handleLogout(); closeMobileMenu();" class="hidden w-full lg:w-auto text-left lg:text-center bg-white/5 hover:bg-white/20 lg:bg-white/20 lg:hover:bg-white/30 text-white text-sm font-semibold py-3 px-4 lg:py-1.5 lg:rounded-full transition-colors flex items-center gap-2 border-b border-white/10 lg:border-none">
+                   <span>🚪</span> Log Out
                </button>
 
                <div id="userInfo" class="text-sm opacity-90 p-4 lg:p-0 lg:text-right bg-white/5 lg:bg-transparent text-left w-full lg:w-auto lg:ml-2">
@@ -1611,7 +1797,7 @@
                 showToast("Unauthorized: You do not have permission to view Settings.", "error");
             }
           })
-          .getSettingsForFrontend();
+          .getSettingsForFrontend(window.activeUserEmail);
       }
 
       function renderAbsenceReasons() {
@@ -1709,7 +1895,7 @@
             btn.disabled = false;
             btn.innerText = originalText;
           })
-          .updateSettings(newSettings);
+          .updateSettings(newSettings, window.activeUserEmail, window.activeUserEmail, window.activeUserEmail);
       }
 
       function clearMasterScheduleCacheClient() {
@@ -1734,7 +1920,7 @@
              btn.disabled = false;
              btn.innerText = originalText;
           })
-          .clearMasterScheduleCache();
+          .clearMasterScheduleCache(window.activeUserEmail);
         });
       }
 
@@ -1759,7 +1945,7 @@
              btn.disabled = false;
              btn.innerText = originalText;
           })
-          .refreshMasterScheduleCache();
+          .refreshMasterScheduleCache(window.activeUserEmail);
       }
 
 
@@ -1821,7 +2007,7 @@
           .withFailureHandler(err => {
              showToast('Failed to save permissions: ' + err.message, 'error');
           })
-          .updateSettings(settingsToUpdate);
+          .updateSettings(settingsToUpdate, window.activeUserEmail, window.activeUserEmail, window.activeUserEmail);
       }
     </script>
 
@@ -2138,7 +2324,7 @@
              tbody.innerHTML = `<tr><td colspan="5" class="p-8 text-center text-red-600 font-bold">Failed to load logs: ${escapeHtml(err.message)}</td></tr>`;
              showToast("Connection Error: " + err.message, "error");
           })
-          .getAuditLogs(startDate, endDate);
+          .getAuditLogs(startDate, endDate, window.activeUserEmail, window.activeUserEmail, window.activeUserEmail);
       }
 
       // --- PUB-SUB EVENT EMITTER ---
@@ -2268,7 +2454,7 @@
               .withFailureHandler(err => {
                   console.error("Failed to check app version", err);
               })
-              .getAppVersion();
+              .getAppVersion(window.activeUserEmail);
       }
 
       function scheduleVersionCheck() {
@@ -2298,7 +2484,6 @@
             dateFormat: "Y-m-d",
             disable: [
                 function(date) {
-                    // Disable weekends: 0 is Sunday, 6 is Saturday
                     return (date.getDay() === 0 || date.getDay() === 6);
                 }
             ],
@@ -2309,13 +2494,47 @@
 
         scheduleVersionCheck();
 
+        let serverEmail = "<?= userEmail ?>".trim().toLowerCase();
+        let storedEmail = localStorage.getItem('subAppEmail');
+
+        if (serverEmail && serverEmail !== "undefined" && serverEmail !== "" && !serverEmail.includes("<?=")) {
+             window.activeUserEmail = serverEmail;
+             localStorage.setItem('subAppEmail', serverEmail);
+        } else if (storedEmail) {
+             window.activeUserEmail = storedEmail;
+        }
+
+        if (!window.activeUserEmail) {
+             // Show login
+             document.getElementById('loginView').classList.remove('hidden');
+             return;
+        }
+
+        // Show loading state if active user is loading
+        google.script.run
+          .withSuccessHandler(payload => {
+              finishInitApp(payload);
+          })
+          .withFailureHandler(err => {
+              console.error("Failed initial payload", err);
+              // If it fails with access denied, show login
+              if (err.message && err.message.includes("Access Denied")) {
+                  localStorage.removeItem('subAppEmail');
+                  document.getElementById('loginView').classList.remove('hidden');
+              } else {
+                  alert("Failed to load app data: " + err.message);
+              }
+          })
+          .getInitialPayload(window.activeUserEmail);
+}
+
+function finishInitApp(payload) {
         // Parse URL parameters for "Sign Me Up" links
         google.script.url.getLocation(function(location) {
            if (location.parameter && location.parameter.action === 'quickCover') {
                const absenceId = location.parameter.absenceId;
                const period = location.parameter.period;
                if (absenceId && period) {
-                   // Fetch details first to populate the confirmation prompt accurately
                    google.script.run
                      .withSuccessHandler(details => {
                          setTimeout(() => {
@@ -2330,28 +2549,17 @@
                              } else {
                                  handleSignMeUp(absenceId, period, dummyBtnId);
                              }
-                         }, 1500); // Wait briefly for UI and user name to load
+                         }, 1500);
                      })
                      .withFailureHandler(err => {
                          console.error("Failed to fetch absence details for Quick Cover:", err);
-                         // Fallback to basic if fetch fails
-                         setTimeout(() => {
-                             const dummyBtnId = 'dummy-btn-' + Date.now();
-                             const dummyBtn = document.createElement('button');
-                             dummyBtn.id = dummyBtnId;
-                             dummyBtn.classList.add("hidden");
-                             document.body.appendChild(dummyBtn);
-                             handleSignMeUp(absenceId, period, dummyBtnId);
-                         }, 1500);
                      })
-                     .getAbsenceDetails(absenceId, period);
+                     .getAbsenceDetails(absenceId, period, undefined, window.activeUserEmail);
                }
            }
         });
 
-        google.script.run
-          .withSuccessHandler(payload => {
-            const data = payload.userData;
+const data = payload.userData;
             currentAppVersion = data.appVersion;
             document.getElementById('userName').innerText = data.name;
             document.getElementById('userName').dataset.role = data.role;
@@ -2522,7 +2730,7 @@
       function loadStaffList() {
         google.script.run
           .withSuccessHandler(res => { if (res.staffList) renderStaffList(res.staffList); })
-          .refreshData(['staffList']);
+          .refreshData(['staffList'], window.activeUserEmail, window.activeUserEmail, window.activeUserEmail);
       }
 
 
@@ -2980,7 +3188,7 @@
           .withFailureHandler(err => {
             document.getElementById('todaysOpenJobs').innerHTML = `<div class="text-red-600 font-bold">Failed to load open jobs: ${escapeHtml(err.message)}</div>`;
           })
-          .refreshData(['todaysOpenJobs']);
+          .refreshData(['todaysOpenJobs'], window.activeUserEmail, window.activeUserEmail, window.activeUserEmail);
       }
 
       function handleSignMeUp(absenceId, period, btnId, teacherName, courseName) {
@@ -3053,7 +3261,7 @@
                        btn.disabled = false;
                        btn.innerText = originalText;
                     })
-                    .assignSubToPeriod(absenceId, period, subName, true);
+                    .assignSubToPeriod(absenceId, period, subName, true, window.activeUserEmail, window.activeUserEmail, window.activeUserEmail);
               }, () => {
                  btn.disabled = false;
                  btn.innerText = originalText;
@@ -3064,7 +3272,7 @@
               btn.innerText = originalText;
             }
           })
-          .assignSubToPeriod(absenceId, period, subName, false);
+          .assignSubToPeriod(absenceId, period, subName, false, window.activeUserEmail, window.activeUserEmail, window.activeUserEmail);
         });
       }
 
@@ -3126,7 +3334,7 @@
                        btn.disabled = false;
                        btn.innerText = originalText;
                     })
-                    .assignSubToPeriod(absenceId, period, subName, true);
+                    .assignSubToPeriod(absenceId, period, subName, true, window.activeUserEmail, window.activeUserEmail, window.activeUserEmail);
               }, () => {
                  btn.disabled = false;
                  btn.innerText = originalText;
@@ -3137,7 +3345,7 @@
               btn.innerText = originalText;
             }
           })
-          .assignSubToPeriod(absenceId, period, subName, false);
+          .assignSubToPeriod(absenceId, period, subName, false, window.activeUserEmail, window.activeUserEmail, window.activeUserEmail);
       }
 
       function updateDynamicStaffList(dateStr, period) {
@@ -3345,13 +3553,121 @@
         container.classList.add('p-4');
       }
 
+      function getNext5SchoolDays() {
+        const days = [];
+        let current = new Date();
+        current.setHours(12, 0, 0, 0); // Noon to avoid timezone issues
+
+        while (days.length < 5) {
+            const dayOfWeek = current.getDay();
+            if (dayOfWeek !== 0 && dayOfWeek !== 6) { // Skip Sunday (0) and Saturday (6)
+                const yyyy = current.getFullYear();
+                const mm = String(current.getMonth() + 1).padStart(2, '0');
+                const dd = String(current.getDate()).padStart(2, '0');
+                days.push({
+                    dateStr: `${yyyy}-${mm}-${dd}`,
+                    dateObj: new Date(current.getTime())
+                });
+            }
+            current.setDate(current.getDate() + 1);
+        }
+        return days;
+      }
+
+      function renderSubAvailabilityDashboard() {
+        const container = document.getElementById('subAvailabilityContainer');
+        if (!staffList || staffList.length === 0) {
+            container.innerHTML = '<div class="text-center text-gray-400 italic">No substitute data found.</div>';
+            return;
+        }
+
+        const next5Days = getNext5SchoolDays();
+
+        let html = '<div class="grid grid-cols-1 md:grid-cols-5 gap-4">';
+
+        next5Days.forEach(dayInfo => {
+            const dateStr = dayInfo.dateStr;
+            const dateObj = dayInfo.dateObj;
+
+            // Format date for display (e.g., "Mon, Oct 16")
+            const displayDate = dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+
+            // Get day color
+            const color = globalDateColors[dateStr] || "Unknown";
+            let colorPill = '';
+            if (color.toLowerCase() === 'green') {
+                colorPill = '<span class="ml-2 inline-block bg-green-100 text-green-800 text-[10px] font-bold px-2 py-0.5 rounded border border-green-200 uppercase tracking-wider">Green</span>';
+            } else if (color.toLowerCase() === 'blue') {
+                colorPill = '<span class="ml-2 inline-block bg-blue-100 text-blue-800 text-[10px] font-bold px-2 py-0.5 rounded border border-blue-200 uppercase tracking-wider">Blue</span>';
+            } else if (color.toLowerCase() === 'gold') {
+                colorPill = '<span class="ml-2 inline-block bg-yellow-100 text-yellow-800 text-[10px] font-bold px-2 py-0.5 rounded border border-yellow-200 uppercase tracking-wider">Gold</span>';
+            } else {
+                colorPill = `<span class="ml-2 inline-block bg-gray-100 text-gray-800 text-[10px] font-bold px-2 py-0.5 rounded border border-gray-200 uppercase tracking-wider">${escapeHtml(color)}</span>`;
+            }
+
+            // Find subs available on this day
+            const availableAllDay = [];
+            const availableAM = [];
+            const availablePM = [];
+
+            staffList.forEach(staff => {
+                if (staff.role && staff.role.toLowerCase().includes('substitute')) {
+                    const status = staff.availability && staff.availability[dateStr];
+                    if (status === 'Available') {
+                        availableAllDay.push(staff.name);
+                    } else if (status === 'AM Only') {
+                        availableAM.push(staff.name);
+                    } else if (status === 'PM Only') {
+                        availablePM.push(staff.name);
+                    }
+                }
+            });
+
+            // Build card for the day
+            html += `
+                <div class="bg-gray-50 border border-gray-200 rounded-lg p-3 flex flex-col h-full">
+                    <div class="flex items-center justify-between border-b border-gray-200 pb-2 mb-2">
+                        <h4 class="font-bold text-[#002147] text-sm">${escapeHtml(displayDate)}</h4>
+                        ${colorPill}
+                    </div>
+
+                    <div class="flex-grow space-y-3 overflow-y-auto max-h-[300px]">
+                        <div>
+                            <h5 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">All Day (${availableAllDay.length})</h5>
+                            ${availableAllDay.length > 0 ?
+                                '<ul class="text-sm text-green-700 font-medium list-disc list-inside">' + availableAllDay.map(name => `<li>${escapeHtml(name)}</li>`).join('') + '</ul>' :
+                                '<div class="text-xs text-gray-400 italic">None</div>'}
+                        </div>
+                        <div>
+                            <h5 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">AM Only (${availableAM.length})</h5>
+                            ${availableAM.length > 0 ?
+                                '<ul class="text-sm text-blue-700 font-medium list-disc list-inside">' + availableAM.map(name => `<li>${escapeHtml(name)}</li>`).join('') + '</ul>' :
+                                '<div class="text-xs text-gray-400 italic">None</div>'}
+                        </div>
+                        <div>
+                            <h5 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">PM Only (${availablePM.length})</h5>
+                            ${availablePM.length > 0 ?
+                                '<ul class="text-sm text-orange-700 font-medium list-disc list-inside">' + availablePM.map(name => `<li>${escapeHtml(name)}</li>`).join('') + '</ul>' :
+                                '<div class="text-xs text-gray-400 italic">None</div>'}
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+
+        html += '</div>';
+        container.innerHTML = html;
+        container.classList.remove('p-6');
+        container.classList.add('p-4');
+      }
+
       function loadQuickCover() {
         google.script.run
           .withSuccessHandler(res => { if (res.quickCover) renderQuickCover(res.quickCover); })
           .withFailureHandler(err => {
             document.getElementById('quickCoverContainer').innerHTML = `<div class="p-8 text-center text-red-600 font-bold">Failed to load data: ${escapeHtml(err.message)}</div>`;
           })
-          .refreshData(['quickCover']);
+          .refreshData(['quickCover'], window.activeUserEmail, window.activeUserEmail, window.activeUserEmail);
       }
 
 
@@ -3415,7 +3731,7 @@
             btn.innerHTML = originalText;
             showToast("Export failed: " + err.message, "error");
           })
-          .exportAllAbsenceRequests();
+          .exportAllAbsenceRequests(window.activeUserEmail);
       }
 
       function archiveOldDataClient() {
@@ -3448,7 +3764,7 @@
                 btn.innerHTML = originalText;
                 showToast("Connection Error: " + err.message, "error");
               })
-              .archiveAbsenceRequests(dateInput);
+              .archiveAbsenceRequests(dateInput, window.activeUserEmail, window.activeUserEmail, window.activeUserEmail);
         });
       }
 
@@ -3786,7 +4102,7 @@
       function loadAdminDataRawSilent() {
         google.script.run
           .withSuccessHandler(res => { if (res.adminData) renderAdminDataRawSilent(res.adminData); })
-          .refreshData(['adminData']);
+          .refreshData(['adminData'], window.activeUserEmail, window.activeUserEmail, window.activeUserEmail);
       }
 
       function updateLocalAdminData(absenceId, period, subName) {
@@ -3845,7 +4161,7 @@
                 document.getElementById('atAGlanceTableBody').innerHTML = `<tr><td class="p-8 text-center text-red-600 font-bold">Failed to load: ${escapeHtml(err.message)}</td></tr>`;
             }
           })
-          .refreshData(['adminData']);
+          .refreshData(['adminData'], window.activeUserEmail, window.activeUserEmail, window.activeUserEmail);
       }
 
       function applyAdminFilters() {
@@ -4240,7 +4556,7 @@
                        btn.disabled = false;
                        btn.innerText = originalText;
                     })
-                    .assignSubToPeriod(absenceId, period, subName, true);
+                    .assignSubToPeriod(absenceId, period, subName, true, window.activeUserEmail, window.activeUserEmail, window.activeUserEmail);
               }, () => {
                  btn.disabled = false;
                  btn.innerText = originalText;
@@ -4251,7 +4567,7 @@
               btn.innerText = originalText;
             }
           })
-          .assignSubToPeriod(absenceId, period, subName, false);
+          .assignSubToPeriod(absenceId, period, subName, false, window.activeUserEmail, window.activeUserEmail, window.activeUserEmail);
       }
 
       function handleInlineAdminAssign(absenceId, period, inputElementId) {
@@ -4341,7 +4657,7 @@
                        inputEl.disabled = false;
                        inputEl.classList.remove('bg-[#f3f4f6]', 'opacity-70');
                     })
-                    .assignSubToPeriod(absenceId, period, subName, true);
+                    .assignSubToPeriod(absenceId, period, subName, true, window.activeUserEmail, window.activeUserEmail, window.activeUserEmail);
               }, () => {
                  inputEl.value = originalValue;
                  inputEl.disabled = false;
@@ -4354,7 +4670,7 @@
               inputEl.classList.remove('bg-[#f3f4f6]');
             }
           })
-          .assignSubToPeriod(absenceId, period, subName, false);
+          .assignSubToPeriod(absenceId, period, subName, false, window.activeUserEmail, window.activeUserEmail, window.activeUserEmail);
       }
 
       function openDetailsModal(index) {
@@ -4503,7 +4819,7 @@
                        btn.disabled = false;
                        btn.innerText = originalText;
                     })
-                    .assignSubToPeriod(absenceId, period, subName, true);
+                    .assignSubToPeriod(absenceId, period, subName, true, window.activeUserEmail, window.activeUserEmail, window.activeUserEmail);
               }, () => {
                  btn.disabled = false;
                  btn.innerText = originalText;
@@ -4514,7 +4830,7 @@
               btn.innerText = originalText;
             }
           })
-          .assignSubToPeriod(absenceId, period, subName, false);
+          .assignSubToPeriod(absenceId, period, subName, false, window.activeUserEmail, window.activeUserEmail, window.activeUserEmail);
       }
 
       function renderMySubDuties(duties) {
@@ -4564,7 +4880,7 @@
           .withFailureHandler(err => {
             document.getElementById('mySubDuties').innerHTML = `<div class="p-8 text-center text-red-600 font-bold">Failed to load sub-duties: ${escapeHtml(err.message)}</div>`;
           })
-          .refreshData(['mySubDuties']);
+          .refreshData(['mySubDuties'], window.activeUserEmail, window.activeUserEmail, window.activeUserEmail);
       }
 
       function openSubDutyDetailsModal(index) {
@@ -4635,7 +4951,7 @@
              showToast("Error: " + err.message, 'error');
              loadMySubDuties();
           })
-          .cancelMySubDuty(id, period);
+          .cancelMySubDuty(id, period, window.activeUserEmail, window.activeUserEmail, window.activeUserEmail);
         });
       }
 
@@ -4722,7 +5038,7 @@
                 }
                 renderAvailabilityCalendar();
             })
-            .saveSubstituteAvailability(dateStr, nextStatus);
+            .saveSubstituteAvailability(dateStr, nextStatus, window.activeUserEmail, window.activeUserEmail, window.activeUserEmail);
       }
 
       function renderAvailabilityCalendar() {
@@ -4804,7 +5120,7 @@
           .withFailureHandler(err => {
             document.getElementById('myAbsences').innerHTML = `<div class="text-red-600 font-bold">Failed to load absences: ${escapeHtml(err.message)}</div>`;
           })
-          .refreshData(['myAbsences']);
+          .refreshData(['myAbsences'], window.activeUserEmail, window.activeUserEmail, window.activeUserEmail);
       }
 
       function renderMyPastAbsences(absences) {
@@ -4850,7 +5166,7 @@
             console.error(err);
             document.getElementById('myPastAbsences').innerHTML = `<div class="text-red-600 font-bold">Failed to load past absences: ${escapeHtml(err.message)}</div>`;
           })
-          .refreshData(['myPastAbsences']);
+          .refreshData(['myPastAbsences'], window.activeUserEmail, window.activeUserEmail, window.activeUserEmail);
       }
 
       function editAbsence(index) {
@@ -5004,7 +5320,7 @@
               btn.disabled = false;
               btn.innerText = originalText;
            })
-           .cancelAbsence(id);
+           .cancelAbsence(id, window.activeUserEmail, window.activeUserEmail, window.activeUserEmail);
          });
       }
 
@@ -5031,7 +5347,7 @@
              showToast("Error: " + err.message, 'error');
              loadMyAbsences();
           })
-          .cancelAbsence(id);
+          .cancelAbsence(id, window.activeUserEmail, window.activeUserEmail, window.activeUserEmail);
         });
       }
 
@@ -5180,7 +5496,7 @@
               btn.disabled = false;
               btn.innerHTML = 'Save Changes';
             })
-            .updateAbsence(editId, requests[0]);
+            .updateAbsence(editId, requests[0], window.activeUserEmail, window.activeUserEmail, window.activeUserEmail);
         } else if (requests.length > 1) {
           google.script.run
             .withSuccessHandler((result) => {
@@ -5210,7 +5526,7 @@
               btn.disabled = false;
               btn.innerHTML = 'Submit Request';
             })
-            .submitMultipleAbsenceRequests(requests);
+            .submitMultipleAbsenceRequests(requests, window.activeUserEmail, window.activeUserEmail, window.activeUserEmail);
         } else {
           google.script.run
             .withSuccessHandler((result) => {
@@ -5240,7 +5556,7 @@
               btn.disabled = false;
               btn.innerHTML = 'Submit Request';
             })
-            .submitAbsence(requests[0]);
+            .submitAbsence(requests[0], window.activeUserEmail, window.activeUserEmail, window.activeUserEmail);
         }
       };
 
@@ -5369,7 +5685,7 @@
           .withFailureHandler(err => {
             document.getElementById('hrDashboardTableBody').innerHTML = `<tr><td colspan="2" class="p-8 text-center text-red-600 font-bold">Failed to load: ${escapeHtml(err.message)}</td></tr>`;
           })
-          .refreshData(['hrData']);
+          .refreshData(['hrData'], window.activeUserEmail, window.activeUserEmail, window.activeUserEmail);
       }
 
       function handleHRDateChange() {
@@ -5476,7 +5792,7 @@
                       showToast("Connection Error: " + err.message, "error");
                       checkPayPeriodApprovalState(); // reset button state
                   })
-                  .approvePayPeriod(selectedPP.periodNumber, rangeString, csvString);
+                  .approvePayPeriod(selectedPP.periodNumber, rangeString, csvString, window.activeUserEmail, window.activeUserEmail, window.activeUserEmail);
           });
       }
 
