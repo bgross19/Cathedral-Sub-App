@@ -35,6 +35,7 @@
                       // Success
                       localStorage.setItem('subAppEmail', emailInput);
                       window.activeUserEmail = emailInput;
+                      window.isManualLogin = true;
                       document.getElementById('loginView').classList.add('hidden');
                       finishInitApp(payload);
                   }
@@ -71,6 +72,7 @@
                       // Success
                       localStorage.setItem('subAppEmail', emailInput);
                       window.activeUserEmail = emailInput;
+                      window.isManualLogin = true;
                       document.getElementById('loginView').classList.add('hidden');
                       finishInitApp(payload);
                   }
@@ -107,6 +109,7 @@
                       // Success
                       localStorage.setItem('subAppEmail', emailInput);
                       window.activeUserEmail = emailInput;
+                      window.isManualLogin = true;
                       document.getElementById('loginView').classList.add('hidden');
                       finishInitApp(payload);
                   }
@@ -1008,16 +1011,6 @@
                </button>
                <button id="navSettingsBtn" onclick="toggleSettingsDashboard(); closeMobileMenu();" class="hidden w-full lg:w-auto text-left lg:text-center bg-white/5 hover:bg-white/20 lg:bg-white/20 lg:hover:bg-white/30 text-white text-sm font-semibold py-3 px-4 lg:py-1.5 lg:rounded-full transition-colors flex items-center gap-2 border-b border-white/10 lg:border-none">
                    <span>⚙️</span> Settings
-               </button>
-
-               
-               <button id="navLogoutBtn" onclick="handleLogout(); closeMobileMenu();" class="hidden w-full lg:w-auto text-left lg:text-center bg-white/5 hover:bg-white/20 lg:bg-white/20 lg:hover:bg-white/30 text-white text-sm font-semibold py-3 px-4 lg:py-1.5 lg:rounded-full transition-colors flex items-center gap-2 border-b border-white/10 lg:border-none">
-                   <span>🚪</span> Log Out
-               </button>
-
-               
-               <button id="navLogoutBtn" onclick="handleLogout(); closeMobileMenu();" class="hidden w-full lg:w-auto text-left lg:text-center bg-white/5 hover:bg-white/20 lg:bg-white/20 lg:hover:bg-white/30 text-white text-sm font-semibold py-3 px-4 lg:py-1.5 lg:rounded-full transition-colors flex items-center gap-2 border-b border-white/10 lg:border-none">
-                   <span>🚪</span> Log Out
                </button>
 
                
@@ -2497,11 +2490,14 @@
         let serverEmail = "<?= userEmail ?>".trim().toLowerCase();
         let storedEmail = localStorage.getItem('subAppEmail');
         
+        window.isManualLogin = false;
+
         if (serverEmail && serverEmail !== "undefined" && serverEmail !== "" && !serverEmail.includes("<" + "?=")) {
              window.activeUserEmail = serverEmail;
              localStorage.setItem('subAppEmail', serverEmail);
         } else if (storedEmail) {
              window.activeUserEmail = storedEmail;
+             window.isManualLogin = true;
         }
         
         if (!window.activeUserEmail) {
@@ -2643,6 +2639,11 @@ const data = payload.userData;
 
             if (perms["Settings"]) {
               document.getElementById('navSettingsBtn').classList.remove('hidden');
+            }
+
+            if (window.isManualLogin) {
+              const logoutBtns = document.querySelectorAll('#navLogoutBtn');
+              logoutBtns.forEach(btn => btn.classList.remove('hidden'));
             }
 
             if (perms["Admin Dashboard"] || perms["Today's Open Jobs"] || perms["Today at a Glance"]) {
