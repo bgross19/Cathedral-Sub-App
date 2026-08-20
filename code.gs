@@ -3584,7 +3584,7 @@ function sendPrincipalsDigest(dateObj) {
   console.log("Sent Principal's Digest to " + principals.join(", "));
 }
 
-function generatePrincipalsDigestPreview(dateStr) {
+function generatePrincipalsDigestPreview(dateStr, clientEmail) {
   var dateObj = dateStr ? new Date(dateStr) : new Date();
   return generatePrincipalsDigestHTML(dateObj);
 }
