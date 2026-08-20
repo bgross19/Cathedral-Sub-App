@@ -1311,7 +1311,7 @@ function submitMultipleAbsenceRequests(requestsToSubmit, clientEmail) {
   var lastError = "";
   for (var i = 0; i < requestsToSubmit.length; i++) {
     var req = requestsToSubmit[i];
-    var res = submitAbsence(req);
+    var res = submitAbsence(req, typeof clientEmail !== 'undefined' ? clientEmail : undefined);
     if (!res.success) {
       failedCount++;
       lastError = res.error + " (on date " + req.date + ")";
