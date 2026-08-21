@@ -2450,6 +2450,51 @@
               .getAppVersion(window.activeUserEmail);
       }
 
+
+      // --- Inactivity and Stale Data Tracking ---
+      let lastActivityTime = Date.now();
+      const INACTIVITY_THRESHOLD = 30 * 60 * 1000; // 30 minutes
+
+      function updateActivityTime() {
+          lastActivityTime = Date.now();
+      }
+
+      function checkStaleData() {
+          if (Date.now() - lastActivityTime > INACTIVITY_THRESHOLD) {
+              sessionStorage.setItem('staleDataRefreshed', 'true');
+              window.location.reload(true);
+          }
+      }
+
+      function setupInactivityTracker() {
+          const events = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart'];
+          let throttleTimer = false;
+          events.forEach(event => {
+              document.addEventListener(event, () => {
+                  if(!throttleTimer) {
+                      checkStaleData();
+                      updateActivityTime();
+                      throttleTimer = true;
+                      setTimeout(() => { throttleTimer = false; }, 1000);
+                  }
+              }, { passive: true });
+          });
+
+          document.addEventListener('visibilitychange', () => {
+              if (document.visibilityState === 'visible') {
+                  checkStaleData();
+                  updateActivityTime();
+              }
+          });
+
+          setInterval(() => {
+              if (document.visibilityState === 'visible') {
+                  checkStaleData();
+              }
+          }, 60 * 1000); // Check every minute
+      }
+      // ------------------------------------------
+
       function scheduleVersionCheck() {
           // Calculate ms until next 6:00 AM
           const now = new Date();
@@ -2486,11 +2531,22 @@
         });
 
         scheduleVersionCheck();
+        setupInactivityTracker();
+
         
         let serverEmail = "<?= userEmail ?>".trim().toLowerCase();
         let storedEmail = localStorage.getItem('subAppEmail');
         
         window.isManualLogin = false;
+
+        if (sessionStorage.getItem('staleDataRefreshed') === 'true') {
+             sessionStorage.removeItem('staleDataRefreshed');
+             // Small delay to ensure the DOM is ready for the toast
+             setTimeout(() => {
+                 showToast("Session refreshed to ensure data is up to date.", "info");
+             }, 500);
+        }
+
 
         if (serverEmail && serverEmail !== "undefined" && serverEmail !== "" && !serverEmail.includes("<" + "?=")) {
              window.activeUserEmail = serverEmail;
