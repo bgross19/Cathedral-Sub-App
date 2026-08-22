@@ -190,11 +190,11 @@ function doGet(e) {
 
   var template = HtmlService.createTemplateFromFile('Index');
   template.userEmail = email;
-  
+
   var htmlOutput = template.evaluate();
   htmlOutput.setTitle('Cathedral Sub Coverage');
   htmlOutput.addMetaTag('viewport', 'width=device-width, initial-scale=1');
-  
+
   return htmlOutput;
 }
 
@@ -266,16 +266,16 @@ function assertPermission(user, viewName, customErrorMessage) {
 function getUserData(ss, clientEmail) {
   var email = getActiveUserEmail(typeof clientEmail !== 'undefined' ? clientEmail : undefined);
   ss = ss || getSS();
-  
+
   var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
   var rosterData = rosterSheet ? rosterSheet.getDataRange().getValues() : [];
   var name = null;
   var role = null;
   var targetEmail = String(email).toLowerCase();
-  
+
   for (var i = 1; i < rosterData.length; i++) {
     if (String(rosterData[i][1]).toLowerCase() === targetEmail) {
-      name = rosterData[i][0]; 
+      name = rosterData[i][0];
       role = rosterData[i][2] ? String(rosterData[i][2]).trim() : "Teacher";
       break;
     }
@@ -284,7 +284,7 @@ function getUserData(ss, clientEmail) {
   if (!name) {
     throw new Error("Access Denied: Please Contact Technology@gocathedral.com");
   }
-  
+
   var settings = getSettings(ss);
   var appUrl = settings["App URL"] || DEFAULT_APP_URL;
   var urgencyCutoffTime = settings["Urgency Cutoff Time"] || "15";
@@ -1342,7 +1342,7 @@ function submitAbsence(formData, clientEmail) {
   try {
     var ss = getSS();
     var mainSheet = getSheetOrThrow(ss, "Absence Requests");
-    
+
     var timestamp = new Date();
     var submitterEmail = getActiveUserEmail(typeof clientEmail !== 'undefined' ? clientEmail : undefined);
     var submitterData = getUserData(ss, typeof clientEmail !== 'undefined' ? clientEmail : undefined);
@@ -1397,7 +1397,7 @@ function submitAbsence(formData, clientEmail) {
     if (shouldSendUrgentEmail) {
       sendUrgentCoverageEmail(ss, teacherName, formData, instructions);
     }
-    
+
     // Check Settings to see if HR or Principal needs to be notified
     var settings = getSettings();
     var appUrl = settings["App URL"] || DEFAULT_APP_URL;
@@ -2457,7 +2457,6 @@ function getInitialPayload(clientEmail) {
       // My Absences
       if (rowTeacherEmail === targetEmail) {
         var urgencyStr = String(row[7] || '');
-        var subFeedbackRaw = String(row[20] || "[]");
         var absenceObj = {
           id: String(row[0]),
           date: String(formattedDate),
@@ -2468,8 +2467,7 @@ function getInitialPayload(clientEmail) {
           reason: String(row[5]),
           urgency: urgencyStr.includes('Urgent') ? 'Urgent' : 'Standard',
           duration: String(row[6]),
-          instructions: String(row[8]),
-          subFeedback: subFeedbackRaw
+          instructions: String(row[8])
         };
         if (isDateValid && rowDate < today) {
           myPastAbsences.push(absenceObj);
@@ -3356,12 +3354,12 @@ function generatePrincipalsDigestHTML(dateObj) {
 
   // Resolve target dates
   var refDate = dateObj ? new Date(dateObj) : new Date();
-  
+
   // Calculate Monday to Friday of the CURRENT week (assuming refDate is Friday)
   var currentWeekMonday = new Date(refDate);
   currentWeekMonday.setDate(refDate.getDate() - (refDate.getDay() === 0 ? 6 : refDate.getDay() - 1));
   currentWeekMonday.setHours(0, 0, 0, 0);
-  
+
   var currentWeekFriday = new Date(currentWeekMonday);
   currentWeekFriday.setDate(currentWeekMonday.getDate() + 4);
   currentWeekFriday.setHours(23, 59, 59, 999);
@@ -3459,7 +3457,7 @@ function generatePrincipalsDigestHTML(dateObj) {
           if (assignedSubRaw && String(assignedSubRaw).trim() !== "") {
             // Trim suffix if exists (e.g. 'Name - Duty')
             var assignedSub = String(assignedSubRaw).trim().replace(/\s+-\s+.*$/, "");
-            
+
             // Check if sub is dedicated substitute or teacher. Calculate pay only for teachers (not role substitute).
             // (Assuming teachers are handled with hrRates based on day color. We need to know if the person is a sub or teacher)
             var subEmailLookup = "";
@@ -3469,7 +3467,7 @@ function generatePrincipalsDigestHTML(dateObj) {
                     break;
                 }
             }
-            
+
             var isSubstituteRole = false;
             var teacherDuty = dutyLookup[assignedSub];
             var teacherDutyArr = teacherDuty ? String(teacherDuty).split(',').map(function(d){return d.trim();}) : [];
@@ -3576,7 +3574,7 @@ function sendPrincipalsDigest(dateObj) {
   var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
   var rosterData = rosterSheet.getDataRange().getValues();
   var principals = [];
-  
+
   for (var i = 1; i < rosterData.length; i++) {
     var email = String(rosterData[i][1]).toLowerCase().trim();
     var roles = String(rosterData[i][2]).toLowerCase();
@@ -3584,12 +3582,12 @@ function sendPrincipalsDigest(dateObj) {
       if (principals.indexOf(email) === -1) principals.push(email);
     }
   }
-  
+
   if (principals.length === 0) {
     console.log("No principals found in Staff Roster to send digest to.");
     return;
   }
-  
+
   var settings = getSettings();
   var options = { htmlBody: htmlBody };
   if (settings["Email Sender Name"]) {
@@ -3610,295 +3608,4 @@ function sendPrincipalsDigest(dateObj) {
 function generatePrincipalsDigestPreview(dateStr, clientEmail) {
   var dateObj = dateStr ? new Date(dateStr) : new Date();
   return generatePrincipalsDigestHTML(dateObj);
-}
-
-function saveSubFeedback(absenceId, period, rating, note, clientEmail) {
-  var lock = LockService.getScriptLock();
-  try {
-    lock.waitLock(10000);
-  } catch (e) {
-    notifyAdminOfError("saveSubFeedback", e);
-    return { success: false, error: "The server is currently busy. Please try again in a few moments." };
-  }
-
-  try {
-    var ss = getSS();
-    var sheet = getSheetOrThrow(ss, "Absence Requests");
-
-    var email = getActiveUserEmail(typeof clientEmail !== 'undefined' ? clientEmail : undefined);
-    var targetEmail = String(email).toLowerCase();
-
-    var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
-    var rosterData = rosterSheet ? rosterSheet.getDataRange().getValues() : [];
-
-    var subName = "Unknown Sub";
-    for (var r = 1; r < rosterData.length; r++) {
-       if (String(rosterData[r][1]).toLowerCase().trim() === targetEmail) {
-           subName = String(rosterData[r][0]).trim();
-           break;
-       }
-    }
-
-    var data = sheet.getDataRange().getValues();
-    var targetIndex = -1;
-    for (var i = 1; i < data.length; i++) {
-      if (String(data[i][0]) === String(absenceId)) {
-        targetIndex = i;
-        break;
-      }
-    }
-
-    if (targetIndex === -1) {
-       throw new Error("Could not find absence request with ID " + absenceId);
-    }
-
-    var row = data[targetIndex];
-    var subFeedbackRaw = String(row[20] || "[]");
-    var subFeedbackParsed = [];
-    try {
-      subFeedbackParsed = JSON.parse(subFeedbackRaw);
-    } catch(e) {}
-
-    var existingIndex = -1;
-    for (var j = 0; j < subFeedbackParsed.length; j++) {
-       if (subFeedbackParsed[j].period === String(period) && String(subFeedbackParsed[j].subName).toLowerCase() === subName.toLowerCase()) {
-           existingIndex = j;
-           break;
-       }
-    }
-
-    var feedbackObj = {
-        subName: subName,
-        period: String(period),
-        rating: parseInt(rating) || 0,
-        note: String(note || "").trim()
-    };
-
-    if (existingIndex !== -1) {
-       subFeedbackParsed[existingIndex] = feedbackObj;
-    } else {
-       subFeedbackParsed.push(feedbackObj);
-    }
-
-    sheet.getRange(targetIndex + 1, 21).setValue(JSON.stringify(subFeedbackParsed));
-
-    logAction(ss, email, "Saved Sub Feedback", absenceId, "Period: " + period + ", Rating: " + rating);
-
-    return { success: true };
-
-  } catch (err) {
-    notifyAdminOfError("saveSubFeedback", err);
-    return { success: false, error: err.message };
-  } finally {
-    lock.releaseLock();
-  }
-}
-
-function sendDailySubFeedbackRequests() {
-  try {
-    var ss = getSS();
-    var mainSheet = getSheetOrThrow(ss, "Absence Requests");
-    var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
-    var settings = getSettings(ss);
-
-    var data = mainSheet.getDataRange().getValues();
-    var rosterData = rosterSheet.getDataRange().getValues();
-    var appUrl = settings["App URL"] || DEFAULT_APP_URL;
-
-    var subEmailLookup = {};
-    for (var r = 1; r < rosterData.length; r++) {
-      subEmailLookup[String(rosterData[r][0]).trim()] = String(rosterData[r][1]).trim();
-    }
-    var nameLookup = buildNameLookup(rosterData);
-
-    var today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    var requestsToSend = {}; // Keyed by substitute email
-
-    for (var i = 1; i < data.length; i++) {
-      var row = data[i];
-      var status = String(row[19] || 'Active');
-      if (status === 'Canceled') continue;
-
-      var dateVal = row[3];
-      if (!dateVal) continue;
-
-      var rowDate = new Date(dateVal);
-      rowDate.setHours(0, 0, 0, 0);
-
-      if (rowDate.getTime() === today.getTime()) {
-        var rowTeacherEmail = String(row[2]).toLowerCase();
-        var teacherName = nameLookup[rowTeacherEmail] || rowTeacherEmail;
-        if (teacherName.includes(",")) {
-          var parts = teacherName.split(",");
-          teacherName = parts[1].trim() + " " + parts[0].trim();
-        }
-
-        var periodsRequested = String(row[4]).split(",").map(function(p) { return p.trim(); });
-        var rowId = String(row[0]);
-        var allPeriods = ['1', '2', '3', '4', '5', '6', '7', '8', '0', 'Advisory'];
-
-        for (var pIdx = 0; pIdx < allPeriods.length; pIdx++) {
-          var p = allPeriods[pIdx];
-          if (periodsRequested.indexOf(String(p)) !== -1) {
-             var subColumnIndex = getSubColumnIndex(p) - 1;
-             var assignedSub = String(row[subColumnIndex] || "").trim();
-
-             if (assignedSub !== "") {
-                var subEmail = subEmailLookup[assignedSub];
-                if (subEmail) {
-                    subEmail = subEmail.toLowerCase();
-                    if (!requestsToSend[subEmail]) {
-                        requestsToSend[subEmail] = { name: assignedSub, jobs: [] };
-                    }
-                    requestsToSend[subEmail].jobs.push({
-                       id: rowId,
-                       teacherName: teacherName,
-                       period: p
-                    });
-                }
-             }
-          }
-        }
-      }
-    }
-
-    // Process sending emails
-    for (var email in requestsToSend) {
-        var subData = requestsToSend[email];
-        var subject = "Leave Feedback for Today's Classes";
-
-        var bodyText = "Hello " + subData.name + ",\n\nThank you for covering classes today. Please leave feedback for your classes:\n\n";
-        var bodyHtml = "<p>Hello " + subData.name + ",</p><p>Thank you for covering classes today. Please leave feedback for your classes:</p><ul>";
-
-        for (var j = 0; j < subData.jobs.length; j++) {
-            var job = subData.jobs[j];
-            var jobLink = appUrl + "?feedbackAbsenceId=" + encodeURIComponent(job.id) + "&feedbackPeriod=" + encodeURIComponent(job.period);
-            bodyText += "- Period " + job.period + " (" + job.teacherName + "): " + jobLink + "\n";
-            bodyHtml += "<li>Period " + job.period + " (" + job.teacherName + "): <a href='" + jobLink + "'>Leave Feedback</a></li>";
-        }
-
-        bodyText += "\nThank you!";
-        bodyHtml += "</ul><p>Thank you!</p>";
-
-        enqueueEmail(ss, email, subject, bodyText, bodyHtml);
-    }
-
-  } catch (e) {
-    console.error("Error in sendDailySubFeedbackRequests: " + e.message);
-  }
-}
-
-function sendConsolidatedTeacherFeedback() {
-  try {
-    var ss = getSS();
-    var mainSheet = getSheetOrThrow(ss, "Absence Requests");
-    var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
-
-    var data = mainSheet.getDataRange().getValues();
-    var rosterData = rosterSheet.getDataRange().getValues();
-
-    var nameLookup = buildNameLookup(rosterData);
-
-    var today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    var feedbackToSend = {}; // Keyed by teacher email
-
-    for (var i = 1; i < data.length; i++) {
-      var row = data[i];
-      var status = String(row[19] || 'Active');
-      if (status === 'Canceled') continue;
-
-      var dateVal = row[3];
-      if (!dateVal) continue;
-
-      var rowDate = new Date(dateVal);
-      rowDate.setHours(0, 0, 0, 0);
-
-      if (rowDate.getTime() === today.getTime()) {
-         var rowTeacherEmail = String(row[2]).toLowerCase();
-         var subFeedbackRaw = String(row[20] || "[]");
-         var subFeedbackParsed = [];
-         try {
-             subFeedbackParsed = JSON.parse(subFeedbackRaw);
-         } catch(e) {}
-
-         if (subFeedbackParsed.length > 0) {
-             if (!feedbackToSend[rowTeacherEmail]) {
-                 var teacherName = nameLookup[rowTeacherEmail] || rowTeacherEmail;
-                 if (teacherName.includes(",")) {
-                    var parts = teacherName.split(",");
-                    teacherName = parts[1].trim() + " " + parts[0].trim();
-                 }
-                 feedbackToSend[rowTeacherEmail] = { name: teacherName, feedbacks: [] };
-             }
-             for (var j = 0; j < subFeedbackParsed.length; j++) {
-                 feedbackToSend[rowTeacherEmail].feedbacks.push(subFeedbackParsed[j]);
-             }
-         }
-      }
-    }
-
-    // Process sending emails
-    for (var email in feedbackToSend) {
-        var tData = feedbackToSend[email];
-        var subject = "Substitute Feedback for Today's Classes";
-
-        var bodyText = "Hello " + tData.name + ",\n\nHere is the feedback from the substitutes who covered your classes today:\n\n";
-        var bodyHtml = "<p>Hello " + tData.name + ",</p><p>Here is the feedback from the substitutes who covered your classes today:</p><ul>";
-
-        for (var k = 0; k < tData.feedbacks.length; k++) {
-            var fb = tData.feedbacks[k];
-            var ratingStars = "★".repeat(fb.rating) + "☆".repeat(5 - fb.rating);
-            bodyText += "- Period " + fb.period + " (" + fb.subName + ") - Rating: " + fb.rating + "/5\n  Notes: " + (fb.note || "No notes") + "\n";
-            bodyHtml += "<li><strong>Period " + fb.period + "</strong> covered by " + fb.subName + "<br>Rating: " + ratingStars + " (" + fb.rating + "/5)<br>Notes: " + (fb.note || "<em>No notes provided</em>") + "</li>";
-        }
-
-        bodyText += "\nThank you!";
-        bodyHtml += "</ul><p>Thank you!</p>";
-
-        enqueueEmail(ss, email, subject, bodyText, bodyHtml);
-    }
-
-  } catch (e) {
-    console.error("Error in sendConsolidatedTeacherFeedback: " + e.message);
-  }
-}
-
-function setupSubFeedbackTriggers() {
-  var triggers = ScriptApp.getProjectTriggers();
-  for (var i = 0; i < triggers.length; i++) {
-    if (triggers[i].getHandlerFunction() === 'runSubFeedbackRequests' || triggers[i].getHandlerFunction() === 'runTeacherFeedbackConsolidated') {
-      ScriptApp.deleteTrigger(triggers[i]);
-    }
-  }
-
-  // Create daily triggers that internally check for weekdays
-  ScriptApp.newTrigger('runSubFeedbackRequests')
-    .timeBased()
-    .everyDays(1)
-    .atHour(15) // 3 PM
-    .create();
-
-  ScriptApp.newTrigger('runTeacherFeedbackConsolidated')
-    .timeBased()
-    .everyDays(1)
-    .atHour(16) // 4 PM
-    .create();
-}
-
-function runSubFeedbackRequests() {
-    var today = new Date().getDay();
-    if (today > 0 && today < 6) { // Monday (1) to Friday (5)
-        sendDailySubFeedbackRequests();
-    }
-}
-
-function runTeacherFeedbackConsolidated() {
-    var today = new Date().getDay();
-    if (today > 0 && today < 6) { // Monday (1) to Friday (5)
-        sendConsolidatedTeacherFeedback();
-    }
 }
