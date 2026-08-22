@@ -3682,7 +3682,7 @@ function saveSubFeedback(absenceId, period, rating, note, clientEmail) {
 
     sheet.getRange(targetIndex + 1, 21).setValue(JSON.stringify(subFeedbackParsed));
 
-    logAction(ss, email, "Saved Sub Feedback", absenceId, "Period: " + period + ", Rating: " + rating);
+    logAuditAction("SUB_FEEDBACK_SAVED", absenceId, "Saved Sub Feedback - Period: " + period + ", Rating: " + rating);
 
     return { success: true };
 
