@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
+    <meta charset="UTF-8">
     <base target="_top">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
@@ -2059,6 +2060,20 @@
           </div>
         </div>
       </div>
+
+      <div id="myPastSubDutiesSection" class="mb-6">
+        <div class="mb-3 flex items-center cursor-pointer select-none" id="headerMyPastSubDuties" onclick="toggleSection('myPastSubDutiesWrapper', 'iconMyPastSubDuties')">
+          <svg id="iconMyPastSubDuties" class="fill-current text-[#002147] mr-2 transition-transform duration-300 -rotate-90" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+          <h3 class="text-lg font-bold text-[#002147]">My Past Sub-Duties</h3>
+        </div>
+        <div id="myPastSubDutiesWrapper" class="grid grid-rows-[0fr] transition-all duration-300 ease-in-out mb-6">
+          <div class="overflow-hidden">
+            <div id="myPastSubDutiesContent" class="bg-white rounded-xl shadow-sm p-8 text-center text-gray-400 border border-gray-200">
+                Loading past sub-duties...
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Generic Modal overlay -->
@@ -2581,7 +2596,7 @@
 }
 
 function finishInitApp(payload) {
-        // Parse URL parameters for "Sign Me Up" links
+        // Parse URL parameters for "Sign Me Up" links and Deep Links
         google.script.url.getLocation(function(location) {
            if (location.parameter && location.parameter.action === 'quickCover') {
                const absenceId = location.parameter.absenceId;
@@ -2607,6 +2622,20 @@ function finishInitApp(payload) {
                          console.error("Failed to fetch absence details for Quick Cover:", err);
                      })
                      .getAbsenceDetails(absenceId, period, undefined, window.activeUserEmail);
+               }
+           } else if (location.parameter && location.parameter.feedbackAbsenceId) {
+               const absenceId = location.parameter.feedbackAbsenceId;
+               const feedbackPeriod = location.parameter.feedbackPeriod;
+
+               if (absenceId && feedbackPeriod) {
+                   setTimeout(() => {
+                       // Make sure section is visible
+                       const myPastSubDutiesSection = document.getElementById('myPastSubDutiesSection');
+                       if (myPastSubDutiesSection && !myPastSubDutiesSection.classList.contains('hidden')) {
+                           toggleSection('myPastSubDutiesWrapper', 'iconMyPastSubDuties', true);
+                           openSubFeedbackModal(absenceId, feedbackPeriod);
+                       }
+                   }, 1000);
                }
            }
         });
@@ -2646,6 +2675,7 @@ const data = payload.userData;
             renderMyAbsences(payload.myAbsences);
             renderMyPastAbsences(payload.myPastAbsences);
             renderMySubDuties(payload.mySubDuties);
+            renderMyPastSubDuties(payload.myPastSubDuties || []);
             renderTodaysOpenJobs(payload.todaysOpenJobs);
 
             globalDateColors = payload.dateColors || {};
@@ -5182,19 +5212,40 @@ const data = payload.userData;
               let bgClass = 'bg-gray-50 border-gray-200';
               let textClass = 'text-gray-500';
 
+              let feedbackHtml = '';
+              try {
+                  const fbArray = JSON.parse(abs.subFeedback || "[]");
+                  if (fbArray && fbArray.length > 0) {
+                      feedbackHtml += '<div class="mt-3 border-t pt-2 w-full">';
+                      fbArray.forEach(fb => {
+                          const ratingStars = '★'.repeat(fb.rating) + '☆'.repeat(5 - fb.rating);
+                          feedbackHtml += `
+                            <div class="mb-2">
+                               <p class="text-xs font-bold text-gray-700">Period ${escapeHtml(fb.period)} - ${escapeHtml(fb.subName)}</p>
+                               <p class="text-xs text-yellow-500">${ratingStars}</p>
+                               <p class="text-xs text-gray-500 italic mt-0.5">${escapeHtml(fb.note) || "No notes provided"}</p>
+                            </div>
+                          `;
+                      });
+                      feedbackHtml += '</div>';
+                  }
+              } catch(e) {
+                  // ignore
+              }
+
               html += `
-                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 border rounded-xl shadow-sm ${bgClass} gap-4 opacity-75">
-                  <div>
-                    <div class="flex items-center gap-2">
-                       <p class="font-bold ${textClass} text-lg">${escapeHtml(abs.date)}</p>
-                       <span class="text-[10px] font-bold uppercase tracking-wider opacity-60 bg-white px-2 py-0.5 rounded border border-gray-300">${escapeHtml(abs.urgency)}</span>
+                <div class="flex flex-col p-4 border rounded-xl shadow-sm ${bgClass} gap-2 opacity-75">
+                  <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 w-full">
+                    <div>
+                      <div class="flex items-center gap-2">
+                         <p class="font-bold ${textClass} text-lg">${escapeHtml(abs.date)}</p>
+                         <span class="text-[10px] font-bold uppercase tracking-wider opacity-60 bg-white px-2 py-0.5 rounded border border-gray-300">${escapeHtml(abs.urgency)}</span>
+                      </div>
+                      <p class="text-sm text-gray-500 font-semibold">${escapeHtml(abs.reason)}</p>
+                      <p class="text-xs text-gray-400 mt-1">Periods: ${escapeHtml(abs.periods)}</p>
                     </div>
-                    <p class="text-sm text-gray-500 font-semibold">${escapeHtml(abs.reason)}</p>
-                    <p class="text-xs text-gray-400 mt-1">Periods: ${escapeHtml(abs.periods)}</p>
                   </div>
-                  <div class="flex gap-2 w-full sm:w-auto">
-                    <!-- Usually no actions for past absences, but if desired could add view button -->
-                  </div>
+                  ${feedbackHtml}
                 </div>
               `;
             });
@@ -5213,6 +5264,118 @@ const data = payload.userData;
             document.getElementById('myPastAbsences').innerHTML = `<div class="text-red-600 font-bold">Failed to load past absences: ${escapeHtml(err.message)}</div>`;
           })
           .refreshData(['myPastAbsences'], window.activeUserEmail);
+      }
+
+      let userMyPastSubDuties = [];
+
+      function renderMyPastSubDuties(jobs) {
+          userMyPastSubDuties = jobs;
+          const container = document.getElementById('myPastSubDutiesContent');
+          if (!jobs || !Array.isArray(jobs) || jobs.length === 0) {
+              container.innerHTML = 'No past sub-duties found.';
+              return;
+          }
+
+          let html = '<div class="space-y-3 text-left">';
+          jobs.forEach((job, index) => {
+              const bgClass = 'bg-gray-50 border-gray-200';
+              const textClass = 'text-gray-500';
+              const hasFeedback = (job.rating > 0 || job.note);
+              const feedbackBtnText = hasFeedback ? "Edit Feedback" : "Leave Feedback";
+
+              html += `
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 border rounded-xl shadow-sm ${bgClass} gap-4 opacity-75">
+                  <div>
+                    <div class="flex items-center gap-2">
+                       <p class="font-bold ${textClass} text-lg">${escapeHtml(job.date)} - Period ${escapeHtml(job.period)}</p>
+                    </div>
+                    <p class="text-sm text-gray-500 font-semibold">${escapeHtml(job.teacherName)}</p>
+                    <p class="text-xs text-gray-400 mt-1">Room: ${escapeHtml(job.room)} | Course: ${escapeHtml(job.course)}</p>
+                  </div>
+                  <div class="flex gap-2 w-full sm:w-auto">
+                    <button onclick="openSubFeedbackModal('${escapeJs(job.id)}', '${escapeJs(job.period)}')" class="w-full sm:w-auto bg-white hover:bg-gray-100 text-gray-700 text-sm font-bold py-2 px-4 rounded-lg border border-gray-300 transition-colors shadow-sm whitespace-nowrap">
+                       ${feedbackBtnText}
+                    </button>
+                  </div>
+                </div>
+              `;
+          });
+          html += '</div>';
+
+          container.innerHTML = html;
+          container.classList.remove('text-gray-400');
+      }
+
+      function openSubFeedbackModal(absenceId, period) {
+          // Reset UI
+          document.getElementById('feedbackAbsenceId').value = absenceId;
+          document.getElementById('feedbackPeriod').value = period;
+          document.getElementById('feedbackNote').value = "";
+          setFeedbackRating(0);
+
+          // Pre-fill if we have existing feedback
+          const existingJob = userMyPastSubDuties.find(j => j.id === absenceId && j.period === period);
+          if (existingJob) {
+              if (existingJob.rating) setFeedbackRating(existingJob.rating);
+              if (existingJob.note) document.getElementById('feedbackNote').value = existingJob.note;
+          }
+
+          document.getElementById('subFeedbackModal').classList.remove('opacity-0', 'pointer-events-none');
+      }
+
+      function closeSubFeedbackModal() {
+          document.getElementById('subFeedbackModal').classList.add('opacity-0', 'pointer-events-none');
+      }
+
+      function setFeedbackRating(val) {
+          document.getElementById('feedbackRating').value = val;
+          const stars = document.getElementById('feedbackStarsContainer').children;
+          for (let i = 0; i < stars.length; i++) {
+              if (i < val) {
+                  stars[i].classList.remove('text-gray-300');
+                  stars[i].classList.add('text-yellow-400');
+              } else {
+                  stars[i].classList.remove('text-yellow-400');
+                  stars[i].classList.add('text-gray-300');
+              }
+          }
+      }
+
+      function submitSubFeedback() {
+          const btn = document.getElementById('submitFeedbackBtn');
+          btn.disabled = true;
+          btn.innerText = 'Submitting...';
+
+          const absenceId = document.getElementById('feedbackAbsenceId').value;
+          const period = document.getElementById('feedbackPeriod').value;
+          const rating = document.getElementById('feedbackRating').value;
+          const note = document.getElementById('feedbackNote').value;
+
+          google.script.run
+            .withSuccessHandler(res => {
+                btn.disabled = false;
+                btn.innerText = 'Submit Feedback';
+                if (res.success) {
+                    showToast("Feedback saved successfully!", 'success');
+                    closeSubFeedbackModal();
+
+                    // Optimistically update the UI data model
+                    const job = userMyPastSubDuties.find(j => j.id === absenceId && j.period === period);
+                    if (job) {
+                        job.rating = parseInt(rating);
+                        job.note = note;
+                        renderMyPastSubDuties(userMyPastSubDuties);
+                    }
+                } else {
+                    alert("Error: " + res.error);
+                }
+            })
+            .withFailureHandler(err => {
+                btn.disabled = false;
+                btn.innerText = 'Submit Feedback';
+                alert("Error submitting feedback: " + err.message);
+            })
+            .saveSubFeedback(absenceId, period, rating, note, window.activeUserEmail);
       }
 
       function editAbsence(index) {
@@ -6303,6 +6466,47 @@ const data = payload.userData;
         }, 5000);
       }
     </script>
+
+    <!-- Sub Feedback Modal -->
+    <div id="subFeedbackModal" class="modal transition-opacity duration-[250ms] ease-in-out opacity-0 pointer-events-none fixed w-full h-full top-0 left-0 flex items-center justify-center z-[300]" onclick="if(event.target === this) closeSubFeedbackModal()">
+      <div class="modal-overlay absolute w-full h-full bg-gray-900 opacity-50" onclick="closeSubFeedbackModal()"></div>
+      <div class="modal-container bg-white w-11/12 md:max-w-md mx-auto rounded-2xl shadow-2xl z-[310] overflow-y-auto">
+        <div class="p-6">
+          <div class="flex justify-between items-center pb-3 border-b mb-4">
+            <p class="text-xl font-bold text-[#002147]">Leave Feedback</p>
+            <div onclick="closeSubFeedbackModal()" class="cursor-pointer z-50 p-2 hover:bg-gray-100 rounded-full">
+              <svg class="fill-current text-black" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 18 18"><path d="M14.53 4.53l-1.06-1.06L9 7.94 4.53 3.47 3.47 4.53 7.94 9l-4.47 4.47 1.06 1.06L9 10.06l4.47 4.47 1.06-1.06L10.06 9z"></path></svg>
+            </div>
+          </div>
+          <form id="subFeedbackForm" onsubmit="event.preventDefault(); submitSubFeedback();">
+             <input type="hidden" id="feedbackAbsenceId" name="feedbackAbsenceId">
+             <input type="hidden" id="feedbackPeriod" name="feedbackPeriod">
+             <input type="hidden" id="feedbackRating" name="feedbackRating" value="0">
+
+             <div class="mb-4 text-center">
+                 <p class="text-gray-700 font-semibold mb-2">How did the class go?</p>
+                 <div id="feedbackStarsContainer" class="flex justify-center gap-2 cursor-pointer text-gray-300 text-4xl select-none">
+                     <span data-val="1" onclick="setFeedbackRating(1)">★</span>
+                     <span data-val="2" onclick="setFeedbackRating(2)">★</span>
+                     <span data-val="3" onclick="setFeedbackRating(3)">★</span>
+                     <span data-val="4" onclick="setFeedbackRating(4)">★</span>
+                     <span data-val="5" onclick="setFeedbackRating(5)">★</span>
+                 </div>
+             </div>
+
+             <div class="mb-4">
+                 <label class="block text-gray-700 text-sm font-bold mb-2" for="feedbackNote">Notes for the Teacher (Optional)</label>
+                 <textarea id="feedbackNote" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline focus:border-blue-500 h-24" placeholder="Any issues, positive notes, or general feedback..."></textarea>
+             </div>
+
+             <div class="flex justify-end gap-3 mt-6">
+                <button type="button" onclick="closeSubFeedbackModal()" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold rounded-lg transition-colors">Cancel</button>
+                <button type="submit" id="submitFeedbackBtn" class="px-4 py-2 bg-[#00843D] hover:bg-green-700 text-white font-bold rounded-lg transition-colors">Submit Feedback</button>
+             </div>
+          </form>
+        </div>
+      </div>
+    </div>
 
     <!-- Duplicate Absence Modal -->
     <div id="duplicateAbsenceModal" class="modal transition-opacity duration-[250ms] ease-in-out opacity-0 pointer-events-none fixed w-full h-full top-0 left-0 flex items-center justify-center z-[300]" onclick="if(event.target === this) closeDuplicateWarning()">
