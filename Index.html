@@ -14,83 +14,17 @@
       // === Globals ===
       window.activeUserEmail = "";
       
-      function handleLogout() {
-          localStorage.removeItem('subAppEmail');
-          window.location.reload();
-      }
-      
-      function handleCustomLogin(e) {
-          e.preventDefault();
-          const emailInput = document.getElementById('loginEmailInput').value.trim().toLowerCase();
-          if (!emailInput) return;
-          
-          const btn = document.getElementById('loginBtn');
-          const originalText = btn.innerHTML;
-          btn.disabled = true;
-          btn.innerHTML = '<span class="inline-block animate-spin mr-2">↻</span> Authenticating...';
-          
-          // Verify with backend
-          google.script.run
-              .withSuccessHandler(payload => {
-                  if (payload && payload.userData && payload.userData.name) {
-                      // Success
-                      localStorage.setItem('subAppEmail', emailInput);
-                      window.activeUserEmail = emailInput;
-                      window.isManualLogin = true;
-                      document.getElementById('loginView').classList.add('hidden');
-                      finishInitApp(payload);
-                  }
-              })
-              .withFailureHandler(err => {
-                  alert("Access Denied: " + err.message);
-                  btn.disabled = false;
-                  btn.innerHTML = originalText;
-              })
-              .getInitialPayload(emailInput);
+      function reloadApp() {
+          if (window.globalAppUrl) {
+              window.top.location.href = window.globalAppUrl;
+          } else {
+              window.top.location.href = '<?= ScriptApp.getService().getUrl() ?>';
+          }
       }
 
-      window.activeUserEmail = "";
-      
       function handleLogout() {
           localStorage.removeItem('subAppEmail');
-          window.location.reload();
-      }
-      
-      function handleCustomLogin(e) {
-          e.preventDefault();
-          const emailInput = document.getElementById('loginEmailInput').value.trim().toLowerCase();
-          if (!emailInput) return;
-          
-          const btn = document.getElementById('loginBtn');
-          const originalText = btn.innerHTML;
-          btn.disabled = true;
-          btn.innerHTML = '<span class="inline-block animate-spin mr-2">↻</span> Authenticating...';
-          
-          // Verify with backend
-          google.script.run
-              .withSuccessHandler(payload => {
-                  if (payload && payload.userData && payload.userData.name) {
-                      // Success
-                      localStorage.setItem('subAppEmail', emailInput);
-                      window.activeUserEmail = emailInput;
-                      window.isManualLogin = true;
-                      document.getElementById('loginView').classList.add('hidden');
-                      finishInitApp(payload);
-                  }
-              })
-              .withFailureHandler(err => {
-                  alert("Access Denied: " + err.message);
-                  btn.disabled = false;
-                  btn.innerHTML = originalText;
-              })
-              .getInitialPayload(emailInput);
-      }
-
-      window.activeUserEmail = "";
-      
-      function handleLogout() {
-          localStorage.removeItem('subAppEmail');
-          window.location.reload();
+          reloadApp();
       }
       
       function handleCustomLogin(e) {
@@ -2477,7 +2411,7 @@
       function checkStaleData() {
           if (Date.now() - lastActivityTime > INACTIVITY_THRESHOLD) {
               sessionStorage.setItem('staleDataRefreshed', 'true');
-              window.location.reload(true);
+              reloadApp();
           }
       }
 
@@ -6679,7 +6613,7 @@ const data = payload.userData;
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 transform transition-all p-6 text-center">
             <h2 class="text-2xl font-bold text-[#002147] mb-4">App Update Available</h2>
             <p class="text-gray-700 mb-6">A new version of this application has been released. Please refresh your browser to apply the update and continue working.</p>
-            <button onclick="window.location.reload(true)" class="w-full bg-[#002147] hover:bg-blue-800 text-white font-bold py-3 px-4 rounded-lg transition-colors">
+            <button onclick="reloadApp()" class="w-full bg-[#002147] hover:bg-blue-800 text-white font-bold py-3 px-4 rounded-lg transition-colors">
                 Refresh Now
             </button>
         </div>
