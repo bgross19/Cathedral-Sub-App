@@ -1148,6 +1148,20 @@
         </div>
       </div>
 
+      <div id="myPastSubDutiesSection" class="mb-6">
+        <div class="mb-3 flex items-center cursor-pointer select-none" id="headerMyPastSubDuties" onclick="toggleSection('myPastSubDutiesWrapper', 'iconMyPastSubDuties')">
+          <svg id="iconMyPastSubDuties" class="fill-current text-[#002147] mr-2 transition-transform duration-300 -rotate-90" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+          <h3 class="text-lg font-bold text-[#002147]">My Past Sub-Duties</h3>
+        </div>
+        <div id="myPastSubDutiesWrapper" class="grid grid-rows-[0fr] transition-all duration-300 ease-in-out mb-6">
+          <div class="overflow-hidden">
+            <div id="myPastSubDutiesContent" class="bg-white rounded-xl shadow-sm p-8 text-center text-gray-400 border border-gray-200">
+                Loading past sub-duties...
+            </div>
+          </div>
+        </div>
+      </div>
+
           </main>
 
 
@@ -2057,20 +2071,6 @@
           <div class="flex justify-end pt-2 mt-4 space-x-2 border-t border-gray-200 pt-4">
             <button class="modal-close px-4 bg-gray-200 p-2 rounded-lg text-black hover:bg-gray-300 transition-colors" onclick="attemptCloseAllModals()">Cancel</button>
             <button id="saveStaffBtn" class="px-4 bg-[#00843D] p-2 rounded-lg text-white hover:bg-green-700 transition-colors" onclick="saveStaffMember()">Save Staff</button>
-          </div>
-        </div>
-      </div>
-
-      <div id="myPastSubDutiesSection" class="mb-6">
-        <div class="mb-3 flex items-center cursor-pointer select-none" id="headerMyPastSubDuties" onclick="toggleSection('myPastSubDutiesWrapper', 'iconMyPastSubDuties')">
-          <svg id="iconMyPastSubDuties" class="fill-current text-[#002147] mr-2 transition-transform duration-300 -rotate-90" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
-          <h3 class="text-lg font-bold text-[#002147]">My Past Sub-Duties</h3>
-        </div>
-        <div id="myPastSubDutiesWrapper" class="grid grid-rows-[0fr] transition-all duration-300 ease-in-out mb-6">
-          <div class="overflow-hidden">
-            <div id="myPastSubDutiesContent" class="bg-white rounded-xl shadow-sm p-8 text-center text-gray-400 border border-gray-200">
-                Loading past sub-duties...
-            </div>
           </div>
         </div>
       </div>
