@@ -3240,7 +3240,7 @@ const data = payload.userData;
       function handleSignMeUp(absenceId, period, btnId, teacherName, courseName) {
         let confirmMsg = "Are you sure you want to cover this period?";
         if (teacherName && courseName) {
-            confirmMsg = `Are you sure you want to cover Period ${period}, ${courseName}, for ${teacherName}?`;
+            confirmMsg = `Are you sure you want to cover Period ${escapeHtml(period)}, ${escapeHtml(courseName)}, for ${escapeHtml(teacherName)}?`;
         }
 
         showConfirm(confirmMsg, () => {
@@ -4012,7 +4012,7 @@ const data = payload.userData;
         // 2. Build Header
         let headerHtml = `<th class="p-3 border border-gray-300 min-w-[200px] sticky left-0 z-20 bg-gray-50 shadow-[1px_0_0_0_#d1d5db]">Teacher Name</th>`;
         sortedActivePeriods.forEach(p => {
-            headerHtml += `<th class="p-3 border border-gray-300 text-center w-32">Period ${p}</th>`;
+            headerHtml += `<th class="p-3 border border-gray-300 text-center w-32">Period ${escapeHtml(p)}</th>`;
         });
         thead.innerHTML = headerHtml;
 
@@ -4029,7 +4029,7 @@ const data = payload.userData;
                 if (pData) {
                     // They requested a sub for this period
                     if (pData.assignedSub) {
-                        html += `<td class="p-3 text-xs text-center border border-gray-300 bg-green-50 align-top cursor-pointer hover:opacity-80 transition-opacity" onclick="openDetailsModalForAdmin(${pData.rawIdx})">
+                        html += `<td class="p-3 text-xs text-center border border-gray-300 bg-green-50 align-top cursor-pointer hover:opacity-80 transition-opacity" onclick="openDetailsModalForAdmin(${escapeJs(pData.rawIdx)})">
                                     <div class="font-bold text-green-800">${escapeHtml(pData.assignedSub)}</div>
                                     <div class="text-gray-500 mt-1">${escapeHtml(pData.room)}</div>
                                  </td>`;
@@ -4037,7 +4037,7 @@ const data = payload.userData;
                         const req = adminDataRaw[pData.rawIdx];
                         const quickCoverLink = window.globalAppUrl ? `${window.globalAppUrl}?action=quickCover&absenceId=${req.id}&period=${req.period}` : '#';
 
-                        html += `<td class="p-3 text-xs text-center border border-gray-300 bg-yellow-100 align-top hover:opacity-80 transition-opacity relative group" onclick="openDetailsModalForAdmin(${pData.rawIdx})">
+                        html += `<td class="p-3 text-xs text-center border border-gray-300 bg-yellow-100 align-top hover:opacity-80 transition-opacity relative group" onclick="openDetailsModalForAdmin(${escapeJs(pData.rawIdx)})">
                                     <div class="font-bold text-yellow-800 cursor-pointer">Unassigned</div>
                                     <div class="text-gray-600 mt-1 cursor-pointer">${escapeHtml(pData.room)}</div>
                                     <div class="mt-2 text-center" onclick="event.stopPropagation()">
@@ -4096,7 +4096,7 @@ const data = payload.userData;
         // 2. Build Header
         let headerHtml = `<th class="p-3 border border-gray-300 min-w-[200px] sticky left-0 z-20 bg-gray-50 shadow-[1px_0_0_0_#d1d5db]">Teacher Name</th>`;
         sortedActivePeriods.forEach(p => {
-            headerHtml += `<th class="p-3 border border-gray-300 text-center w-64">Period ${p}</th>`;
+            headerHtml += `<th class="p-3 border border-gray-300 text-center w-64">Period ${escapeHtml(p)}</th>`;
         });
         thead.innerHTML = headerHtml;
 
@@ -5125,7 +5125,7 @@ const data = payload.userData;
 
               if (isWeekend) {
                   html += `<div class="p-4 border rounded-lg bg-gray-100 border-gray-200 text-gray-400 relative">
-                              <span class="absolute top-1 left-2 text-sm font-bold">${day}</span>
+                              <span class="absolute top-1 left-2 text-sm font-bold">${escapeHtml(day)}</span>
                            </div>`;
               } else {
                   let statusColor = "bg-white border-gray-200 hover:bg-gray-50";
@@ -5142,9 +5142,9 @@ const data = payload.userData;
                       statusIcon = "PM";
                   }
 
-                  html += `<div onclick="toggleAvailability('${stdDateStr}')" class="p-4 sm:p-6 border rounded-lg cursor-pointer transition-colors relative flex items-center justify-center ${statusColor}">
+                  html += `<div onclick="toggleAvailability('${escapeJs(stdDateStr)}')" class="p-4 sm:p-6 border rounded-lg cursor-pointer transition-colors relative flex items-center justify-center ${escapeHtml(statusColor)}">
                               <span class="absolute top-1 left-2 text-sm font-bold">${day}</span>
-                              <span class="text-xs font-bold mt-3">${statusIcon}</span>
+                              <span class="text-xs font-bold mt-3">${escapeHtml(statusIcon)}</span>
                            </div>`;
               }
           }
@@ -5817,7 +5817,7 @@ const data = payload.userData;
 
               google.script.run
                   .withSuccessHandler(res => {
-                      if (res.success) {
+                      if (res && res.success) {
                           showToast(`Pay Period ${selectedPP.periodNumber} approved successfully!`, "success");
                           // Update local state
                           hrPayPeriods[val].approved = true;
@@ -5830,7 +5830,7 @@ const data = payload.userData;
 
                           checkPayPeriodApprovalState();
                       } else {
-                          showToast("Failed to approve pay period: " + res.error, "error");
+                          showToast("Failed to approve pay period: " + (res ? res.error : "Unknown error"), "error");
                           checkPayPeriodApprovalState(); // reset button state
                       }
                   })
@@ -6041,7 +6041,7 @@ const data = payload.userData;
         const colCount = hrCurrentView === 'absences' ? (2 + (dynamicReasons ? dynamicReasons.length : 0)) : 5;
 
         if (dataList.length === 0) {
-          tbody.innerHTML = `<tr><td colspan="${colCount}" class="p-8 text-center text-gray-400 italic hidden sm:table-cell">No data found for the selected dates.</td><td class="p-8 text-center text-gray-400 italic block sm:hidden">No data found for the selected dates.</td></tr>`;
+          tbody.innerHTML = `<tr><td colspan="${escapeHtml(colCount)}" class="p-8 text-center text-gray-400 italic hidden sm:table-cell">No data found for the selected dates.</td><td class="p-8 text-center text-gray-400 italic block sm:hidden">No data found for the selected dates.</td></tr>`;
           return;
         }
 
@@ -6073,7 +6073,7 @@ const data = payload.userData;
           } else {
             let breakdownText = `${escapeHtml(item.greenExtras)} Green, ${escapeHtml(item.blueGoldExtras)} Blue/Gold`;
             let extraPayFormatted = '$' + Number(item.extraPay).toFixed(2);
-            let exportText = `${extraPayFormatted} (${breakdownText})`;
+            let exportText = `${escapeHtml(extraPayFormatted)} (${escapeHtml(breakdownText)})`;
 
             let safeName = item.name.replace(/[^a-zA-Z0-9]/g, '');
             let detailsId = `hr-detail-${safeName}-${Math.random().toString(36).substr(2, 9)}`;
@@ -6114,7 +6114,7 @@ const data = payload.userData;
             }
 
             html += `
-              <tr class="hover:bg-gray-100 transition-colors border-b border-gray-100 last:border-b-0 cursor-pointer" onclick="document.getElementById('${detailsId}').classList.toggle('hidden')">
+              <tr class="hover:bg-gray-100 transition-colors border-b border-gray-100 last:border-b-0 cursor-pointer" onclick="document.getElementById('${escapeJs(detailsId)}').classList.toggle('hidden')">
                 <!-- Mobile View -->
                 <td class="p-3 block sm:hidden">
                     <div class="font-bold text-[#002147] mb-2">${escapeHtml(item.name)} <span class="text-xs text-gray-400 ml-2">▼</span></div>
@@ -6123,7 +6123,7 @@ const data = payload.userData;
                         <div><span class="font-semibold text-gray-600">Extras:</span> ${escapeHtml(item.extras)}</div>
                         <div class="col-span-2">
                             <span class="font-semibold text-gray-600">Extra (Pay):</span>
-                            <span class="text-[#00843D] font-bold">${extraPayFormatted}</span>
+                            <span class="text-[#00843D] font-bold">${escapeHtml(extraPayFormatted)}</span>
                             <div class="mt-1 text-xs text-gray-500">${breakdownText}</div>
                         </div>
                         <div class="col-span-2 pt-2 mt-1 border-t border-gray-100"><span class="font-bold text-gray-800">Totals:</span> ${escapeHtml(item.total)}</div>
@@ -6139,7 +6139,7 @@ const data = payload.userData;
                 <td class="p-3 text-sm text-gray-600 font-bold text-right hidden sm:table-cell">${escapeHtml(item.duties)}</td>
                 <td class="p-3 text-sm text-gray-600 font-bold text-right hidden sm:table-cell">${escapeHtml(item.extras)}</td>
                 <td class="p-3 text-sm text-[#00843D] font-bold text-right hidden sm:table-cell" data-export="${escapeHtml(exportText)}">
-                    ${extraPayFormatted}
+                    ${escapeHtml(extraPayFormatted)}
                 </td>
                 <td class="p-3 text-sm text-gray-600 font-bold text-right hidden sm:table-cell">${escapeHtml(item.total)}</td>
               </tr>

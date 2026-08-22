@@ -1,0 +1,55 @@
+name: Weekly Code Health Checkup
+
+on:
+  schedule:
+    - cron: '0 0 * * 0' # Run at midnight on Sunday
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  lint:
+    name: Code Health / Linting
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Install dependencies
+      run: npm install eslint eslint-plugin-html eslint-plugin-googleappsscript --save-dev
+
+    - name: Initialize ESLint Configuration
+      run: |
+        cat << 'ESLINT_CONF' > .eslintrc.json
+        {
+            "env": {
+                "browser": true,
+                "es2021": true,
+                "node": true,
+                "googleappsscript/googleappsscript": true
+            },
+            "extends": "eslint:recommended",
+            "plugins": [
+                "html",
+                "googleappsscript"
+            ],
+            "parserOptions": {
+                "ecmaVersion": 12
+            },
+            "rules": {
+                "no-unused-vars": "warn",
+                "no-undef": "warn",
+                "no-implicit-globals": "warn"
+            },
+            "settings": {
+                "html/html-extensions": [".html"]
+            }
+        }
+        ESLINT_CONF
+
+    - name: Run ESLint
+      run: npx eslint Index.html code.gs powerschool.gs tests.gs
