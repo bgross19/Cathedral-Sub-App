@@ -3682,6 +3682,38 @@ function saveSubFeedback(absenceId, period, rating, note, clientEmail) {
 
     sheet.getRange(targetIndex + 1, 21).setValue(JSON.stringify(subFeedbackParsed));
 
+    var teacherEmail = String(row[2]).toLowerCase().trim();
+    var absenceDateVal = row[3];
+    var absenceDateStr = (absenceDateVal instanceof Date) ? Utilities.formatDate(absenceDateVal, Session.getScriptTimeZone(), "M/d/yyyy") : String(absenceDateVal);
+
+    var nameLookup = buildNameLookup(rosterData);
+    var teacherName = nameLookup[teacherEmail] || teacherEmail;
+    if (teacherName.includes(",")) {
+        var parts = teacherName.split(",");
+        teacherName = parts[1].trim() + " " + parts[0].trim();
+    }
+
+    var subject = "Substitute Feedback Received - Period " + period;
+    var parsedRating = parseInt(rating) || 0;
+    var ratingStars = "★".repeat(parsedRating) + "☆".repeat(Math.max(0, 5 - parsedRating));
+
+    var bodyText = "Hello " + teacherName + ",\n\n";
+    bodyText += subName + " just submitted feedback for covering your class on " + absenceDateStr + ":\n\n";
+    bodyText += "- Period: " + period + "\n";
+    bodyText += "- Rating: " + rating + "/5\n";
+    bodyText += "- Notes: " + (note || "No notes") + "\n\n";
+    bodyText += "Thank you!";
+
+    var bodyHtml = "<p>Hello " + teacherName + ",</p>";
+    bodyHtml += "<p>" + subName + " just submitted feedback for covering your class on " + absenceDateStr + ":</p>";
+    bodyHtml += "<ul>";
+    bodyHtml += "<li><strong>Period:</strong> " + period + "</li>";
+    bodyHtml += "<li><strong>Rating:</strong> " + ratingStars + " (" + rating + "/5)</li>";
+    bodyHtml += "<li><strong>Notes:</strong> " + (note || "<em>No notes provided</em>") + "</li>";
+    bodyHtml += "</ul><p>Thank you!</p>";
+
+    enqueueEmail(teacherEmail, subject, bodyText, {htmlBody: bodyHtml});
+
     logAuditAction("SUB_FEEDBACK_SAVED", absenceId, "Saved Sub Feedback - Period: " + period + ", Rating: " + rating);
 
     return { success: true };
@@ -3782,7 +3814,7 @@ function sendDailySubFeedbackRequests() {
         bodyText += "\nThank you!";
         bodyHtml += "</ul><p>Thank you!</p>";
 
-        enqueueEmail(ss, email, subject, bodyText, bodyHtml);
+        enqueueEmail(email, subject, bodyText, {htmlBody: bodyHtml});
     }
 
   } catch (e) {
@@ -3790,82 +3822,6 @@ function sendDailySubFeedbackRequests() {
   }
 }
 
-function sendConsolidatedTeacherFeedback() {
-  try {
-    var ss = getSS();
-    var mainSheet = getSheetOrThrow(ss, "Absence Requests");
-    var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
-
-    var data = mainSheet.getDataRange().getValues();
-    var rosterData = rosterSheet.getDataRange().getValues();
-
-    var nameLookup = buildNameLookup(rosterData);
-
-    var today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    var feedbackToSend = {}; // Keyed by teacher email
-
-    for (var i = 1; i < data.length; i++) {
-      var row = data[i];
-      var status = String(row[19] || 'Active');
-      if (status === 'Canceled') continue;
-
-      var dateVal = row[3];
-      if (!dateVal) continue;
-
-      var rowDate = new Date(dateVal);
-      rowDate.setHours(0, 0, 0, 0);
-
-      if (rowDate.getTime() === today.getTime()) {
-         var rowTeacherEmail = String(row[2]).toLowerCase();
-         var subFeedbackRaw = String(row[20] || "[]");
-         var subFeedbackParsed = [];
-         try {
-             subFeedbackParsed = JSON.parse(subFeedbackRaw);
-         } catch(e) {}
-
-         if (subFeedbackParsed.length > 0) {
-             if (!feedbackToSend[rowTeacherEmail]) {
-                 var teacherName = nameLookup[rowTeacherEmail] || rowTeacherEmail;
-                 if (teacherName.includes(",")) {
-                    var parts = teacherName.split(",");
-                    teacherName = parts[1].trim() + " " + parts[0].trim();
-                 }
-                 feedbackToSend[rowTeacherEmail] = { name: teacherName, feedbacks: [] };
-             }
-             for (var j = 0; j < subFeedbackParsed.length; j++) {
-                 feedbackToSend[rowTeacherEmail].feedbacks.push(subFeedbackParsed[j]);
-             }
-         }
-      }
-    }
-
-    // Process sending emails
-    for (var email in feedbackToSend) {
-        var tData = feedbackToSend[email];
-        var subject = "Substitute Feedback for Today's Classes";
-
-        var bodyText = "Hello " + tData.name + ",\n\nHere is the feedback from the substitutes who covered your classes today:\n\n";
-        var bodyHtml = "<p>Hello " + tData.name + ",</p><p>Here is the feedback from the substitutes who covered your classes today:</p><ul>";
-
-        for (var k = 0; k < tData.feedbacks.length; k++) {
-            var fb = tData.feedbacks[k];
-            var ratingStars = "★".repeat(fb.rating) + "☆".repeat(5 - fb.rating);
-            bodyText += "- Period " + fb.period + " (" + fb.subName + ") - Rating: " + fb.rating + "/5\n  Notes: " + (fb.note || "No notes") + "\n";
-            bodyHtml += "<li><strong>Period " + fb.period + "</strong> covered by " + fb.subName + "<br>Rating: " + ratingStars + " (" + fb.rating + "/5)<br>Notes: " + (fb.note || "<em>No notes provided</em>") + "</li>";
-        }
-
-        bodyText += "\nThank you!";
-        bodyHtml += "</ul><p>Thank you!</p>";
-
-        enqueueEmail(ss, email, subject, bodyText, bodyHtml);
-    }
-
-  } catch (e) {
-    console.error("Error in sendConsolidatedTeacherFeedback: " + e.message);
-  }
-}
 
 function setupSubFeedbackTriggers() {
   var triggers = ScriptApp.getProjectTriggers();
@@ -3881,12 +3837,6 @@ function setupSubFeedbackTriggers() {
     .everyDays(1)
     .atHour(15) // 3 PM
     .create();
-
-  ScriptApp.newTrigger('runTeacherFeedbackConsolidated')
-    .timeBased()
-    .everyDays(1)
-    .atHour(16) // 4 PM
-    .create();
 }
 
 function runSubFeedbackRequests() {
@@ -3896,9 +3846,3 @@ function runSubFeedbackRequests() {
     }
 }
 
-function runTeacherFeedbackConsolidated() {
-    var today = new Date().getDay();
-    if (today > 0 && today < 6) { // Monday (1) to Friday (5)
-        sendConsolidatedTeacherFeedback();
-    }
-}
