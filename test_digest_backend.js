@@ -110,13 +110,19 @@ vm.runInContext(code, context);
 try {
     // 2023-10-20 is a Friday
     let html = context.generatePrincipalsDigestHTML(new Date("2023-10-20T12:00:00Z"));
-    console.log(html);
     if (html.includes("Teacher Ann</strong>: 0.5 days and 2 periods")) console.log("Ann absences OK");
     if (html.includes("Teacher Dan</strong>: 1 days and 2 periods")) console.log("Dan absences OK");
     if (html.includes("Teacher Dan</strong>: covered 1 class</li>")) console.log("Dan coverage OK");
     if (html.includes("Teacher Ann</strong>: covered 1 class ($10.00 extra pay)</li>")) console.log("Ann coverage OK");
     if (html.includes("Sub Sally</strong>: covered 2 classes</li>")) console.log("Sally coverage OK");
 
+    // Test with string date format "2023-10-20"
+    let htmlStr = context.generatePrincipalsDigestHTML("2023-10-20");
+    if (htmlStr.includes("Teacher Ann</strong>: 0.5 days and 2 periods") && htmlStr.includes("Teacher Dan</strong>: 1 days and 2 periods")) {
+        console.log("String date parsing OK");
+    } else {
+        console.error("String date parsing failed!");
+    }
 } catch(e) {
     console.error(e);
 }

@@ -3356,6 +3356,12 @@ function generatePrincipalsDigestHTML(dateObj) {
 
   // Resolve target dates
   var refDate = dateObj ? new Date(dateObj) : new Date();
+  if (typeof dateObj === 'string' && dateObj.indexOf('-') > -1) {
+    var refParts = dateObj.split('-');
+    if (refParts.length === 3) {
+      refDate = new Date(parseInt(refParts[0], 10), parseInt(refParts[1], 10) - 1, parseInt(refParts[2], 10), 12, 0, 0);
+    }
+  }
   
   // Calculate Monday to Friday of the CURRENT week (assuming refDate is Friday)
   var currentWeekMonday = new Date(refDate);
@@ -3417,11 +3423,19 @@ function generatePrincipalsDigestHTML(dateObj) {
     if (status.toLowerCase() !== "active") continue; // Only active requests
 
     var dateVal = row[3];
-    var dateObjRow = new Date(dateVal);
-    if (isNaN(dateObjRow.getTime())) {
-      dateObjRow = new Date(String(dateVal).trim());
-      if (isNaN(dateObjRow.getTime())) continue;
+    var dateObjRow;
+    if (dateVal instanceof Date) {
+      dateObjRow = new Date(dateVal);
+    } else {
+      var dStr = String(dateVal).trim();
+      var parts = dStr.split("-");
+      if (parts.length === 3) {
+        dateObjRow = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10), 12, 0, 0);
+      } else {
+        dateObjRow = new Date(dStr);
+      }
     }
+    if (!dateObjRow || isNaN(dateObjRow.getTime())) continue;
 
     var teacherEmail = String(row[2]).toLowerCase().trim();
     var teacherName = nameLookup[teacherEmail] || teacherEmail;
