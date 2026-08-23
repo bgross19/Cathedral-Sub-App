@@ -2289,6 +2289,7 @@
       EventBus.subscribe('refresh_myAbsences', () => loadMyAbsences());
       EventBus.subscribe('refresh_myPastAbsences', () => loadMyPastAbsences());
       EventBus.subscribe('refresh_mySubDuties', () => loadMySubDuties());
+      EventBus.subscribe('refresh_myPastSubDuties', () => loadMyPastSubDuties());
       EventBus.subscribe('refresh_todaysOpenJobs', () => loadTodaysOpenJobs());
       EventBus.subscribe('refresh_quickCover', () => loadQuickCover());
       EventBus.subscribe('refresh_adminData', (data) => { loadAdminDataRawSilent(); loadAdminDashboardData(data && data.renderAtAGlance); });
@@ -5200,6 +5201,17 @@ const data = payload.userData;
           .refreshData(['myPastAbsences'], window.activeUserEmail);
       }
 
+      function loadMyPastSubDuties() {
+        document.getElementById('myPastSubDutiesContent').innerHTML = "Refreshing past sub-duties...";
+        google.script.run
+          .withSuccessHandler(res => { if (res.myPastSubDuties) renderMyPastSubDuties(res.myPastSubDuties); })
+          .withFailureHandler(err => {
+            console.error(err);
+            document.getElementById('myPastSubDutiesContent').innerHTML = `<div class="text-red-600 font-bold">Failed to load past sub-duties: ${escapeHtml(err.message)}</div>`;
+          })
+          .refreshData(['myPastSubDuties'], window.activeUserEmail);
+      }
+
       let userMyPastSubDuties = [];
 
       function renderMyPastSubDuties(jobs) {
@@ -5300,6 +5312,7 @@ const data = payload.userData;
                         job.note = note;
                         renderMyPastSubDuties(userMyPastSubDuties);
                     }
+                    EventBus.publish('refresh_myPastSubDuties');
                 } else {
                     alert("Error: " + res.error);
                 }
