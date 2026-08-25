@@ -6338,6 +6338,25 @@ const data = payload.userData;
         // Show the footer temporarily for the copy
         footer.classList.remove('hidden');
 
+        // Temporarily modify table and container styles for better email client rendering
+        const originalContainerStyle = container.getAttribute('style') || '';
+        container.setAttribute('style', originalContainerStyle + ' overflow-x: auto !important; max-width: 100% !important; display: block !important;');
+
+        const table = document.getElementById('atAGlanceTable');
+        const originalTableStyle = table.getAttribute('style') || '';
+        table.setAttribute('style', originalTableStyle + ' min-width: max-content !important;');
+
+        // Temporarily remove sticky positioning classes
+        const stickyElements = container.querySelectorAll('.sticky');
+        const stickyElementsData = [];
+        stickyElements.forEach(el => {
+            stickyElementsData.push({
+                element: el,
+                classes: el.className
+            });
+            el.classList.remove('sticky', 'left-0', 'z-10', 'z-20', 'shadow-[1px_0_0_0_#d1d5db]');
+        });
+
         // Create a range and selection to copy HTML content
         const range = document.createRange();
         range.selectNode(container);
@@ -6362,6 +6381,13 @@ const data = payload.userData;
         // Clean up
         selection.removeAllRanges();
         footer.classList.add('hidden');
+
+        // Restore styles and classes
+        container.setAttribute('style', originalContainerStyle);
+        table.setAttribute('style', originalTableStyle);
+        stickyElementsData.forEach(data => {
+            data.element.className = data.classes;
+        });
       }
     </script>
 
