@@ -3299,7 +3299,12 @@ const data = payload.userData;
         }
 
         // Optional validation like in assignSubFromAdmin
-        if (subName && !staffList.some(s => s.name === subName)) {
+        // Normalize "No Sub Needed"
+        if (subName && subName.toLowerCase() === "no sub needed") {
+            subName = "No Sub Needed";
+        }
+
+        if (subName && subName !== "No Sub Needed" && !staffList.some(s => s.name === subName)) {
             const isConfirmed = confirm('The name "' + subName + '" is not in the staff roster. Do you still want to assign them?');
             if (!isConfirmed) return;
         }
@@ -4479,6 +4484,9 @@ const data = payload.userData;
                 <button onclick="handleAdminAssign('${escapeJs(req.id)}', '${escapeJs(req.period)}', '${escapeJs(assignId)}')" class="bg-[#00843D] hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg transition-colors shadow-sm">
                   Save
                 </button>
+                <button onclick="document.getElementById('${escapeJs(assignId)}').value='No Sub Needed'; handleAdminAssign('${escapeJs(req.id)}', '${escapeJs(req.period)}', '${escapeJs(assignId)}')" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 px-6 rounded-lg transition-colors shadow-sm ml-2">
+                  No Sub Needed
+                </button>
              </div>
              <p class="text-xs text-gray-500 mt-2 italic">To remove a sub, clear the box and click Save.</p>
           </div>
@@ -4506,7 +4514,12 @@ const data = payload.userData;
            subName = subName.replace(/\s+-\s+.*$/, '');
         }
 
-        if (subName && !staffList.some(s => s.name === subName)) {
+        // Normalize "No Sub Needed"
+        if (subName && subName.toLowerCase() === "no sub needed") {
+            subName = "No Sub Needed";
+        }
+
+        if (subName && subName !== "No Sub Needed" && !staffList.some(s => s.name === subName)) {
           showToast("Please enter a valid staff name from the list, or leave it blank to clear.", 'error');
           return;
         }
@@ -4596,7 +4609,12 @@ const data = payload.userData;
            return;
         }
 
-        if (subName && !staffList.some(s => s.name === subName)) {
+        // Normalize "No Sub Needed"
+        if (subName && subName.toLowerCase() === "no sub needed") {
+            subName = "No Sub Needed";
+        }
+
+        if (subName && subName !== "No Sub Needed" && !staffList.some(s => s.name === subName)) {
           showToast("Please enter a valid staff name from the list, or leave it blank to clear.", 'error');
           inputEl.value = originalValue;
           return;
@@ -4732,6 +4750,9 @@ const data = payload.userData;
                 <button onclick="handleAssign('${escapeJs(req.id)}', '${escapeJs(req.period)}', '${escapeJs(assignId)}', true)" class="bg-[#00843D] hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg transition-colors shadow-sm">
                   Assign
                 </button>
+                <button onclick="document.getElementById('${escapeJs(assignId)}').value='No Sub Needed'; handleAssign('${escapeJs(req.id)}', '${escapeJs(req.period)}', '${escapeJs(assignId)}', true)" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 px-6 rounded-lg transition-colors shadow-sm ml-2">
+                  No Sub Needed
+                </button>
              </div>
           </div>
         `;
@@ -4770,7 +4791,12 @@ const data = payload.userData;
            subName = subName.replace(/\s+-\s+.*$/, '');
         }
 
-        if (subName && !staffList.some(s => s.name === subName)) {
+        // Normalize "No Sub Needed"
+        if (subName && subName.toLowerCase() === "no sub needed") {
+            subName = "No Sub Needed";
+        }
+
+        if (subName && subName !== "No Sub Needed" && !staffList.some(s => s.name === subName)) {
           showToast("Please enter a valid staff name from the list, or leave it blank to clear.", 'error');
           return;
         }
