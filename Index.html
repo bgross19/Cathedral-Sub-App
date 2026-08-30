@@ -1194,10 +1194,6 @@
                      <input type="date" id="hrFilterEndDate" class="border rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-[#00843D]" onchange="handleHRDateChange()">
                   </div>
                   <div class="flex items-center gap-2">
-                     <label id="hrFilterUnpaidContainer" class="hidden items-center gap-2 mr-2 cursor-pointer text-sm font-bold text-gray-700">
-                       <input type="checkbox" id="hrFilterUnpaidToggle" class="h-4 w-4 text-[#00843D] focus:ring-[#00843D] border-gray-300 rounded" onchange="applyHRFilters()">
-                       Hide Unpaid
-                     </label>
                      <button onclick="exportToCSV('HR_Dashboard_Export.csv', 'hrDashboardTable')" class="bg-white hover:bg-gray-100 text-[#002147] text-sm font-bold py-1.5 px-4 rounded border border-[#002147] transition-colors shadow-sm flex items-center gap-2">
                          <span>📥</span> Export CSV
                      </button>
@@ -2154,7 +2150,7 @@
         let csv = '';
 
         // Get headers
-        const headers = Array.from(table.querySelectorAll(':scope > thead tr.sm\\:table-row th, :scope > thead tr:not(.sm\\:table-row) th'))
+        const headers = Array.from(table.querySelectorAll('thead tr.sm\\:table-row th, thead tr:not(.sm\\:table-row) th'))
                              .map(th => {
                                  let text = th.textContent.trim();
                                  if (/^[=+\-@\t\r]/.test(text)) {
@@ -5640,19 +5636,13 @@ const data = payload.userData;
         hrCurrentView = viewType;
         const btnAbsences = document.getElementById('hrToggleAbsences');
         const btnSubs = document.getElementById('hrToggleSubs');
-        const filterUnpaidContainer = document.getElementById('hrFilterUnpaidContainer');
 
         if (viewType === 'absences') {
           btnAbsences.className = "flex-1 py-2 px-4 rounded-lg border-2 border-[#00843D] bg-[#00843D] text-white font-bold transition-colors";
           btnSubs.className = "flex-1 py-2 px-4 rounded-lg border-2 border-gray-200 text-gray-500 font-bold transition-colors";
-          if (filterUnpaidContainer) filterUnpaidContainer.classList.add('hidden');
         } else {
           btnSubs.className = "flex-1 py-2 px-4 rounded-lg border-2 border-[#00843D] bg-[#00843D] text-white font-bold transition-colors";
           btnAbsences.className = "flex-1 py-2 px-4 rounded-lg border-2 border-gray-200 text-gray-500 font-bold transition-colors";
-          if (filterUnpaidContainer) {
-              filterUnpaidContainer.classList.remove('hidden');
-              filterUnpaidContainer.classList.add('flex');
-          }
         }
 
         applyHRFilters();
@@ -5823,21 +5813,8 @@ const data = payload.userData;
               btn.disabled = true;
               btn.innerHTML = `<span>⏳</span> Approving...`;
 
-              // Force filter to ON to exclude unpaid subs from export, then restore
-              const unpaidToggle = document.getElementById('hrFilterUnpaidToggle');
-              const originalToggleState = unpaidToggle ? unpaidToggle.checked : false;
-              if (unpaidToggle) {
-                  unpaidToggle.checked = true;
-                  applyHRFilters();
-              }
-
               const csvString = generateCSVString('hrDashboardTable');
               const rangeString = `${selectedPP.startDate} to ${selectedPP.endDate}`;
-
-              if (unpaidToggle) {
-                  unpaidToggle.checked = originalToggleState;
-                  applyHRFilters();
-              }
 
               google.script.run
                   .withSuccessHandler(res => {
@@ -5943,10 +5920,6 @@ const data = payload.userData;
                     let subName = subObj.name;
                     let coveredPeriod = subObj.period;
 
-                    if (subName && subName.toLowerCase() === "no sub needed") {
-                        return; // Exclude "No Sub Needed"
-                    }
-
                     if (!aggregated[subName]) {
                         aggregated[subName] = { duties: 0, extras: 0, total: 0, greenExtras: 0, blueGoldExtras: 0, details: [] };
                     }
@@ -5988,8 +5961,6 @@ const data = payload.userData;
 
         // Convert to array and filter out 0s
         let resultList = [];
-        const filterUnpaid = document.getElementById('hrFilterUnpaidToggle') && document.getElementById('hrFilterUnpaidToggle').checked;
-
         for (let name in aggregated) {
             if (hrCurrentView === 'absences') {
                 if (aggregated[name].total > 0) {
@@ -6000,10 +5971,6 @@ const data = payload.userData;
                     let greenPay = aggregated[name].greenExtras * parseFloat(hrRates.green || 0);
                     let blueGoldPay = aggregated[name].blueGoldExtras * parseFloat(hrRates.blueGold || 0);
                     let extraPay = greenPay + blueGoldPay;
-
-                    if (filterUnpaid && extraPay <= 0) {
-                        continue;
-                    }
 
                     // Sort details by date then period
                     aggregated[name].details.sort((a, b) => {
@@ -6197,7 +6164,7 @@ const data = payload.userData;
         let tsv = '';
 
         // Get headers
-        const headers = Array.from(table.querySelectorAll(':scope > thead tr.sm\\:table-row th, :scope > thead tr:not(.sm\\:table-row) th'))
+        const headers = Array.from(table.querySelectorAll('thead tr.sm\\:table-row th, thead tr:not(.sm\\:table-row) th'))
             .filter(th => !th.classList.contains('sm:hidden'))
             .map(th => {
                 let text = th.textContent.trim();
