@@ -3573,6 +3573,141 @@ const data = payload.userData;
         container.classList.add('p-4');
       }
 
+      function getNext5SchoolDays() {
+        const days = [];
+        let current = new Date();
+        current.setHours(12, 0, 0, 0); // Noon to avoid timezone issues
+
+        while (days.length < 5) {
+            const dayOfWeek = current.getDay();
+            if (dayOfWeek !== 0 && dayOfWeek !== 6) { // Skip Sunday (0) and Saturday (6)
+                const yyyy = current.getFullYear();
+                const mm = String(current.getMonth() + 1).padStart(2, '0');
+                const dd = String(current.getDate()).padStart(2, '0');
+                days.push({
+                    dateStr: `${yyyy}-${mm}-${dd}`,
+                    dateObj: new Date(current.getTime())
+                });
+            }
+            current.setDate(current.getDate() + 1);
+        }
+        return days;
+      }
+
+      function renderSubAvailabilityDashboard() {
+        const container = document.getElementById('subAvailabilityContainer');
+        if (!staffList || staffList.length === 0) {
+            container.innerHTML = '<div class="text-center text-gray-400 italic">No substitute data found.</div>';
+            return;
+        }
+
+        const next5Days = getNext5SchoolDays();
+
+        let html = '<div class="grid grid-cols-1 md:grid-cols-5 gap-4">';
+
+        next5Days.forEach(dayInfo => {
+            const dateStr = dayInfo.dateStr;
+            const dateObj = dayInfo.dateObj;
+
+            // Format date for display (e.g., "Mon, Oct 16")
+            const displayDate = dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+
+            // Get day color
+            const color = globalDateColors[dateStr] || "Unknown";
+            let colorPill = '';
+            if (color.toLowerCase() === 'green') {
+                colorPill = '<span class="ml-2 inline-block bg-green-100 text-green-800 text-[10px] font-bold px-2 py-0.5 rounded border border-green-200 uppercase tracking-wider">Green</span>';
+            } else if (color.toLowerCase() === 'blue') {
+                colorPill = '<span class="ml-2 inline-block bg-blue-100 text-blue-800 text-[10px] font-bold px-2 py-0.5 rounded border border-blue-200 uppercase tracking-wider">Blue</span>';
+            } else if (color.toLowerCase() === 'gold') {
+                colorPill = '<span class="ml-2 inline-block bg-yellow-100 text-yellow-800 text-[10px] font-bold px-2 py-0.5 rounded border border-yellow-200 uppercase tracking-wider">Gold</span>';
+            } else {
+                colorPill = `<span class="ml-2 inline-block bg-gray-100 text-gray-800 text-[10px] font-bold px-2 py-0.5 rounded border border-gray-200 uppercase tracking-wider">${escapeHtml(color)}</span>`;
+            }
+
+            // Find subs available on this day
+            const availableAllDay = [];
+            const availableAM = [];
+            const availablePM = [];
+
+            staffList.forEach(staff => {
+                if (staff.role && staff.role.toLowerCase().includes('substitute')) {
+                    const status = staff.availability && staff.availability[dateStr];
+                    if (status === 'Available') {
+                        availableAllDay.push(staff.name);
+                    } else if (status === 'AM Only') {
+                        availableAM.push(staff.name);
+                    } else if (status === 'PM Only') {
+                        availablePM.push(staff.name);
+                    }
+                }
+            });
+
+            // Build card for the day
+            html += `
+                <div class="bg-gray-50 border border-gray-200 rounded-lg p-3 flex flex-col h-full">
+                    <div class="flex items-center justify-between border-b border-gray-200 pb-2 mb-2">
+                        <h4 class="font-bold text-[#002147] text-sm">${escapeHtml(displayDate)}</h4>
+                        ${colorPill}
+                    </div>
+
+                    <div class="flex-grow space-y-3 overflow-y-auto max-h-[300px]">
+                        <div>
+                            <h5 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">All Day (${availableAllDay.length})</h5>
+                            ${availableAllDay.length > 0 ?
+                                '<ul class="text-sm text-green-700 font-medium list-disc list-inside">' + availableAllDay.map(name => `<li>${escapeHtml(name)}</li>`).join('') + '</ul>' :
+                                '<div class="text-xs text-gray-400 italic">None</div>'}
+                        </div>
+                        <div>
+                            <h5 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">AM Only (${availableAM.length})</h5>
+                            ${availableAM.length > 0 ?
+                                '<ul class="text-sm text-blue-700 font-medium list-disc list-inside">' + availableAM.map(name => `<li>${escapeHtml(name)}</li>`).join('') + '</ul>' :
+                                '<div class="text-xs text-gray-400 italic">None</div>'}
+                        </div>
+                        <div>
+                            <h5 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">PM Only (${availablePM.length})</h5>
+                            ${availablePM.length > 0 ?
+                                '<ul class="text-sm text-orange-700 font-medium list-disc list-inside">' + availablePM.map(name => `<li>${escapeHtml(name)}</li>`).join('') + '</ul>' :
+                                '<div class="text-xs text-gray-400 italic">None</div>'}
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+
+        html += '</div>';
+        container.innerHTML = html;
+        container.classList.remove('p-6');
+        container.classList.add('p-4');
+      }
+
+      function loadQuickCover() {
+        google.script.run
+          .withSuccessHandler(res => { if (res.quickCover) renderQuickCover(res.quickCover); })
+          .withFailureHandler(err => {
+            document.getElementById('quickCoverContainer').innerHTML = `<div class="p-8 text-center text-red-600 font-bold">Failed to load data: ${escapeHtml(err.message)}</div>`;
+          })
+          .refreshData(['quickCover'], window.activeUserEmail);
+      }
+
+
+      function exportAllAbsenceRequestsClient() {
+        const btn = document.getElementById('btn-exportAllData');
+        const originalText = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span>⏳</span> Exporting...';
+
+        google.script.run
+          .withSuccessHandler(jsonString => {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+            try {
+              const data = JSON.parse(jsonString);
+              if (!data || data.length === 0) {
+                 showToast("No data to export.", "info");
+                 return;
+              }
+              let csvContent = "data:text/csv;charset=utf-8,";
               data.forEach(row => {
                  let rowStr = row.map(val => {
                     if (val === null || val === undefined) return '""';
@@ -4182,12 +4317,12 @@ const data = payload.userData;
 
             let courseHtml = req.course ? `<span class="inline-block max-w-[150px] sm:max-w-[180px] md:max-w-[240px] truncate align-middle" title="${escapeHtml(req.course)}">${escapeHtml(req.course)}</span>` : '';
             if (req.course === "No Class Assigned" || !req.course) {
-               courseHtml = `<span class="group relative inline-block cursor-help text-red-500 font-bold px-2 py-1 bg-red-50 rounded">--<span class="invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-opacity duration-300 w-[140px] bg-[#555] text-white text-center rounded-md p-1.5 absolute z-10 bottom-[125%] left-1/2 -ml-[70px] text-xs font-normal after:content-[""] after:absolute after:top-full after:left-1/2 after:-ml-[5px] after:border-[5px] after:border-solid after:border-[#555_transparent_transparent_transparent]">No course found</span></span>`;
+               courseHtml = `<span class="group relative inline-block cursor-help text-red-500 font-bold px-2 py-1 bg-red-50 rounded">--<span class="invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-opacity duration-300 w-[140px] bg-[#555] text-white text-center rounded-md p-1.5 absolute z-10 bottom-[125%] left-1/2 -ml-[70px] text-xs font-normal after:content-[\"\"] after:absolute after:top-full after:left-1/2 after:-ml-[5px] after:border-[5px] after:border-solid after:border-[#555_transparent_transparent_transparent]">No course found</span></span>`;
             }
 
             let roomHtml = escapeHtml(req.room);
             if (req.room === "No Class Assigned" || !req.room) {
-               roomHtml = `<span class="group relative inline-block cursor-help text-red-500 font-bold px-2 py-1 bg-red-50 rounded">--<span class="invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-opacity duration-300 w-[140px] bg-[#555] text-white text-center rounded-md p-1.5 absolute z-10 bottom-[125%] left-1/2 -ml-[70px] text-xs font-normal after:content-[""] after:absolute after:top-full after:left-1/2 after:-ml-[5px] after:border-[5px] after:border-solid after:border-[#555_transparent_transparent_transparent]">No room found</span></span>`;
+               roomHtml = `<span class="group relative inline-block cursor-help text-red-500 font-bold px-2 py-1 bg-red-50 rounded">--<span class="invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-opacity duration-300 w-[140px] bg-[#555] text-white text-center rounded-md p-1.5 absolute z-10 bottom-[125%] left-1/2 -ml-[70px] text-xs font-normal after:content-[\"\"] after:absolute after:top-full after:left-1/2 after:-ml-[5px] after:border-[5px] after:border-solid after:border-[#555_transparent_transparent_transparent]">No room found</span></span>`;
             }
 
             let assignIdMobile = `inline-assign-mobile-${req.id}-${req.period}`;
