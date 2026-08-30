@@ -73,6 +73,7 @@ function _parseSettingsData(settingsSheet) {
   var data = settingsSheet.getDataRange().getValues();
   // Skip header row
   for (var i = 1; i < data.length; i++) {
+  if (!data[i]) continue;
     var key = String(data[i][0]).trim();
     var value = String(data[i][1]).trim();
     if (key) {
@@ -179,7 +180,7 @@ function doGet(e) {
     var rosterData = rosterSheet.getDataRange().getValues();
     var targetEmail = String(email).toLowerCase();
     for (var i = 1; i < rosterData.length; i++) {
-      if (String(rosterData[i][1]).toLowerCase() === targetEmail) {
+      if (rosterData[i] && String(rosterData[i][1]).toLowerCase() === targetEmail) {
         isAuthorized = true;
         break;
       }
@@ -274,7 +275,7 @@ function getUserData(ss, clientEmail) {
   var targetEmail = String(email).toLowerCase();
   
   for (var i = 1; i < rosterData.length; i++) {
-    if (String(rosterData[i][1]).toLowerCase() === targetEmail) {
+    if (rosterData[i] && String(rosterData[i][1]).toLowerCase() === targetEmail) {
       name = rosterData[i][0]; 
       role = rosterData[i][2] ? String(rosterData[i][2]).trim() : "Teacher";
       break;
@@ -376,7 +377,7 @@ function enqueueEmail(to, subject, body, options) {
 
       for (var i = 1; i < rosterData.length; i++) {
 
-        if (String(rosterData[i][1]).toLowerCase().trim() === targetEmail) {
+        if (rosterData[i] && String(rosterData[i][1]).toLowerCase().trim() === targetEmail) {
           recipientName = String(rosterData[i][0]).trim();
           break;
         }
@@ -389,7 +390,7 @@ function enqueueEmail(to, subject, body, options) {
     var formattedName = recipientName;
     if (formattedName.indexOf(",") > -1) {
       var parts = formattedName.split(",");
-      formattedName = parts[1].trim() + " " + parts[0].trim();
+      if (parts.length > 1) formattedName = parts[1].trim() + " " + parts[0].trim();
     }
 
     var plainGreeting = "Dear " + formattedName + ",\n\n";
@@ -435,6 +436,7 @@ function processEmailQueue() {
 
     // Check if any pending emails need schedule lookups
     for (var i = 1; i < data.length; i++) {
+    if (!data[i]) continue;
       if (data[i][5] === "Pending") {
         var body = String(data[i][3]);
         var optionsStr = String(data[i][4]);
@@ -473,6 +475,7 @@ function processEmailQueue() {
     }
 
     for (var j = 1; j < data.length; j++) {
+    if (!data[j]) continue;
       if (data[j][5] === "Pending") {
         var to = data[j][1];
         var subject = data[j][2];
@@ -597,6 +600,7 @@ function setupPrincipalsDigestTrigger() {
 function buildNameLookup(rosterData) {
   var nameLookup = {};
   for (var r = 1; r < rosterData.length; r++) {
+    if (!rosterData[r]) continue;
     var rosterEmail = String(rosterData[r][1]).toLowerCase().trim();
     nameLookup[rosterEmail] = String(rosterData[r][0]).trim();
   }
@@ -650,6 +654,7 @@ function getStaffRosterForAdmin(clientEmail) {
 
     // Assuming row 0 is header: Name, Email, Role, Duty
     for (var i = 1; i < data.length; i++) {
+    if (!data[i]) continue;
       var name = String(data[i][0] || "").trim();
       var email = String(data[i][1] || "").trim();
       var role = String(data[i][2] || "").trim();
@@ -744,7 +749,8 @@ function updateStaffRoleInlineAdmin(email, newRole, clientEmail) {
     var currentDuty = "";
 
     for (var i = 1; i < data.length; i++) {
-        if (String(data[i][1]).trim().toLowerCase() === targetEmail) {
+    if (!data[i]) continue;
+        if (data[i] && String(data[i][1]).trim().toLowerCase() === targetEmail) {
             rowIndexToUpdate = i + 1;
             currentName = String(data[i][0]).trim();
             currentDuty = String(data[i][3]).trim();
@@ -793,7 +799,8 @@ function updateStaffDutyInlineAdmin(email, newDuty, clientEmail) {
     var currentRole = "";
 
     for (var i = 1; i < data.length; i++) {
-        if (String(data[i][1]).trim().toLowerCase() === targetEmail) {
+    if (!data[i]) continue;
+        if (data[i] && String(data[i][1]).trim().toLowerCase() === targetEmail) {
             rowIndexToUpdate = i + 1;
             currentName = String(data[i][0]).trim();
             currentRole = String(data[i][2]).trim();
@@ -852,7 +859,8 @@ function saveStaffMemberAdmin(staffData, clientEmail) {
 
     if (originalEmail) {
       for (var i = 1; i < data.length; i++) {
-        if (String(data[i][1]).trim().toLowerCase() === originalEmail) {
+      if (!data[i]) continue;
+        if (data[i] && String(data[i][1]).trim().toLowerCase() === originalEmail) {
           rowIndexToUpdate = i + 1;
           break;
         }
@@ -866,7 +874,8 @@ function saveStaffMemberAdmin(staffData, clientEmail) {
     } else {
        // Check if new email already exists to prevent duplicates
        for (var i = 1; i < data.length; i++) {
-         if (String(data[i][1]).trim().toLowerCase() === newEmail.toLowerCase()) {
+       if (!data[i]) continue;
+         if (data[i] && String(data[i][1]).trim().toLowerCase() === newEmail.toLowerCase()) {
             return {
       success: false, error: "A staff member with this email already exists." };
          }
@@ -913,7 +922,8 @@ function deleteStaffMemberAdmin(email, clientEmail) {
     var targetIndex = -1;
 
     for (var i = 1; i < data.length; i++) {
-      if (String(data[i][1]).trim().toLowerCase() === targetEmail) {
+    if (!data[i]) continue;
+      if (data[i] && String(data[i][1]).trim().toLowerCase() === targetEmail) {
         targetIndex = i;
         break;
       }
@@ -1002,6 +1012,7 @@ function bulkUpsertStaffRoster(updates, clientEmail) {
     var existingEmailsMap = {};
     // Map email to row index (1-based for getRange)
     for (var i = 1; i < data.length; i++) {
+    if (!data[i]) continue;
        var email = String(data[i][1] || "").trim().toLowerCase();
        if (email) {
           existingEmailsMap[email] = i + 1;
@@ -1133,6 +1144,7 @@ function updateSettings(newSettings, clientEmail) {
 
     // Map existing rows (0-based index)
     for (var i = 1; i < data.length; i++) {
+    if (!data[i]) continue;
       settingsMap[String(data[i][0]).trim()] = i;
     }
 
@@ -1201,8 +1213,9 @@ function getCoordinatorEmail(ss) {
 
   var data = rosterSheet.getDataRange().getValues();
   for (var i = 1; i < data.length; i++) {
+  if (!data[i]) continue;
     // Column 2 is Role, Column 1 is Email
-    if (String(data[i][2]).toLowerCase().trim() === "sub coordinator") return String(data[i][1]).trim();
+    if (data[i] && String(data[i][2]).toLowerCase().trim() === "sub coordinator") return String(data[i][1]).trim();
   }
   return null;
 }
@@ -1219,9 +1232,10 @@ function getEmailsByRole(sheetSS, roleStr) {
   var emails = [];
   var targetRole = roleStr.toLowerCase().trim();
   for (var i = 1; i < data.length; i++) {
+  if (!data[i]) continue;
     var roles = String(data[i][2]).toLowerCase().split(",").map(function(r) { return r.trim(); });
     if (roles.indexOf(targetRole) !== -1) {
-       emails.push(String(data[i][1]).trim());
+       if (data[i]) emails.push(String(data[i][1]).trim());
     }
   }
   return emails;
@@ -1534,6 +1548,7 @@ function cancelMySubDuty(absenceId, period, clientEmail) {
     var data = sheet.getDataRange().getValues();
     var targetUserName = userName.toLowerCase();
     for (var i = 1; i < data.length; i++) {
+    if (!data[i]) continue;
       if (String(data[i][0]) === String(absenceId)) {
         var subColumnIndex = getSubColumnIndex(period);
         var assignedSub = String(data[i][subColumnIndex - 1] || "").trim();
@@ -1661,6 +1676,8 @@ function cancelAbsence(absenceId, clientEmail) {
 
     var subEmailLookup = {};
     for (var r = 1; r < rosterData.length; r++) {
+      if (!rosterData[r]) continue;
+      if (!rosterData[r]) continue;
       subEmailLookup[String(rosterData[r][0]).trim()] = String(rosterData[r][1]).trim();
     }
 
@@ -1670,6 +1687,7 @@ function cancelAbsence(absenceId, clientEmail) {
     var data = sheet.getDataRange().getValues();
     var targetIndex = -1;
     for (var i = 1; i < data.length; i++) {
+    if (!data[i]) continue;
       if (String(data[i][0]) === String(absenceId)) {
         targetIndex = i;
         break;
@@ -1692,7 +1710,7 @@ function cancelAbsence(absenceId, clientEmail) {
       var allPeriods = ['1', '2', '3', '4', '5', '6', '7', '8', '0', 'Advisory'];
       for (var pIdx = 0; pIdx < allPeriods.length; pIdx++) {
         var p = allPeriods[pIdx];
-        var subIndex = getSubColumnIndex(prd2) - 1;
+        var subIndex = getSubColumnIndex(p) - 1;
         var subName = String(data[i][subIndex] || "").trim();
         if (subName) {
           var email = subEmailLookup[subName];
@@ -1760,6 +1778,8 @@ function updateAbsence(absenceId, formData, clientEmail) {
 
     var subEmailLookup = {};
     for (var r = 1; r < rosterData.length; r++) {
+      if (!rosterData[r]) continue;
+      if (!rosterData[r]) continue;
       subEmailLookup[String(rosterData[r][0]).trim()] = String(rosterData[r][1]).trim();
     }
 
@@ -1769,6 +1789,7 @@ function updateAbsence(absenceId, formData, clientEmail) {
     var data = sheet.getDataRange().getValues();
     var targetIndex = -1;
     for (var i = 1; i < data.length; i++) {
+    if (!data[i]) continue;
       if (String(data[i][0]) === String(absenceId)) {
         targetIndex = i;
         break;
@@ -1812,7 +1833,7 @@ function updateAbsence(absenceId, formData, clientEmail) {
       var allPeriods = ['1', '2', '3', '4', '5', '6', '7', '8', '0', 'Advisory'];
       for (var pIdx = 0; pIdx < allPeriods.length; pIdx++) {
         var p = allPeriods[pIdx];
-        var subIndex = getSubColumnIndex(prd2) - 1;
+        var subIndex = getSubColumnIndex(p) - 1;
         var subName = String(data[i][subIndex] || "").trim();
 
         if (subName) {
@@ -1962,6 +1983,7 @@ function getAbsenceDetails(absenceId, period, optionalData, clientEmail) {
   }
 
   for (var i = 1; i < data.length; i++) {
+  if (!data[i]) continue;
     if (String(data[i][0]) === String(absenceId)) {
       var details = getAbsenceDetailsLocal(data[i], period, _cachedScheduleLookup, _cachedNameLookup);
       details.rowIndex = i + 1;
@@ -2045,6 +2067,8 @@ function assignSubToPeriod(absenceId, period, subName, forceOverride, clientEmai
 
     var subEmailLookup = {};
     for (var r = 1; r < rosterData.length; r++) {
+      if (!rosterData[r]) continue;
+      if (!rosterData[r]) continue;
       subEmailLookup[String(rosterData[r][0]).trim()] = String(rosterData[r][1]).trim();
     }
 
@@ -2055,6 +2079,7 @@ function assignSubToPeriod(absenceId, period, subName, forceOverride, clientEmai
 
     var targetIndex = -1;
     for (var i = 1; i < data.length; i++) {
+    if (!data[i]) continue;
       if (String(data[i][0]) === String(absenceId)) {
         targetIndex = i;
         break;
@@ -2177,6 +2202,7 @@ function assignSubToPeriod(absenceId, period, subName, forceOverride, clientEmai
 
         if (newSubEmail !== "") {
           for (var j = 1; j < data.length; j++) {
+          if (!data[j]) continue;
             var rowEmail = String(data[j][2] || "").toLowerCase();
             if (rowEmail === "") continue;
 
@@ -2313,6 +2339,7 @@ function getInitialPayload(clientEmail) {
     var dateColors = {};
     if (datesData && datesData.length > 0) {
       for (var d = 1; d < datesData.length; d++) {
+      if (!datesData[d]) continue;
         var dateRaw = datesData[d][0];
         var colorRaw = datesData[d][1];
         if (dateRaw && colorRaw) {
@@ -2334,7 +2361,7 @@ function getInitialPayload(clientEmail) {
     var name = null;
     var role = null;
     for (var i = 1; i < rosterData.length; i++) {
-      if (String(rosterData[i][1]).toLowerCase() === targetEmail) {
+      if (rosterData[i] && String(rosterData[i][1]).toLowerCase() === targetEmail) {
         name = rosterData[i][0];
         role = rosterData[i][2] ? String(rosterData[i][2]).trim() : "Teacher";
         break;
@@ -2492,7 +2519,7 @@ function getInitialPayload(clientEmail) {
         var teacherName = nameLookup[rowTeacherEmail] || rowTeacherEmail;
         if (teacherName.includes(",")) {
           var parts = teacherName.split(",");
-          teacherName = parts[1].trim() + " " + parts[0].trim();
+          if (parts.length > 1) teacherName = parts[1].trim() + " " + parts[0].trim();
         }
 
         var periodsRequested = String(row[4]).split(",").map(function(p) { return p.trim(); });
@@ -2506,10 +2533,10 @@ function getInitialPayload(clientEmail) {
       for (var pIdx = 0; pIdx < allPeriods.length; pIdx++) {
         var p = allPeriods[pIdx];
           if (periodsRequested.indexOf(String(p)) !== -1) {
-            var subColumnIndex = getSubColumnIndex(prd2) - 1;
+            var subColumnIndex = getSubColumnIndex(p) - 1;
             var assignedSub = String(row[subColumnIndex] || "").trim().toLowerCase();
 
-            var joinKey = rowTeacherEmail + "-" + getScheduleJoinPeriod(prd2);
+            var joinKey = rowTeacherEmail + "-" + getScheduleJoinPeriod(p);
             var scheduleInfo = scheduleLookup[joinKey];
             var roomStr = scheduleInfo && scheduleInfo.room ? String(scheduleInfo.room) : "No Class Assigned";
             var courseStr = scheduleInfo && scheduleInfo.course ? String(scheduleInfo.course) : "No Class Assigned";
@@ -2520,7 +2547,7 @@ function getInitialPayload(clientEmail) {
                 teacherEmail: String(rowTeacherEmail),
                 date: formattedDate,
                 formDateString: yyyymmdd,
-                period: String(prd2),
+                period: String(p),
                 rawDate: rawDate,
                 room: roomStr,
                 course: courseStr,
@@ -2535,7 +2562,7 @@ function getInitialPayload(clientEmail) {
                  var subFeedbackRaw = String(row[20] || "[]");
                  var subFeedbackParsed = [];
                  try {
-                     subFeedbackParsed = JSON.parse(sFeedbackRaw);
+                     subFeedbackParsed = JSON.parse(subFeedbackRaw);
                  } catch(e) {
                      // Ignore parse error
                  }
@@ -2632,6 +2659,7 @@ function getInitialPayload(clientEmail) {
 
       for (var rsIdx = 1; rsIdx < rosterData.length; rsIdx++) {
         var staffName = String(rosterData[rsIdx][0]).trim();
+        if (!rosterData[rsIdx]) continue;
         var staffEmail = String(rosterData[rsIdx][1]).toLowerCase().trim();
         var staffRole = String(rosterData[rsIdx][2]).toLowerCase().trim();
         var duty = String(rosterData[rsIdx][3] || "").trim();
@@ -2687,7 +2715,7 @@ function getInitialPayload(clientEmail) {
           var tName = nameLookup[rTeacherEmail] || rTeacherEmail;
           if (tName.includes(",")) {
             var prts = tName.split(",");
-            tName = prts[1].trim() + " " + prts[0].trim();
+            if (prts.length > 1) tName = prts[1].trim() + " " + prts[0].trim();
           }
 
           var prdsRequested = String(row[4]).split(",").map(function(p) { return p.trim(); });
@@ -2789,6 +2817,7 @@ function getInitialPayload(clientEmail) {
       var payPeriods = [];
 
       for (var p = 0; p < payPeriodsData.length; p++) {
+      if (!payPeriodsData[p]) continue;
         var periodNum = String(payPeriodsData[p][0]).trim();
         var startDateRaw = payPeriodsData[p][1];
         var endDateRaw = payPeriodsData[p][2];
@@ -2832,13 +2861,13 @@ function getInitialPayload(clientEmail) {
 
         for (var hrPIdx = 0; hrPIdx < hrPeriods.length; hrPIdx++) {
           var pStr = hrPeriods[hrPIdx];
-          var prd2 = pStr; // Keep as string for getSubColumnIndex
+          var p = pStr; // Keep as string for getSubColumnIndex
           if (p) {
-            var hrAssignedSub = hrRow[getSubColumnIndex(prd2) - 1];
+            var hrAssignedSub = hrRow[getSubColumnIndex(p) - 1];
             if (hrAssignedSub && String(hrAssignedSub).trim() !== "") {
-              var hrSchedKey = hrTeacherEmail + "-" + getScheduleJoinPeriod(prd2);
+              var hrSchedKey = hrTeacherEmail + "-" + getScheduleJoinPeriod(p);
               var hrCourseStr = scheduleLookup[hrSchedKey] ? String(scheduleLookup[hrSchedKey].course) : "No Class Assigned";
-              assignedSubs.push({ name: String(hrAssignedSub).trim(), period: String(prd2), course: hrCourseStr });
+              assignedSubs.push({ name: String(hrAssignedSub).trim(), period: String(p), course: hrCourseStr });
             }
           }
         }
@@ -3015,6 +3044,7 @@ function archiveAbsenceRequests(cutoffDateStr, clientEmail) {
     var rowsToArchive = [];
 
     for (var i = 1; i < data.length; i++) {
+    if (!data[i]) continue;
       var row = data[i];
       var rowDate = new Date(row[3]);
 
@@ -3065,11 +3095,12 @@ function getAuditLogs(startDateStr, endDateStr, clientEmail) {
 
     // Skip header
     for (var i = 1; i < data.length; i++) {
+    if (!data[i]) continue;
       var rowDate = new Date(data[i][0]);
       if (rowDate >= startDate && rowDate <= endDate) {
         logs.push({
           timestamp: Utilities.formatDate(rowDate, Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss"),
-          actor: String(data[i][1]),
+          actor: (data[i] ? String(data[i][1]) : ""),
           actionType: String(data[i][2]),
           targetId: String(data[i][3]),
           details: String(data[i][4])
@@ -3247,6 +3278,7 @@ function loadPayPeriodsSettings(clientEmail) {
     var payPeriods = [];
 
     for (var i = 1; i < data.length; i++) {
+    if (!data[i]) continue;
         var row = data[i];
         if (row[0] && row[1] && row[2]) {
             var periodNum = String(row[0]).trim();
@@ -3286,6 +3318,7 @@ function getSubstituteAvailability(email) {
   var targetEmail = String(email).toLowerCase();
 
   for (var i = 1; i < data.length; i++) {
+  if (!data[i]) continue;
     if (String(data[i][0]).toLowerCase() === targetEmail) {
       var cellVal = data[i][1];
       var dateStr = (cellVal instanceof Date) ? _formatDateToYYYYMMDD(cellVal) : String(cellVal).trim();
@@ -3309,7 +3342,8 @@ function saveSubstituteAvailability(dateStr, status, clientEmail) {
   var matchingRows = [];
 
   for (var i = 1; i < data.length; i++) {
-    var cellVal = data[i][1];
+  if (!data[i]) continue;
+      var cellVal = data[i][1];
     var rowDateStr = (cellVal instanceof Date) ? _formatDateToYYYYMMDD(cellVal) : String(cellVal).trim();
     if (String(data[i][0]).toLowerCase() === targetEmail && rowDateStr === dateStr) {
       matchingRows.push(i + 1); // 1-based index for sheets
@@ -3338,8 +3372,9 @@ function getAllSubstituteAvailability() {
   var availabilityMap = {}; // Format: { "email": { "YYYY-MM-DD": "status" } }
 
   for (var i = 1; i < data.length; i++) {
+  if (!data[i]) continue;
     var email = String(data[i][0]).toLowerCase().trim();
-    var cellVal = data[i][1];
+      var cellVal = data[i][1];
     var dateStr = (cellVal instanceof Date) ? _formatDateToYYYYMMDD(cellVal) : String(cellVal).trim();
     var status = String(data[i][2]).trim();
 
@@ -3405,6 +3440,7 @@ function generatePrincipalsDigestHTML(dateObj) {
         var dStr = datesRaw[i][0];
         if (dStr) {
            var formatted = dStr instanceof Date ? Utilities.formatDate(dStr, Session.getScriptTimeZone(), "yyyy-MM-dd") : String(dStr).trim();
+           if (!datesRaw[i]) continue;
            dateColors[formatted] = String(datesRaw[i][1]).trim();
         }
     }
@@ -3415,6 +3451,7 @@ function generatePrincipalsDigestHTML(dateObj) {
   var nameLookup = {};
   var dutyLookup = {};
   for (var roIdx = 1; roIdx < rosterData.length; roIdx++) {
+    if (!rosterData[roIdx]) continue;
     var e = String(rosterData[roIdx][1]).toLowerCase().trim();
     var nm = String(rosterData[roIdx][0]).trim();
     if (e) nameLookup[e] = nm;
@@ -3478,7 +3515,7 @@ function generatePrincipalsDigestHTML(dateObj) {
       for (var j = 0; j < periods.length; j++) {
         var p = periods[j];
         if (!p) continue;
-        var subColIdx = getSubColumnIndex(prd2);
+        var subColIdx = getSubColumnIndex(p);
         if (subColIdx > 0 && subColIdx <= row.length) {
           var assignedSubRaw = row[subColIdx - 1];
           if (assignedSubRaw && String(assignedSubRaw).trim() !== "") {
@@ -3490,6 +3527,7 @@ function generatePrincipalsDigestHTML(dateObj) {
             var subEmailLookup = "";
             for (var r = 1; r < rosterData.length; r++) {
                 if (String(rosterData[r][0]).trim() === assignedSub) {
+                    if (!rosterData[r]) continue;
                     subEmailLookup = String(rosterData[r][1]).toLowerCase().trim();
                     break;
                 }
@@ -3502,7 +3540,7 @@ function generatePrincipalsDigestHTML(dateObj) {
 
             if (subEmailLookup) {
                 for (var rsIdx = 1; rsIdx < rosterData.length; rsIdx++) {
-                    if (String(rosterData[rsIdx][1]).toLowerCase().trim() === subEmailLookup) {
+                    if (rosterData[rsIdx] && String(rosterData[rsIdx][1]).toLowerCase().trim() === subEmailLookup) {
                          var roles = String(rosterData[rsIdx][2]).toLowerCase();
                          if (roles.includes("substitute")) {
                              isSubstituteRole = true;
@@ -3603,6 +3641,8 @@ function sendPrincipalsDigest(dateObj) {
   var principals = [];
   
   for (var i = 1; i < rosterData.length; i++) {
+    if (!rosterData[i]) continue;
+    if (!rosterData[i]) continue;
     var email = String(rosterData[i][1]).toLowerCase().trim();
     var roles = String(rosterData[i][2]).toLowerCase();
     if (roles.includes("principal") && email) {
@@ -3658,7 +3698,7 @@ function saveSubFeedback(absenceId, period, rating, note, clientEmail) {
 
     var subName = "Unknown Sub";
     for (var r = 1; r < rosterData.length; r++) {
-       if (String(rosterData[r][1]).toLowerCase().trim() === targetEmail) {
+       if (rosterData[r] && String(rosterData[r][1]).toLowerCase().trim() === targetEmail) {
            subName = String(rosterData[r][0]).trim();
            break;
        }
@@ -3667,6 +3707,7 @@ function saveSubFeedback(absenceId, period, rating, note, clientEmail) {
     var data = sheet.getDataRange().getValues();
     var targetIndex = -1;
     for (var i = 1; i < data.length; i++) {
+    if (!data[i]) continue;
       if (String(data[i][0]) === String(absenceId)) {
         targetIndex = i;
         break;
@@ -3681,7 +3722,7 @@ function saveSubFeedback(absenceId, period, rating, note, clientEmail) {
     var subFeedbackRaw = String(row[20] || "[]");
     var subFeedbackParsed = [];
     try {
-      subFeedbackParsed = JSON.parse(sFeedbackRaw);
+      subFeedbackParsed = JSON.parse(subFeedbackRaw);
     } catch(e) {
       // Ignore parse error
     }
@@ -3717,7 +3758,7 @@ function saveSubFeedback(absenceId, period, rating, note, clientEmail) {
     var teacherName = nameLookup[teacherEmail] || teacherEmail;
     if (teacherName.includes(",")) {
         var parts = teacherName.split(",");
-        teacherName = parts[1].trim() + " " + parts[0].trim();
+        if (parts.length > 1) teacherName = parts[1].trim() + " " + parts[0].trim();
     }
 
     var subject = "Substitute Feedback Received - Period " + period;
@@ -3766,6 +3807,8 @@ function sendDailySubFeedbackRequests() {
 
     var subEmailLookup = {};
     for (var r = 1; r < rosterData.length; r++) {
+      if (!rosterData[r]) continue;
+      if (!rosterData[r]) continue;
       subEmailLookup[String(rosterData[r][0]).trim()] = String(rosterData[r][1]).trim();
     }
     var nameLookup = buildNameLookup(rosterData);
@@ -3776,6 +3819,7 @@ function sendDailySubFeedbackRequests() {
     var requestsToSend = {}; // Keyed by substitute email
 
     for (var i = 1; i < data.length; i++) {
+    if (!data[i]) continue;
       var row = data[i];
       var status = String(row[19] || 'Active');
       if (status === 'Canceled') continue;
@@ -3791,7 +3835,7 @@ function sendDailySubFeedbackRequests() {
         var teacherName = nameLookup[rowTeacherEmail] || rowTeacherEmail;
         if (teacherName.includes(",")) {
           var parts = teacherName.split(",");
-          teacherName = parts[1].trim() + " " + parts[0].trim();
+          if (parts.length > 1) teacherName = parts[1].trim() + " " + parts[0].trim();
         }
 
         var periodsRequested = String(row[4]).split(",").map(function(p) { return p.trim(); });
@@ -3801,7 +3845,7 @@ function sendDailySubFeedbackRequests() {
         for (var pIdx = 0; pIdx < allPeriods.length; pIdx++) {
           var p = allPeriods[pIdx];
           if (periodsRequested.indexOf(String(p)) !== -1) {
-             var subColumnIndex = getSubColumnIndex(prd2) - 1;
+             var subColumnIndex = getSubColumnIndex(p) - 1;
              var assignedSub = String(row[subColumnIndex] || "").trim();
 
              if (assignedSub !== "") {
