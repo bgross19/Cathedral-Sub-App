@@ -188,7 +188,7 @@ function getMasterScheduleData() {
         if (stringified.length < 100000) { // Max 100KB cache
            cache.put("master_schedule_data", stringified, 1800); // 30 mins
         }
-      } catch (e) { /* ignored */ }
+      } catch (e) {}
 
       return data;
     }
@@ -306,7 +306,7 @@ function syncMasterScheduleToStaffRoster(scheduleData, ss) {
       if (typeof clearRosterCache === 'function') {
         clearRosterCache();
       }
-    } catch (e) { /* ignored */ }
+    } catch (e) {}
   }
 }
 
