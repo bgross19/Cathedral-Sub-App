@@ -511,7 +511,7 @@ function benchmarkSendEmailHelperLoop() {
   getSettings(ss);
 
   var startOld = new Date().getTime();
-  for (let i = 0; i < N; i++) {
+  for (var i = 0; i < N; i++) {
     // Calling without pre-fetched settings (Simulating old behavior)
     sendEmailHelper("test@example.com", "Subject", "Body");
   }
@@ -521,7 +521,7 @@ function benchmarkSendEmailHelperLoop() {
 
   var startNew = new Date().getTime();
   var preFetchedSettings = getSettings(ss);
-  for (let i = 0; i < N; i++) {
+  for (var i = 0; i < N; i++) {
     // Calling with pre-fetched settings (Optimized behavior)
     sendEmailHelper("test@example.com", "Subject", "Body", null, preFetchedSettings);
   }
