@@ -2630,15 +2630,15 @@ function getInitialPayload(clientEmail) {
         var hdrs = scheduleData[0];
         var emlIdx = hdrs.indexOf("EMAIL_ADDR");
         var prIdx = hdrs.indexOf("PERIOD");
-        if (emailIdx > -1 && periodIdx > -1) {
+        if (emlIdx > -1 && prIdx > -1) {
           for (var sIdx = 1; sIdx < scheduleData.length; sIdx++) {
-            var sEmail = String(scheduleData[s][emailIdx]).toLowerCase().trim();
-            var pVal = String(scheduleData[s][periodIdx]).trim();
+            var sEmail = String(scheduleData[sIdx][emlIdx]).toLowerCase().trim();
+            var pVal = String(scheduleData[sIdx][prIdx]).trim();
             var jP = getScheduleJoinPeriod(pVal);
-            if (joinP) {
+            if (jP) {
               if (!allSchedules[sEmail]) allSchedules[sEmail] = [];
-              if (allSchedules[sEmail].indexOf(joinP) === -1) {
-                allSchedules[sEmail].push(joinP);
+              if (allSchedules[sEmail].indexOf(jP) === -1) {
+                allSchedules[sEmail].push(jP);
               }
             }
           }
