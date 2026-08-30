@@ -3572,7 +3572,16 @@ const data = payload.userData;
         container.classList.remove('p-6');
         container.classList.add('p-4');
       }
+      function exportAllAbsenceRequestsClient() {
+          const btn = document.getElementById('btn-exportAllData');
+          const originalText = btn.innerHTML;
+          btn.disabled = true;
+          btn.innerHTML = '<span>⏳</span> Exporting...';
 
+          google.script.run
+          .withSuccessHandler(data => {
+            try {
+              let csvContent = "";
               data.forEach(row => {
                  let rowStr = row.map(val => {
                     if (val === null || val === undefined) return '""';
