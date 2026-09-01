@@ -2553,7 +2553,8 @@ function getInitialPayload(clientEmail) {
                 course: courseStr,
                 reason: reason,
                 duration: duration,
-                instructions: instructions
+                instructions: instructions,
+                assignedSub: assignedSub
             };
 
             // My Sub Duties
