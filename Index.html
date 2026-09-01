@@ -1058,25 +1058,25 @@
         </div>
       </div>
 
-      <div class="mb-3 flex items-center cursor-pointer select-none" id="headerTodaysOpenJobs" onclick="toggleSection('todaysOpenJobsWrapper', 'iconTodaysOpenJobs')">
+      <div class="mb-3 flex items-center cursor-pointer select-none" id="headerTodaysOpenJobs" onclick="toggleSection('todaysAbsencesWrapper', 'iconTodaysOpenJobs')">
         <svg id="iconTodaysOpenJobs" class="fill-current text-[#002147] mr-2 transition-transform duration-300" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
-        <h3 class="text-lg font-bold text-[#002147]">Today's Open Jobs</h3>
+        <h3 class="text-lg font-bold text-[#002147]">Today's Absences</h3>
       </div>
-      <div id="todaysOpenJobsWrapper" class="grid grid-rows-1 transition-all duration-300 ease-in-out mb-6">
+      <div id="todaysAbsencesWrapper" class="grid grid-rows-1 transition-all duration-300 ease-in-out mb-6">
         <div class="overflow-hidden">
-          <div id="todaysOpenJobsGridContainer" class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-x-auto p-4 mb-4">
-            <table id="todaysOpenJobsGridTable" class="text-left border-collapse min-w-max border border-gray-300">
-              <thead id="todaysOpenJobsGridTableHeader">
+          <div id="todaysAbsencesGridContainer" class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-x-auto p-4 mb-4">
+            <table id="todaysAbsencesGridTable" class="text-left border-collapse min-w-max border border-gray-300">
+              <thead id="todaysAbsencesGridTableHeader">
                  <tr class="bg-gray-50 border-b border-gray-300 text-sm text-gray-700 uppercase">
                     <!-- Columns dynamically injected -->
                  </tr>
               </thead>
-              <tbody id="todaysOpenJobsGridTableBody" class="divide-y divide-gray-200">
+              <tbody id="todaysAbsencesGridTableBody" class="divide-y divide-gray-200">
                  <tr><td class="p-8 text-center text-gray-400 italic">Loading open jobs grid...</td></tr>
               </tbody>
             </table>
           </div>
-          <div id="todaysOpenJobs" class="bg-white rounded-xl shadow-sm p-8 text-center text-gray-400 border border-gray-200 hidden">
+          <div id="todaysAbsences" class="bg-white rounded-xl shadow-sm p-8 text-center text-gray-400 border border-gray-200 hidden">
               Loading open jobs...
           </div>
         </div>
@@ -1425,7 +1425,7 @@
                            <th class="p-3 text-center">HR Dashboard</th>
                            <th class="p-3 text-center">Today at a Glance</th>
                            <th class="p-3 text-center">My Upcoming Sub Duties</th>
-                           <th class="p-3 text-center">Today's Open Jobs</th>
+                           <th class="p-3 text-center">Today's Absences</th>
                            <th class="p-3 text-center">My Past Absences</th>
                            <th class="p-3 text-center">Settings</th>
                            <th class="p-3 text-center">Add Request on Behalf</th>
@@ -1717,18 +1717,18 @@
             try {
                  const savedMatrix = JSON.parse(settings.RolePermissions || '{}');
                  const defaultMatrix = {
-                    "admin": { "Admin Dashboard": true, "HR Dashboard": true, "Today at a Glance": true, "My Upcoming Sub Duties": true, "Today's Open Jobs": true, "My Past Absences": true, "Settings": true, "Add Request on Behalf": true },
-                    "hr": { "Admin Dashboard": false, "HR Dashboard": true, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Open Jobs": false, "My Past Absences": true, "Settings": true, "Add Request on Behalf": true },
-                    "sub coordinator": { "Admin Dashboard": true, "HR Dashboard": false, "Today at a Glance": true, "My Upcoming Sub Duties": true, "Today's Open Jobs": true, "My Past Absences": true, "Settings": true, "Add Request on Behalf": true },
-                    "principal": { "Admin Dashboard": true, "HR Dashboard": true, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Open Jobs": false, "My Past Absences": true, "Settings": true, "Add Request on Behalf": true },
-                    "teacher": { "Admin Dashboard": false, "HR Dashboard": false, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Open Jobs": true, "My Past Absences": true, "Settings": false, "Add Request on Behalf": false },
-                    "substitute": { "Admin Dashboard": false, "HR Dashboard": false, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Open Jobs": false, "My Past Absences": false, "Settings": false, "Add Request on Behalf": false }
+                    "admin": { "Admin Dashboard": true, "HR Dashboard": true, "Today at a Glance": true, "My Upcoming Sub Duties": true, "Today's Absences": true, "My Past Absences": true, "Settings": true, "Add Request on Behalf": true },
+                    "hr": { "Admin Dashboard": false, "HR Dashboard": true, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Absences": false, "My Past Absences": true, "Settings": true, "Add Request on Behalf": true },
+                    "sub coordinator": { "Admin Dashboard": true, "HR Dashboard": false, "Today at a Glance": true, "My Upcoming Sub Duties": true, "Today's Absences": true, "My Past Absences": true, "Settings": true, "Add Request on Behalf": true },
+                    "principal": { "Admin Dashboard": true, "HR Dashboard": true, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Absences": false, "My Past Absences": true, "Settings": true, "Add Request on Behalf": true },
+                    "teacher": { "Admin Dashboard": false, "HR Dashboard": false, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Absences": true, "My Past Absences": true, "Settings": false, "Add Request on Behalf": false },
+                    "substitute": { "Admin Dashboard": false, "HR Dashboard": false, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Absences": false, "My Past Absences": false, "Settings": false, "Add Request on Behalf": false }
                  };
 
                  // Merge saved matrix into default matrix
                  rolePermissionsMatrix = {};
                  const roles = ["admin", "hr", "sub coordinator", "principal", "teacher", "substitute"];
-                 const views = ["Admin Dashboard", "HR Dashboard", "Today at a Glance", "My Upcoming Sub Duties", "Today's Open Jobs", "My Past Absences", "Settings", "Add Request on Behalf"];
+                 const views = ["Admin Dashboard", "HR Dashboard", "Today at a Glance", "My Upcoming Sub Duties", "Today's Absences", "My Past Absences", "Settings", "Add Request on Behalf"];
 
                  roles.forEach(role => {
                     rolePermissionsMatrix[role] = {};
@@ -1912,7 +1912,7 @@
       function renderRolePermissionsMatrix() {
         const tbody = document.getElementById('rolePermissionsTableBody');
         const roles = ["admin", "hr", "sub coordinator", "principal", "teacher", "substitute"];
-        const views = ["Admin Dashboard", "HR Dashboard", "Today at a Glance", "My Upcoming Sub Duties", "Today's Open Jobs", "My Past Absences", "Settings", "Add Request on Behalf"];
+        const views = ["Admin Dashboard", "HR Dashboard", "Today at a Glance", "My Upcoming Sub Duties", "Today's Absences", "My Past Absences", "Settings", "Add Request on Behalf"];
 
         let html = '';
         roles.forEach(role => {
@@ -2306,7 +2306,7 @@
       EventBus.subscribe('refresh_myPastAbsences', () => loadMyPastAbsences());
       EventBus.subscribe('refresh_mySubDuties', () => loadMySubDuties());
       EventBus.subscribe('refresh_myPastSubDuties', () => loadMyPastSubDuties());
-      EventBus.subscribe('refresh_todaysOpenJobs', () => loadTodaysOpenJobs());
+      EventBus.subscribe('refresh_todaysAbsences', () => loadTodaysAbsences());
       EventBus.subscribe('refresh_quickCover', () => loadQuickCover());
       EventBus.subscribe('refresh_adminData', (data) => { loadAdminDataRawSilent(); loadAdminDashboardData(data && data.renderAtAGlance); });
       // -------------------------------
@@ -2339,7 +2339,7 @@
           { wrapperId: 'subAvailabilityWrapper', iconId: 'iconSubAvailability' },
           { wrapperId: 'myAbsencesWrapper', iconId: 'iconMyAbsences' },
           { wrapperId: 'mySubDutiesWrapper', iconId: 'iconMySubDuties' },
-          { wrapperId: 'todaysOpenJobsWrapper', iconId: 'iconTodaysOpenJobs' },
+          { wrapperId: 'todaysAbsencesWrapper', iconId: 'iconTodaysOpenJobs' },
           { wrapperId: 'myPastAbsencesWrapper', iconId: 'iconMyPastAbsences' }
         ];
 
@@ -2627,7 +2627,7 @@ const data = payload.userData;
             renderMyPastAbsences(payload.myPastAbsences);
             renderMySubDuties(payload.mySubDuties);
             renderMyPastSubDuties(payload.myPastSubDuties || []);
-            renderTodaysOpenJobs(payload.todaysOpenJobs);
+            renderTodaysAbsences(payload.todaysAbsences);
 
             globalDateColors = payload.dateColors || {};
             userDateColors = payload.dateColors || {};
@@ -2683,13 +2683,13 @@ const data = payload.userData;
               logoutBtns.forEach(btn => btn.classList.remove('hidden'));
             }
 
-            if (perms["Admin Dashboard"] || perms["Today's Open Jobs"] || perms["Today at a Glance"]) {
+            if (perms["Admin Dashboard"] || perms["Today's Absences"] || perms["Today at a Glance"]) {
               if (payload.quickCover) {
                   renderQuickCover(payload.quickCover);
               }
             }
 
-            if (perms["Admin Dashboard"] || perms["Today's Open Jobs"]) {
+            if (perms["Admin Dashboard"] || perms["Today's Absences"]) {
                if (perms["Admin Dashboard"]) document.getElementById('adminSection').classList.remove('hidden');
                if (payload.adminData) {
                   renderAdminDataRawSilent(payload.adminData);
@@ -2707,7 +2707,7 @@ const data = payload.userData;
                 if (myAbsWrapper) myAbsWrapper.classList.add('hidden');
                 const myOpenJobsHeader = document.getElementById('headerTodaysOpenJobs');
                 if (myOpenJobsHeader) myOpenJobsHeader.classList.add('hidden');
-                const myOpenJobsWrapper = document.getElementById('todaysOpenJobsWrapper');
+                const myOpenJobsWrapper = document.getElementById('todaysAbsencesWrapper');
                 if (myOpenJobsWrapper) myOpenJobsWrapper.classList.add('hidden');
 
                 const myAvailSection = document.getElementById('myAvailabilitySection');
@@ -3165,13 +3165,13 @@ const data = payload.userData;
       }
 
 
-      function renderTodaysOpenJobsGrid(records) {
-        const thead = document.getElementById('todaysOpenJobsGridTableHeader');
-        const tbody = document.getElementById('todaysOpenJobsGridTableBody');
+      function renderTodaysAbsencesGrid(records) {
+        const thead = document.getElementById('todaysAbsencesGridTableHeader');
+        const tbody = document.getElementById('todaysAbsencesGridTableBody');
 
         if (!records || records.length === 0) {
             thead.innerHTML = '<tr class="bg-gray-50 border-b border-gray-300 text-sm text-gray-700 uppercase"><th class="p-3 border border-gray-300 sticky left-0 z-20 bg-gray-50">Teacher Name</th></tr>';
-            tbody.innerHTML = '<tr><td class="p-8 text-center text-gray-400 italic border border-gray-300">No open jobs found for today.</td></tr>';
+            tbody.innerHTML = '<tr><td class="p-8 text-center text-gray-400 italic border border-gray-300">No absences found for today.</td></tr>';
             return;
         }
 
@@ -3253,14 +3253,14 @@ const data = payload.userData;
         tbody.innerHTML = html;
       }
 
-      let todaysOpenJobsData = [];
+      let todaysAbsencesData = [];
 
-      function renderTodaysOpenJobs(requests) {
-            const container = document.getElementById('todaysOpenJobs');
-            const gridContainer = document.getElementById('todaysOpenJobsGridContainer');
+      function renderTodaysAbsences(requests) {
+            const container = document.getElementById('todaysAbsences');
+            const gridContainer = document.getElementById('todaysAbsencesGridContainer');
 
             if (!requests || !Array.isArray(requests) || requests.length === 0) {
-              container.innerHTML = 'There are no open jobs available for today.';
+              container.innerHTML = 'There are no absences available for today.';
               container.classList.add('text-gray-400');
               gridContainer.classList.add('hidden');
               return;
@@ -3269,11 +3269,11 @@ const data = payload.userData;
             // Show both containers
             gridContainer.classList.remove('hidden');
 
-            renderTodaysOpenJobsGrid(requests);
+            renderTodaysAbsencesGrid(requests);
 
             // Re-render the original list as well
             let html = '<div class="divide-y divide-gray-200 text-left">';
-            todaysOpenJobsData = requests;
+            todaysAbsencesData = requests;
 
             requests.forEach((req, index) => {
               let assignId = `todays-assign-${req.id}-${req.period}`;
@@ -3293,9 +3293,19 @@ const data = payload.userData;
                     </div>
                   </div>
                   <div class="flex items-center gap-2 w-full sm:w-auto" onclick="event.stopPropagation()">
-                    <button id="${escapeHtml(assignId)}" onclick="handleSignMeUp('${escapeJs(req.id)}', '${escapeJs(req.period)}', '${escapeJs(assignId)}', '${escapeJs(req.teacherName)}', '${escapeJs(req.course)}')"  class="bg-[#00843D] hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg text-sm transition-colors shadow-sm">
-                      Sign Me Up
-                    </button>
+                    ${(!req.assignedSub || req.assignedSub.trim() === '') ? `
+                        <button id="${escapeHtml(assignId)}" onclick="handleSignMeUp('${escapeJs(req.id)}', '${escapeJs(req.period)}', '${escapeJs(assignId)}', '${escapeJs(req.teacherName)}', '${escapeJs(req.course)}')"  class="bg-[#00843D] hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg text-sm transition-colors shadow-sm">
+                          Sign Me Up
+                        </button>
+                    ` : (req.assignedSub === 'No Sub Needed' ? `
+                        <div class="bg-gray-100 border-2 border-gray-200 text-gray-500 font-bold py-2 px-4 rounded-lg text-sm flex items-center justify-center gap-2 w-full sm:w-auto cursor-default">
+                          <span>No Sub Needed</span>
+                        </div>
+                    ` : `
+                        <div class="bg-green-50 border-2 border-green-200 text-green-800 font-bold py-2 px-4 rounded-lg text-sm flex items-center justify-center gap-2 w-full sm:w-auto cursor-default">
+                          <span>✓ Filled by ${escapeHtml(req.assignedSub)}</span>
+                        </div>
+                    `)}
                   </div>
                 </div>
               `;
@@ -3306,13 +3316,13 @@ const data = payload.userData;
             container.classList.remove('text-gray-400');
       }
 
-      function loadTodaysOpenJobs() {
+      function loadTodaysAbsences() {
         google.script.run
-          .withSuccessHandler(res => { if (res.todaysOpenJobs) renderTodaysOpenJobs(res.todaysOpenJobs); })
+          .withSuccessHandler(res => { if (res.todaysAbsences) renderTodaysAbsences(res.todaysAbsences); })
           .withFailureHandler(err => {
-            document.getElementById('todaysOpenJobs').innerHTML = `<div class="text-red-600 font-bold">Failed to load open jobs: ${escapeHtml(err.message)}</div>`;
+            document.getElementById('todaysAbsences').innerHTML = `<div class="text-red-600 font-bold">Failed to load absences: ${escapeHtml(err.message)}</div>`;
           })
-          .refreshData(['todaysOpenJobs'], window.activeUserEmail);
+          .refreshData(['todaysAbsences'], window.activeUserEmail);
       }
 
       function handleSignMeUp(absenceId, period, btnId, teacherName, courseName) {
@@ -3342,7 +3352,7 @@ const data = payload.userData;
             if (result && result.success) {
               showToast("Successfully signed up for period " + period + "!", "success");
               // Refresh all relevant sections
-              EventBus.publish('refresh_todaysOpenJobs');
+              EventBus.publish('refresh_todaysAbsences');
               EventBus.publish('refresh_mySubDuties');
 
               if (!document.getElementById('adminSection').classList.contains('hidden')) {
@@ -3355,7 +3365,7 @@ const data = payload.userData;
               btn.innerText = originalText;
 
               if (result && result.error && (result.error.includes('filled by someone else') || result.error.includes('server is currently busy'))) {
-                  loadTodaysOpenJobs();
+                  loadTodaysAbsences();
               }
             }
           })
@@ -4821,7 +4831,7 @@ const data = payload.userData;
               btn.innerText = originalText;
 
               if (result && result.error && (result.error.includes('filled by someone else') || result.error.includes('server is currently busy'))) {
-                  loadTodaysOpenJobs();
+                  loadTodaysAbsences();
               }
             }
           })
@@ -5488,7 +5498,7 @@ const data = payload.userData;
               btn.innerText = originalText;
 
               if (result && result.error && (result.error.includes('filled by someone else') || result.error.includes('server is currently busy'))) {
-                  loadTodaysOpenJobs();
+                  loadTodaysAbsences();
               }
             }
           })

@@ -141,12 +141,12 @@ function getSettings(ss) {
       {reason: "Bereavement", hrRequired: true, principalRequired: false}
     ]),
     "RolePermissions": JSON.stringify({
-        "admin": { "Admin Dashboard": true, "HR Dashboard": true, "Today at a Glance": true, "My Upcoming Sub Duties": true, "Today's Open Jobs": true, "My Past Absences": true, "Settings": true, "Add Request on Behalf": true },
-        "hr": { "Admin Dashboard": false, "HR Dashboard": true, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Open Jobs": false, "My Past Absences": true, "Settings": true, "Add Request on Behalf": true },
-        "sub coordinator": { "Admin Dashboard": true, "HR Dashboard": false, "Today at a Glance": true, "My Upcoming Sub Duties": true, "Today's Open Jobs": true, "My Past Absences": true, "Settings": true, "Add Request on Behalf": true },
-        "principal": { "Admin Dashboard": true, "HR Dashboard": true, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Open Jobs": false, "My Past Absences": true, "Settings": true, "Add Request on Behalf": true },
-        "teacher": { "Admin Dashboard": false, "HR Dashboard": false, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Open Jobs": true, "My Past Absences": true, "Settings": false, "Add Request on Behalf": false },
-        "substitute": { "Admin Dashboard": false, "HR Dashboard": false, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Open Jobs": false, "My Past Absences": false, "Settings": false, "Add Request on Behalf": false }
+        "admin": { "Admin Dashboard": true, "HR Dashboard": true, "Today at a Glance": true, "My Upcoming Sub Duties": true, "Today's Absences": true, "My Past Absences": true, "Settings": true, "Add Request on Behalf": true },
+        "hr": { "Admin Dashboard": false, "HR Dashboard": true, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Absences": false, "My Past Absences": true, "Settings": true, "Add Request on Behalf": true },
+        "sub coordinator": { "Admin Dashboard": true, "HR Dashboard": false, "Today at a Glance": true, "My Upcoming Sub Duties": true, "Today's Absences": true, "My Past Absences": true, "Settings": true, "Add Request on Behalf": true },
+        "principal": { "Admin Dashboard": true, "HR Dashboard": true, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Absences": false, "My Past Absences": true, "Settings": true, "Add Request on Behalf": true },
+        "teacher": { "Admin Dashboard": false, "HR Dashboard": false, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Absences": true, "My Past Absences": true, "Settings": false, "Add Request on Behalf": false },
+        "substitute": { "Admin Dashboard": false, "HR Dashboard": false, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Absences": false, "My Past Absences": false, "Settings": false, "Add Request on Behalf": false }
       })
   };
 
@@ -2294,12 +2294,12 @@ function hasPermission(role, view, rolePermissionsStr) {
 
     // Fallback to default if not explicitly set in the saved JSON
     var defaultSettings = {
-        "admin": { "Admin Dashboard": true, "HR Dashboard": true, "Today at a Glance": true, "My Upcoming Sub Duties": true, "Today's Open Jobs": true, "My Past Absences": true, "Settings": true, "Add Request on Behalf": true },
-        "hr": { "Admin Dashboard": false, "HR Dashboard": true, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Open Jobs": false, "My Past Absences": true, "Settings": true, "Add Request on Behalf": true },
-        "sub coordinator": { "Admin Dashboard": true, "HR Dashboard": false, "Today at a Glance": true, "My Upcoming Sub Duties": true, "Today's Open Jobs": true, "My Past Absences": true, "Settings": true, "Add Request on Behalf": true },
-        "principal": { "Admin Dashboard": true, "HR Dashboard": true, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Open Jobs": false, "My Past Absences": true, "Settings": true, "Add Request on Behalf": true },
-        "teacher": { "Admin Dashboard": false, "HR Dashboard": false, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Open Jobs": true, "My Past Absences": true, "Settings": false, "Add Request on Behalf": false },
-        "substitute": { "Admin Dashboard": false, "HR Dashboard": false, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Open Jobs": false, "My Past Absences": false, "Settings": false, "Add Request on Behalf": false }
+        "admin": { "Admin Dashboard": true, "HR Dashboard": true, "Today at a Glance": true, "My Upcoming Sub Duties": true, "Today's Absences": true, "My Past Absences": true, "Settings": true, "Add Request on Behalf": true },
+        "hr": { "Admin Dashboard": false, "HR Dashboard": true, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Absences": false, "My Past Absences": true, "Settings": true, "Add Request on Behalf": true },
+        "sub coordinator": { "Admin Dashboard": true, "HR Dashboard": false, "Today at a Glance": true, "My Upcoming Sub Duties": true, "Today's Absences": true, "My Past Absences": true, "Settings": true, "Add Request on Behalf": true },
+        "principal": { "Admin Dashboard": true, "HR Dashboard": true, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Absences": false, "My Past Absences": true, "Settings": true, "Add Request on Behalf": true },
+        "teacher": { "Admin Dashboard": false, "HR Dashboard": false, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Absences": true, "My Past Absences": true, "Settings": false, "Add Request on Behalf": false },
+        "substitute": { "Admin Dashboard": false, "HR Dashboard": false, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Absences": false, "My Past Absences": false, "Settings": false, "Add Request on Behalf": false }
     };
 
     if (defaultSettings[lowerRole] && typeof defaultSettings[lowerRole][view] !== 'undefined') {
@@ -2421,7 +2421,7 @@ function getInitialPayload(clientEmail) {
       "HR Dashboard": hasPermission(lowerRole, "HR Dashboard", rolePermissions),
       "Today at a Glance": hasPermission(lowerRole, "Today at a Glance", rolePermissions),
       "My Upcoming Sub Duties": hasPermission(lowerRole, "My Upcoming Sub Duties", rolePermissions),
-      "Today's Open Jobs": hasPermission(lowerRole, "Today's Open Jobs", rolePermissions),
+      "Today's Absences": hasPermission(lowerRole, "Today's Absences", rolePermissions),
       "My Past Absences": hasPermission(lowerRole, "My Past Absences", rolePermissions),
       "Settings": hasPermission(lowerRole, "Settings", rolePermissions) || lowerRole === "admin",
       "Add Request on Behalf": hasPermission(lowerRole, "Add Request on Behalf", rolePermissions)
@@ -2444,7 +2444,7 @@ function getInitialPayload(clientEmail) {
     var myPastAbsences = [];
     var mySubDuties = [];
     var myPastSubDuties = [];
-    var todaysOpenJobs = [];
+    var todaysAbsences = [];
 
     var today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -2576,8 +2576,8 @@ function getInitialPayload(clientEmail) {
             }
 
             // Open Jobs (Today only)
-            if (assignedSub === "" && rowDate <= targetEndToday && rowDate >= today) {
-              todaysOpenJobs.push(jobObj);
+            if (rowDate <= targetEndToday && rowDate >= today) {
+              todaysAbsences.push(jobObj);
             }
           }
         }
@@ -2603,7 +2603,7 @@ function getInitialPayload(clientEmail) {
     };
     mySubDuties.sort(sortJobs);
     myPastSubDuties.sort(sortJobsDesc);
-    todaysOpenJobs.sort(sortJobs);
+    todaysAbsences.sort(sortJobs);
 
 
     var payload = {
@@ -2612,7 +2612,7 @@ function getInitialPayload(clientEmail) {
       myPastAbsences: myPastAbsences,
       mySubDuties: mySubDuties,
       myPastSubDuties: myPastSubDuties,
-      todaysOpenJobs: todaysOpenJobs,
+      todaysAbsences: todaysAbsences,
       permissions: permissions,
       dateColors: dateColors
     };
@@ -2688,7 +2688,7 @@ function getInitialPayload(clientEmail) {
       payload.staffList = staffList;
     }
 
-    if (permissions["Admin Dashboard"] || permissions["Today at a Glance"] || permissions["Today's Open Jobs"]) {
+    if (permissions["Admin Dashboard"] || permissions["Today at a Glance"] || permissions["Today's Absences"]) {
       // Quick Cover Data
       var quickCover = [];
       var targetEndQC = new Date(today);
