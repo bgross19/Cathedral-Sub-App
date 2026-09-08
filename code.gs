@@ -2143,15 +2143,28 @@ function assignSubToPeriod(absenceId, period, subName, forceOverride, clientEmai
                  throw new Error(JSON.stringify({type: "AVAILABILITY_ERROR", message: "Sub not listed as available, proceed?"}));
              }
 
-             // Fetch day color using cached payload optimization
+             // Fetch day color directly from Dates sheet to avoid locking issues with getInitialPayload
              var dayColor = "Green"; // default
              try {
-               var payload = getInitialPayload(typeof clientEmail !== 'undefined' ? clientEmail : undefined);
-               if (payload.dateColors && payload.dateColors[targetDateStr]) {
-                  dayColor = payload.dateColors[targetDateStr];
+               var datesSheet = ss.getSheetByName("Dates");
+               if (datesSheet) {
+                 var datesData = datesSheet.getDataRange().getValues();
+                 for (var d = 1; d < datesData.length; d++) {
+                   if (!datesData[d]) continue;
+                   var rowDateRaw = datesData[d][0];
+                   var rowColor = datesData[d][1];
+                   if (rowDateRaw) {
+                     var formattedDate = rowDateRaw instanceof Date ? Utilities.formatDate(rowDateRaw, Session.getScriptTimeZone(), "yyyy-MM-dd") :
+                        (function(){ try { return Utilities.formatDate(new Date(rowDateRaw), Session.getScriptTimeZone(), "yyyy-MM-dd"); } catch(e) { return String(rowDateRaw); } })();
+                     if (formattedDate === targetDateStr && rowColor) {
+                       dayColor = String(rowColor).trim();
+                       break;
+                     }
+                   }
+                 }
                }
              } catch(e) {
-               console.error("Failed to fetch day color from payload cache: " + e.message);
+               console.error("Failed to fetch day color: " + e.message);
              }
 
              var p = parseInt(period);
