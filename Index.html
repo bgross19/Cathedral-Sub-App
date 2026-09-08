@@ -415,7 +415,7 @@
       }
 
       function deleteStaffMember(email) {
-        showConfirm(`Are you sure you want to delete ${email} from the staff roster?`, () => {
+        showConfirm(`Are you sure you want to delete ${escapeHtml(email)} from the staff roster?`, () => {
         google.script.run
           .withSuccessHandler(result => {
              if (result && result.success) {
@@ -578,7 +578,7 @@
             return;
          }
 
-         showConfirm(`Are you sure you want to process ${updates.length} staff records? Existing records with the same email will be updated.`, () => {
+         showConfirm(`Are you sure you want to process ${escapeHtml(updates.length)} staff records? Existing records with the same email will be updated.`, () => {
              google.script.run
             .withSuccessHandler(result => {
                if (result && result.success) {
@@ -763,7 +763,7 @@
             return;
          }
 
-         showConfirm(`Are you sure you want to process ${updates.length} pay periods? Existing ones will not be deleted but they will be appended to the bottom. Consider deleting all current pay periods first if replacing them.`, () => {
+         showConfirm(`Are you sure you want to process ${escapeHtml(updates.length)} pay periods? Existing ones will not be deleted but they will be appended to the bottom. Consider deleting all current pay periods first if replacing them.`, () => {
              google.script.run
             .withSuccessHandler(result => {
                if (result && result.success) {
@@ -5955,7 +5955,7 @@ const data = payload.userData;
 
           const selectedPP = hrPayPeriods[val];
 
-          showConfirm(`Are you sure you want to approve Pay Period ${selectedPP.periodNumber} (${selectedPP.startDate} to ${selectedPP.endDate})? This will email the current CSV data to HR and Sub Coordinators.`, () => {
+          showConfirm(`Are you sure you want to approve Pay Period ${escapeHtml(selectedPP.periodNumber)} (${escapeHtml(selectedPP.startDate)} to ${escapeHtml(selectedPP.endDate)})? This will email the current CSV data to HR and Sub Coordinators.`, () => {
               const btn = document.getElementById('btnApprovePayPeriod');
               btn.disabled = true;
               btn.innerHTML = `<span>⏳</span> Approving...`;

@@ -20,7 +20,7 @@ jobs:
         node-version: '20'
 
     - name: Install dependencies
-      run: npm install eslint eslint-plugin-html eslint-plugin-googleappsscript --save-dev
+      run: npm install eslint@8.57.1 eslint-plugin-html eslint-plugin-googleappsscript --save-dev
 
     - name: Initialize ESLint Configuration
       run: |
