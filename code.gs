@@ -2223,8 +2223,8 @@ function assignSubToPeriod(absenceId, period, subName, forceOverride, clientEmai
             var rowDuration = String(data[j][6] || "").trim();
 
             if (rowEmail === nSubEmail && rowStatus !== "Canceled" && rowDuration === "Full Day") {
-              let innerRowDateRaw = data[j][3];
-              let rowDateStr = (innerRowDateRaw instanceof Date) ? Utilities.formatDate(innerRowDateRaw, Session.getScriptTimeZone(), "yyyy-MM-dd") : String(innerRowDateRaw).trim();
+              var rowDateRaw = data[j][3];
+              var rowDateStr = (rowDateRaw instanceof Date) ? Utilities.formatDate(rowDateRaw, Session.getScriptTimeZone(), "yyyy-MM-dd") : String(rowDateRaw).trim();
 
               if (rowDateStr === trgDateStr) {
                 var currentUserEmail = (getActiveUserEmail(typeof clientEmail !== 'undefined' ? clientEmail : undefined) || "").toLowerCase();
