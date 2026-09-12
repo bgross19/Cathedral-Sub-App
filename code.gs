@@ -180,6 +180,7 @@ function doGet(e) {
     var rosterData = rosterSheet.getDataRange().getValues();
     var targetEmail = String(email).toLowerCase();
     for (var i = 1; i < rosterData.length; i++) {
+      if (!rosterData[i] || rosterData[i].length < 3) continue;
       if (rosterData[i] && String(rosterData[i][1]).toLowerCase() === targetEmail) {
         isAuthorized = true;
         break;
@@ -275,7 +276,8 @@ function getUserData(ss, clientEmail) {
   var targetEmail = String(email).toLowerCase();
   
   for (var i = 1; i < rosterData.length; i++) {
-    if (rosterData[i] && String(rosterData[i][1]).toLowerCase() === targetEmail) {
+      if (!rosterData[i] || rosterData[i].length < 3) continue;
+      if (rosterData[i] && String(rosterData[i][1]).toLowerCase() === targetEmail) {
       name = rosterData[i][0]; 
       role = rosterData[i][2] ? String(rosterData[i][2]).trim() : "Teacher";
       break;
@@ -376,8 +378,8 @@ function enqueueEmail(to, subject, body, options) {
       var targetEmail = String(to).toLowerCase().trim();
 
       for (var i = 1; i < rosterData.length; i++) {
-
-        if (rosterData[i] && String(rosterData[i][1]).toLowerCase().trim() === targetEmail) {
+      if (!rosterData[i] || rosterData[i].length < 3) continue;
+      if (rosterData[i] && String(rosterData[i][1]).toLowerCase().trim() === targetEmail) {
           recipientName = String(rosterData[i][0]).trim();
           break;
         }
@@ -2150,7 +2152,7 @@ function assignSubToPeriod(absenceId, period, subName, forceOverride, clientEmai
                if (datesSheet) {
                  var datesData = datesSheet.getDataRange().getValues();
                  for (var d = 1; d < datesData.length; d++) {
-                   if (!datesData[d]) continue;
+      if (!datesData[d] || datesData[d].length < 2) continue;
                    var rowDateRaw = datesData[d][0];
                    var rowColor = datesData[d][1];
                    if (rowDateRaw) {
@@ -2188,7 +2190,8 @@ function assignSubToPeriod(absenceId, period, subName, forceOverride, clientEmai
                var periodIdx = headers.indexOf("PERIOD");
                if (emailIdx > -1 && periodIdx > -1) {
                  for (var s = 1; s < scheduleData.length; s++) {
-                   if (String(scheduleData[s][emailIdx]).toLowerCase().trim() === newSubEmail) {
+          if (!scheduleData[s] || scheduleData[s].length <= Math.max(emailIdx, periodIdx)) continue;
+          if (String(scheduleData[s][emailIdx]).toLowerCase().trim() === newSubEmail) {
                      var pVal = String(scheduleData[s][periodIdx]).trim();
                      var joinP = getScheduleJoinPeriod(pVal);
                      if (teacherSchedule.indexOf(joinP) === -1) {
@@ -2352,7 +2355,7 @@ function getInitialPayload(clientEmail) {
     var dateColors = {};
     if (datesData && datesData.length > 0) {
       for (var d = 1; d < datesData.length; d++) {
-      if (!datesData[d]) continue;
+      if (!datesData[d] || datesData[d].length < 2) continue;
         var dateRaw = datesData[d][0];
         var colorRaw = datesData[d][1];
         if (dateRaw && colorRaw) {
@@ -2374,6 +2377,7 @@ function getInitialPayload(clientEmail) {
     var name = null;
     var role = null;
     for (var i = 1; i < rosterData.length; i++) {
+      if (!rosterData[i] || rosterData[i].length < 3) continue;
       if (rosterData[i] && String(rosterData[i][1]).toLowerCase() === targetEmail) {
         name = rosterData[i][0];
         role = rosterData[i][2] ? String(rosterData[i][2]).trim() : "Teacher";
@@ -2396,6 +2400,7 @@ function getInitialPayload(clientEmail) {
       var periodIdx = headers.indexOf("PERIOD");
       if (emailIdx > -1 && periodIdx > -1) {
         for (var s = 1; s < scheduleData.length; s++) {
+          if (!scheduleData[s] || scheduleData[s].length <= Math.max(emailIdx, periodIdx)) continue;
           if (String(scheduleData[s][emailIdx]).toLowerCase().trim() === targetEmail) {
             var pVal = String(scheduleData[s][periodIdx]).trim();
             var joinP = getScheduleJoinPeriod(pVal);
@@ -2715,6 +2720,7 @@ function getInitialPayload(clientEmail) {
 
       for (var abIdx = 1; abIdx < absenceData.length; abIdx++) {
         var row = absenceData[abIdx];
+        if (!row || row.length < 4) continue;
         var stat = String(row[19] || 'Active');
         if (stat === 'Canceled') continue;
 
@@ -2831,7 +2837,7 @@ function getInitialPayload(clientEmail) {
       var payPeriods = [];
 
       for (var p = 0; p < payPeriodsData.length; p++) {
-      if (!payPeriodsData[p]) continue;
+        if (!payPeriodsData[p] || payPeriodsData[p].length < 3) continue;
         var periodNum = String(payPeriodsData[p][0]).trim();
         var startDateRaw = payPeriodsData[p][1];
         var endDateRaw = payPeriodsData[p][2];
@@ -2859,6 +2865,7 @@ function getInitialPayload(clientEmail) {
 
       for (var hrIdx = 1; hrIdx < absenceData.length; hrIdx++) {
         var hrRow = absenceData[hrIdx];
+        if (!hrRow || hrRow.length < 4) continue;
         if (String(hrRow[19] || "").trim() === "Canceled") continue;
 
         var hrDateStr = hrRow[3];
@@ -3465,7 +3472,7 @@ function generatePrincipalsDigestHTML(dateObj) {
   var nameLookup = {};
   var dutyLookup = {};
   for (var roIdx = 1; roIdx < rosterData.length; roIdx++) {
-    if (!rosterData[roIdx]) continue;
+    if (!rosterData[roIdx] || rosterData[roIdx].length < 4) continue;
     var e = String(rosterData[roIdx][1]).toLowerCase().trim();
     var nm = String(rosterData[roIdx][0]).trim();
     if (e) nameLookup[e] = nm;
@@ -3481,6 +3488,7 @@ function generatePrincipalsDigestHTML(dateObj) {
 
   for (var aIdx = 1; aIdx < absenceData.length; aIdx++) {
     var row = absenceData[aIdx];
+    if (!row || row.length < 4) continue;
     var status = String(row[19] || "").trim();
     if (status.toLowerCase() !== "active") continue; // Only active requests
 
@@ -3833,7 +3841,7 @@ function sendDailySubFeedbackRequests() {
     var requestsToSend = {}; // Keyed by substitute email
 
     for (var i = 1; i < data.length; i++) {
-    if (!data[i]) continue;
+      if (!data[i] || data[i].length < 4) continue;
       var row = data[i];
       var status = String(row[19] || 'Active');
       if (status === 'Canceled') continue;
