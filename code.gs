@@ -460,7 +460,7 @@ function processEmailQueue() {
       }
     }
 
-    for (var i = 0; i < data.length; i++) {
+    for (let i = 0; i < data.length; i++) {
         statuses.push([data[i][5]]);
     }
 
@@ -481,8 +481,8 @@ function processEmailQueue() {
       if (data[j][5] === "Pending") {
         var to = data[j][1];
         var subject = data[j][2];
-        var body = data[j][3];
-        var optionsStr = data[j][4];
+        let body = data[j][3];
+        let optionsStr = data[j][4];
         var options = {};
 
         try {
@@ -518,7 +518,7 @@ function processEmailQueue() {
     // Optional: Cleanup old sent/failed emails
     // We could delete rows that are marked "Sent" to keep the sheet small
     var rowsToDelete = [];
-    for (var i = statuses.length - 1; i >= 1; i--) {
+    for (let i = statuses.length - 1; i >= 1; i--) {
       var status = String(statuses[i][0] || "");
       if (status === "Sent" || status.indexOf("Failed") > -1) {
          rowsToDelete.push(i + 1);
@@ -530,7 +530,7 @@ function processEmailQueue() {
       var startRow = rowsToDelete[0];
       var numRows = 1;
 
-      for (var j = 1; j < rowsToDelete.length; j++) {
+      for (let j = 1; j < rowsToDelete.length; j++) {
         if (rowsToDelete[j] === startRow - numRows) {
           numRows++;
         } else {
@@ -875,7 +875,7 @@ function saveStaffMemberAdmin(staffData, clientEmail) {
        logAuditAction("STAFF_UPDATED", newEmail, "Updated staff member: " + newName + " (" + newRole + ", " + newDuty + ")");
     } else {
        // Check if new email already exists to prevent duplicates
-       for (var i = 1; i < data.length; i++) {
+       for (let i = 1; i < data.length; i++) {
        if (!data[i]) continue;
          if (data[i] && String(data[i][1]).trim().toLowerCase() === newEmail.toLowerCase()) {
             return {
@@ -1027,7 +1027,7 @@ function bulkUpsertStaffRoster(updates, clientEmail) {
 
     for (var j = 0; j < updates.length; j++) {
        var update = updates[j];
-       var email = String(update.email || "").trim();
+       let email = String(update.email || "").trim();
        var name = String(update.name || "").trim();
        var role = String(update.role || "Teacher").trim();
        var duty = String(update.duty || "").trim();
@@ -2129,11 +2129,11 @@ function assignSubToPeriod(absenceId, period, subName, forceOverride, clientEmai
 
       // Check if the new sub is available based on Dates and SubstituteAvailability or Master Schedule
       if (newSub !== "" && newSub !== "No Sub Needed" && !forceOverride) {
-        var newSubEmail = (subEmailLookup[newSub] || "").toLowerCase();
+        let newSubEmail = (subEmailLookup[newSub] || "").toLowerCase();
         if (newSubEmail !== "") {
            var isSubstitute = newSubRole.indexOf("Substitute") !== -1;
-           var targetDateRaw = data[i][3];
-           var targetDateStr = (targetDateRaw instanceof Date) ? Utilities.formatDate(targetDateRaw, Session.getScriptTimeZone(), "yyyy-MM-dd") : String(targetDateRaw).trim();
+           let targetDateRaw = data[i][3];
+           let targetDateStr = (targetDateRaw instanceof Date) ? Utilities.formatDate(targetDateRaw, Session.getScriptTimeZone(), "yyyy-MM-dd") : String(targetDateRaw).trim();
 
            if (isSubstitute) {
              // For substitutes, check SubstituteAvailability sheet
@@ -2212,9 +2212,9 @@ function assignSubToPeriod(absenceId, period, subName, forceOverride, clientEmai
 
       // Check if the new sub is absent for a full day on the same date
       if (newSub !== "" && newSub !== "No Sub Needed") {
-        var targetDateRaw = data[i][3]; // Date object or string
-        var targetDateStr = (targetDateRaw instanceof Date) ? Utilities.formatDate(targetDateRaw, Session.getScriptTimeZone(), "yyyy-MM-dd") : String(targetDateRaw).trim();
-        var newSubEmail = (subEmailLookup[newSub] || "").toLowerCase();
+        let targetDateRaw = data[i][3]; // Date object or string
+        let targetDateStr = (targetDateRaw instanceof Date) ? Utilities.formatDate(targetDateRaw, Session.getScriptTimeZone(), "yyyy-MM-dd") : String(targetDateRaw).trim();
+        let newSubEmail = (subEmailLookup[newSub] || "").toLowerCase();
 
         if (newSubEmail !== "") {
           for (var j = 1; j < data.length; j++) {
@@ -2226,7 +2226,7 @@ function assignSubToPeriod(absenceId, period, subName, forceOverride, clientEmai
             var rowDuration = String(data[j][6] || "").trim();
 
             if (rowEmail === newSubEmail && rowStatus !== "Canceled" && rowDuration === "Full Day") {
-              var rowDateRaw = data[j][3];
+              let rowDateRaw = data[j][3];
               var rowDateStr = (rowDateRaw instanceof Date) ? Utilities.formatDate(rowDateRaw, Session.getScriptTimeZone(), "yyyy-MM-dd") : String(rowDateRaw).trim();
 
               if (rowDateStr === targetDateStr) {
@@ -2246,8 +2246,8 @@ function assignSubToPeriod(absenceId, period, subName, forceOverride, clientEmai
       if (existingSub) {
          var existingEmail = subEmailLookup[existingSub];
          if (existingEmail) {
-            var scheduleLookup = null; // Deferred to email queue to save time
-            var details = getAbsenceDetailsLocal(data[i], period, scheduleLookup, nameLookup);
+            let scheduleLookup = null; // Deferred to email queue to save time
+            let details = getAbsenceDetailsLocal(data[i], period, scheduleLookup, nameLookup);
             sendSubNotification(existingEmail, 'Canceled', details);
          }
       }
@@ -2260,8 +2260,8 @@ function assignSubToPeriod(absenceId, period, subName, forceOverride, clientEmai
       if (newSub && newSub !== "No Sub Needed") {
          var newEmail = subEmailLookup[newSub];
          if (newEmail) {
-            var scheduleLookup = null; // Deferred to email queue to save time
-            var details = getAbsenceDetailsLocal(data[i], period, scheduleLookup, nameLookup);
+            let scheduleLookup = null; // Deferred to email queue to save time
+            let details = getAbsenceDetailsLocal(data[i], period, scheduleLookup, nameLookup);
             sendSubNotification(newEmail, 'Assigned', details);
          }
       }
@@ -2474,14 +2474,13 @@ function getInitialPayload(clientEmail) {
     var targetEndToday = new Date(today);
     targetEndToday.setHours(23, 59, 59, 999);
 
-    var settings = getSettings();
     var fetchWindowDays = parseInt(settings["Data Fetch Window (Days)"]);
     if (isNaN(fetchWindowDays)) fetchWindowDays = 30; // default to 30 days
     var cutoffDate = new Date(today);
     cutoffDate.setDate(today.getDate() - fetchWindowDays);
     cutoffDate.setHours(0, 0, 0, 0);
 
-    for (var i = 1; i < absenceData.length; i++) {
+    for (let i = 1; i < absenceData.length; i++) {
       var row = absenceData[i];
       var status = String(row[19] || 'Active');
       if (status === 'Canceled') continue;
@@ -2511,7 +2510,7 @@ function getInitialPayload(clientEmail) {
       // My Absences
       if (rowTeacherEmail === targetEmail) {
         var urgencyStr = String(row[7] || '');
-        var subFeedbackRaw = String(row[20] || "[]");
+        let subFeedbackRaw = String(row[20] || "[]");
         var absenceObj = {
           id: String(row[0]),
           date: String(formattedDate),
@@ -2578,7 +2577,7 @@ function getInitialPayload(clientEmail) {
             // My Sub Duties
             if (assignedSub === userName) {
               if (rowDate < today && rowDate >= cutoffDate) {
-                 var subFeedbackRaw = String(row[20] || "[]");
+                 let subFeedbackRaw = String(row[20] || "[]");
                  var subFeedbackParsed = [];
                  try {
                      subFeedbackParsed = JSON.parse(subFeedbackRaw);
@@ -2652,7 +2651,7 @@ function getInitialPayload(clientEmail) {
         if (emlIdx > -1 && prIdx > -1) {
           for (var sIdx = 1; sIdx < scheduleData.length; sIdx++) {
             var sEmail = String(scheduleData[sIdx][emlIdx]).toLowerCase().trim();
-            var pVal = String(scheduleData[sIdx][prIdx]).trim();
+            let pVal = String(scheduleData[sIdx][prIdx]).trim();
             var jP = getScheduleJoinPeriod(pVal);
             if (jP) {
               if (!allSchedules[sEmail]) allSchedules[sEmail] = [];
@@ -2719,7 +2718,7 @@ function getInitialPayload(clientEmail) {
       targetEndQC.setHours(23, 59, 59, 999);
 
       for (var abIdx = 1; abIdx < absenceData.length; abIdx++) {
-        var row = absenceData[abIdx];
+        let row = absenceData[abIdx];
         if (!row || row.length < 4) continue;
         var stat = String(row[19] || 'Active');
         if (stat === 'Canceled') continue;
@@ -2748,7 +2747,7 @@ function getInitialPayload(clientEmail) {
           var inst = String(row[8]);
 
           var aPeriods = ['1', '2', '3', '4', '5', '6', '7', '8', '0', 'Advisory'];
-      for (var prIdx = 0; prIdx < aPeriods.length; prIdx++) {
+      for (let prIdx = 0; prIdx < aPeriods.length; prIdx++) {
         var prd = aPeriods[prIdx];
             if (prdsRequested.indexOf(String(prd)) !== -1) {
               var asgSub = row[getSubColumnIndex(prd) - 1];
@@ -2836,7 +2835,7 @@ function getInitialPayload(clientEmail) {
       var hrData = [];
       var payPeriods = [];
 
-      for (var p = 0; p < payPeriodsData.length; p++) {
+      for (let p = 0; p < payPeriodsData.length; p++) {
         if (!payPeriodsData[p] || payPeriodsData[p].length < 3) continue;
         var periodNum = String(payPeriodsData[p][0]).trim();
         var startDateRaw = payPeriodsData[p][1];
@@ -2882,7 +2881,7 @@ function getInitialPayload(clientEmail) {
 
         for (var hrPIdx = 0; hrPIdx < hrPeriods.length; hrPIdx++) {
           var pStr = hrPeriods[hrPIdx];
-          var p = pStr; // Keep as string for getSubColumnIndex
+          let p = pStr; // Keep as string for getSubColumnIndex
           if (p) {
             var hrAssignedSub = hrRow[getSubColumnIndex(p) - 1];
             if (hrAssignedSub && String(hrAssignedSub).trim() !== "") {
@@ -3497,7 +3496,7 @@ function generatePrincipalsDigestHTML(dateObj) {
     if (dateVal instanceof Date) {
       dateObjRow = new Date(dateVal);
     } else {
-      var dStr = String(dateVal).trim();
+      let dStr = String(dateVal).trim();
       var parts = dStr.split("-");
       if (parts.length === 3) {
         dateObjRow = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10), 12, 0, 0);
@@ -3604,7 +3603,7 @@ function generatePrincipalsDigestHTML(dateObj) {
   for (var cwName in currentWeekAbsences) {
     if (currentWeekAbsences[cwName].days > 0 || currentWeekAbsences[cwName].periods > 0) {
       sec1 = true;
-      var text = [];
+      let text = [];
       if (currentWeekAbsences[cwName].days > 0) text.push(currentWeekAbsences[cwName].days + " days");
       if (currentWeekAbsences[cwName].periods > 0) text.push(currentWeekAbsences[cwName].periods + " periods");
       html += "<li><strong>" + cwName + "</strong>: " + text.join(" and ") + "</li>";
@@ -3635,7 +3634,7 @@ function generatePrincipalsDigestHTML(dateObj) {
   for (var nwName in nextWeekAbsences) {
     if (nextWeekAbsences[nwName].days > 0 || nextWeekAbsences[nwName].periods > 0) {
       sec3 = true;
-      var text = [];
+      let text = [];
       if (nextWeekAbsences[nwName].days > 0) text.push(nextWeekAbsences[nwName].days + " days");
       if (nextWeekAbsences[nwName].periods > 0) text.push(nextWeekAbsences[nwName].periods + " periods");
       html += "<li><strong>" + nwName + "</strong>: " + text.join(" and ") + "</li>";
@@ -3741,7 +3740,7 @@ function saveSubFeedback(absenceId, period, rating, note, clientEmail) {
     }
 
     var row = data[targetIndex];
-    var subFeedbackRaw = String(row[20] || "[]");
+    let subFeedbackRaw = String(row[20] || "[]");
     var subFeedbackParsed = [];
     try {
       subFeedbackParsed = JSON.parse(subFeedbackRaw);

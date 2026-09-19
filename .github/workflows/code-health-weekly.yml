@@ -40,8 +40,37 @@ jobs:
             "parserOptions": {
                 "ecmaVersion": 12
             },
+            "globals": {
+                "google": "readonly",
+                "flatpickr": "readonly",
+                "escapeHtml": "readonly",
+                "escapeJs": "readonly",
+                "showToast": "readonly",
+                "showConfirm": "readonly",
+                "showDuplicateWarning": "readonly",
+                "cancelDuplicateWarning": "readonly",
+                "toggleModal": "readonly",
+                "closeAllModals": "readonly",
+                "attemptCloseAllModals": "readonly",
+                "captureModalState": "readonly",
+                "editAbsence": "readonly",
+                "reloadApp": "readonly",
+                "finishInitApp": "readonly",
+                "loadSettingsData": "readonly",
+                "loadStaffRosterSettings": "readonly",
+                "loadPayPeriodsSettings": "readonly",
+                "loadQuickCover": "readonly",
+                "switchSettingsTab": "readonly",
+                "getActiveTeacherSchedule": "readonly",
+                "currentAppVersion": "writable",
+                "isFromModal": "writable",
+                "originalModalData": "writable",
+                "staffList": "writable",
+                "userTeacherSchedule": "writable",
+                "userDateColors": "writable"
+            },
             "rules": {
-                "no-unused-vars": "warn",
+                "no-unused-vars": ["warn", { "vars": "all", "args": "none", "ignoreRestSiblings": false, "varsIgnorePattern": "^(Utilities_formatDateLocal|addAbsenceReasonRow|applyPayPeriodSelection|archiveOldDataClient|assignSubFromAtAGlance|cancelAbsence|cancelDuplicateWarning|cancelMySubDutyClient|changeAvailabilityMonth|clearAllDutiesClient|clearMasterScheduleCacheClient|closeMobileMenu|closePrincipalsDigestModal|copyAtAGlance|copyHRData|copyPrincipalsDigest|copyStaffRosterData|deleteAbsenceFromModal|deleteAllPayPeriodsClient|deleteStaffMember|exportAllAbsenceRequestsClient|exportToCSV|generateAuditReport|handleAdminAssign|handleApprovePayPeriod|handleAssign|handleCustomLogin|handleDutyCheckboxChange|handleHRDateChange|handleInlineAdminAssign|handleLogout|handleOnBehalfTeacherChange|initApp|loadStaffList|openAddStaffModal|openAdminEditModal|openDetailsModal|openDetailsModalForAdmin|openEditStaffModal|openSubDutyDetailsModal|previewPrincipalsDigest|processPayPeriodsCsvUpload|processStaffCsvUpload|refreshMasterScheduleCacheClient|removeAbsenceReasonRow|resetAdminFilters|saveDayPayRates|saveRolePermissions|saveSettings|saveStaffMember|setAdminView|setHRView|shiftAtAGlanceDate|showConfirm|showDuplicateWarning|sortAdminTable|submitSubFeedback|toggleAdminDashboard|toggleAtAGlanceDashboard|toggleAvailability|toggleDutyDropdown|toggleMobileMenu|toggleSettingsDashboard|updateDynamicStaffList|updateHiddenDutyInput|updateStaffRoleInline|dateStr|idx|index|instance|editAbsence|showToast|showConfirm|qCElement|isRequestModalOpen|quickCoverLink|todaysAbsencesData|oldAttemptCloseAllModals)$" }],
                 "no-undef": "warn",
                 "no-implicit-globals": "warn"
             },
