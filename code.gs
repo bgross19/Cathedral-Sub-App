@@ -128,6 +128,7 @@ function getSettings(ss) {
     "Reply To Email": "",
     "App URL": DEFAULT_APP_URL,
     "Max Multi-Select Days": "5",
+    "Sub Availability Window (Days)": "5",
     "Urgency Cutoff Time": "15",
     "Term ID": "3503",
     "Green Day Pay Rate": "10",
@@ -2632,7 +2633,8 @@ function getInitialPayload(clientEmail) {
       myPastSubDuties: myPastSubDuties,
       todaysAbsences: todaysAbsences,
       permissions: permissions,
-      dateColors: dateColors
+      dateColors: dateColors,
+      settings: settings
     };
 
 
@@ -2907,6 +2909,7 @@ function getInitialPayload(clientEmail) {
         requests: hrData,
         payPeriods: payPeriods,
         dateColors: dateColors,
+      settings: settings,
         rates: {
           green: settings["Green Day Pay Rate"] || "10",
           blueGold: settings["Blue/Gold Day Pay Rate"] || "20"

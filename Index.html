@@ -997,7 +997,7 @@
         <div class="mb-3 flex items-center cursor-pointer select-none" id="headerSubAvailability" onclick="toggleSection('subAvailabilityWrapper', 'iconSubAvailability')">
           <svg id="iconSubAvailability" class="fill-current text-[#002147] mr-2 transition-transform duration-300" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
           <h3 class="text-lg font-bold text-[#002147] flex items-center gap-2">
-            <span>👩‍🏫</span> Sub Availability (Next 5 Days)
+            <span>👩‍🏫</span> <span>Sub Availability (Next 5 Days)</span>
           </h3>
         </div>
         <div id="subAvailabilityWrapper" class="grid grid-rows-1 transition-all duration-300 ease-in-out">
@@ -1638,7 +1638,7 @@
 
               <div class="border bg-gray-50 rounded-lg p-5 mb-8">
                   <h4 class="text-md font-bold text-[#002147] mb-4">Application Settings</h4>
-                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                  <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                     <div>
                       <label class="block text-sm font-bold mb-1">App URL</label>
                       <input type="text" id="settingsAppUrl" value="${escapeHtml(settings["App URL"] || "")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none bg-white">
@@ -1646,6 +1646,10 @@
                     <div>
                       <label class="block text-sm font-bold mb-1">Max Multi-Select Days</label>
                       <input type="number" id="settingsMaxMultiDays" min="1" max="14" value="${escapeHtml(settings["Max Multi-Select Days"] || "5")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none bg-white" title="Maximum number of days a teacher can select at once.">
+                    </div>
+                    <div>
+                      <label class="block text-sm font-bold mb-1">Sub Availability Window (Days)</label>
+                      <input type="number" id="settingsSubAvailabilityWindow" min="1" max="30" value="${escapeHtml(settings["Sub Availability Window (Days)"] || "5")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none bg-white" title="Number of days to show in the Sub Availability Dashboard.">
                     </div>
                   </div>
                   <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
@@ -1829,6 +1833,7 @@
           "Reply To Email": document.getElementById('settingsReplyToEmail').value,
           "App URL": document.getElementById('settingsAppUrl').value,
           "Max Multi-Select Days": document.getElementById('settingsMaxMultiDays').value,
+          "Sub Availability Window (Days)": document.getElementById('settingsSubAvailabilityWindow').value,
           "Urgency Cutoff Time": document.getElementById('settingsUrgencyCutoff').value,
           "Data Fetch Window (Days)": document.getElementById('settingsFetchWindow').value,
           "Term ID": document.getElementById('settingsTermId').value,
@@ -2630,6 +2635,7 @@ const data = payload.userData;
             renderTodaysAbsences(payload.todaysAbsences);
 
             globalDateColors = payload.dateColors || {};
+            window.appSettings = payload.settings || {};
             userDateColors = payload.dateColors || {};
             userTeacherSchedule = data.teacherSchedule || [];
 
@@ -3584,12 +3590,12 @@ const data = payload.userData;
             container.innerHTML = html;
           }
 
-      function getNext5SchoolDays() {
+      function getNextSchoolDays(numDays) {
         const days = [];
         let current = new Date();
         current.setHours(12, 0, 0, 0); // Noon to avoid timezone issues
 
-        while (days.length < 5) {
+        while (days.length < numDays) {
             const dayOfWeek = current.getDay();
             if (dayOfWeek !== 0 && dayOfWeek !== 6) { // Skip Sunday (0) and Saturday (6)
                 const yyyy = current.getFullYear();
@@ -3612,11 +3618,15 @@ const data = payload.userData;
             return;
         }
 
-        const next5Days = getNext5SchoolDays();
+        const numDays = parseInt(window.appSettings["Sub Availability Window (Days)"] || "5", 10);
+        const headerEl = document.getElementById("headerSubAvailability").querySelector("h3 span:last-child");
+        if (headerEl) headerEl.innerText = "Sub Availability (Next " + numDays + " Days)";
 
-        let html = '<div class="grid grid-cols-1 md:grid-cols-5 gap-4">';
+        const nextDays = getNextSchoolDays(numDays);
 
-        next5Days.forEach(dayInfo => {
+        let html = '<div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">';
+
+        nextDays.forEach(dayInfo => {
             const dateStr = dayInfo.dateStr;
             const dateObj = dayInfo.dateObj;
 
