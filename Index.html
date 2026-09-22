@@ -5028,7 +5028,7 @@ const data = payload.userData;
                        <span class="text-[10px] font-bold uppercase tracking-wider opacity-60 bg-white px-2 py-0.5 rounded border border-gray-300">${escapeHtml(abs.urgency)}</span>
                     </div>
                     <p class="text-sm text-gray-600 font-semibold">${escapeHtml(abs.reason)}</p>
-                    <p class="text-xs text-gray-500 mt-1">Periods: ${escapeHtml(abs.periods)}</p>
+                    <p class="text-xs text-gray-500 mt-1">Periods: ${escapeHtml(abs.periodsWithSubs || abs.periods)}</p>
                   </div>
                   <div class="flex gap-2 w-full sm:w-auto" onclick="event.stopPropagation()">
                     <button onclick="editAbsence(${index})" class="flex-1 sm:flex-none bg-white hover:bg-gray-100 text-gray-700 text-sm font-bold py-2 px-4 rounded-lg border border-gray-300 transition-colors shadow-sm">
@@ -5218,7 +5218,7 @@ const data = payload.userData;
                          <span class="text-[10px] font-bold uppercase tracking-wider opacity-60 bg-white px-2 py-0.5 rounded border border-gray-300">${escapeHtml(abs.urgency)}</span>
                       </div>
                       <p class="text-sm text-gray-500 font-semibold">${escapeHtml(abs.reason)}</p>
-                      <p class="text-xs text-gray-400 mt-1">Periods: ${escapeHtml(abs.periods)}</p>
+                      <p class="text-xs text-gray-400 mt-1">Periods: ${escapeHtml(abs.periodsWithSubs || abs.periods)}</p>
                     </div>
                   </div>
                   ${feedbackHtml}

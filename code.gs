@@ -2512,6 +2512,18 @@ function getInitialPayload(clientEmail) {
       if (rowTeacherEmail === targetEmail) {
         var urgencyStr = String(row[7] || '');
         let subFeedbackRaw = String(row[20] || "[]");
+
+        var periodsRequested = String(row[4] || "").split(",").map(function(p) { return p.trim(); }).filter(function(p) { return p !== ""; });
+        var periodsWithSubs = periodsRequested.map(function(p) {
+          var subColIdx = getSubColumnIndex(p);
+          var subName = (subColIdx > 0 && subColIdx <= row.length) ? row[subColIdx - 1] : "";
+          if (subName && String(subName).trim() !== "") {
+            return p + " (" + String(subName).trim() + ")";
+          } else {
+            return p + " (Not Yet Assigned)";
+          }
+        }).join(", ");
+
         var absenceObj = {
           id: String(row[0]),
           date: String(formattedDate),
@@ -2519,6 +2531,7 @@ function getInitialPayload(clientEmail) {
           rawDateString: String(dateVal),
           formDateString: String(yyyymmdd),
           periods: String(row[4]),
+          periodsWithSubs: periodsWithSubs,
           reason: String(row[5]),
           urgency: urgencyStr.includes('Urgent') ? 'Urgent' : 'Standard',
           duration: String(row[6]),
