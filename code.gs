@@ -12,13 +12,22 @@ function getActiveUserEmail(clientEmail) {
 
 
 /**
+ * Helper to normalize a period string.
+ */
+function parsePeriod(period) {
+  var p = String(period).toLowerCase().trim();
+  if (p === 'a' || p === 'advisory') return 'advisory';
+  return p;
+}
+
+/**
  * Helper to get the 1-based column index for a given period.
  * 0-based array index is one less.
  */
 function getSubColumnIndex(period) {
-  var p = String(period).toLowerCase().trim();
+  var p = parsePeriod(period);
   if (p === '0') return 18; // Col R
-  if (p === 'a' || p === 'advisory') return 19; // Col S
+  if (p === 'advisory') return 19; // Col S
   var pNum = parseInt(p);
   if (!isNaN(pNum) && pNum >= 1 && pNum <= 8) {
     return 10 + pNum - 1; // Col J is 10 for Period 1
@@ -30,9 +39,9 @@ function getSubColumnIndex(period) {
  * Helper to get the master schedule join period.
  */
 function getScheduleJoinPeriod(period) {
-  var p = String(period).toLowerCase().trim();
+  var p = parsePeriod(period);
   if (p === '0') return '9';
-  if (p === 'a' || p === 'advisory') return '10';
+  if (p === 'advisory') return '10';
   return String(period);
 }
 
