@@ -3980,7 +3980,7 @@ function getSubstituteEmailByName(subName) {
 }
 
 function getSubstituteAvailabilityForAdmin(subName, clientEmail) {
-  var user = getUserData(typeof clientEmail !== 'undefined' ? clientEmail : undefined);
+  var user = getUserData(null, typeof clientEmail !== 'undefined' ? clientEmail : undefined);
   assertPermission(user, "Add Request on Behalf");
 
   var targetEmail = getSubstituteEmailByName(subName);
@@ -3992,7 +3992,7 @@ function getSubstituteAvailabilityForAdmin(subName, clientEmail) {
 }
 
 function saveSubstituteAvailabilityAdmin(subName, dateStr, status, clientEmail) {
-  var user = getUserData(typeof clientEmail !== 'undefined' ? clientEmail : undefined);
+  var user = getUserData(null, typeof clientEmail !== 'undefined' ? clientEmail : undefined);
   assertPermission(user, "Add Request on Behalf");
 
   var targetEmail = getSubstituteEmailByName(subName);
