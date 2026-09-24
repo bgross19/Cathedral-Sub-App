@@ -2434,11 +2434,12 @@
           if (Date.now() - lastActivityTime > INACTIVITY_THRESHOLD) {
               sessionStorage.setItem('staleDataRefreshed', 'true');
               reloadApp();
+              updateActivityTime(); // Prevent reload loop while reloading
           }
       }
 
       function setupInactivityTracker() {
-          const events = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart'];
+          const events = ['mousedown', 'keydown', 'scroll', 'touchstart']; // Removed mousemove to prevent accidental timer resets
           let throttleTimer = false;
           events.forEach(event => {
               document.addEventListener(event, () => {
