@@ -3963,3 +3963,71 @@ function runSubFeedbackRequests() {
     }
 }
 
+
+
+function getSubstituteEmailByName(subName) {
+  var ss = getSS();
+  var rosterData = getRosterDataCached(ss);
+  if (!rosterData) return null;
+
+  for (var i = 1; i < rosterData.length; i++) {
+    if (!rosterData[i]) continue;
+    if (String(rosterData[i][0]).trim().toLowerCase() === subName.trim().toLowerCase()) {
+      return String(rosterData[i][1]).trim().toLowerCase();
+    }
+  }
+  return null;
+}
+
+function getSubstituteAvailabilityForAdmin(subName, clientEmail) {
+  var user = getUserData(typeof clientEmail !== 'undefined' ? clientEmail : undefined);
+  assertPermission(user, "Add Request on Behalf");
+
+  var targetEmail = getSubstituteEmailByName(subName);
+  if (!targetEmail) {
+    throw new Error("Could not find substitute email for name: " + subName);
+  }
+
+  return getSubstituteAvailability(targetEmail);
+}
+
+function saveSubstituteAvailabilityAdmin(subName, dateStr, status, clientEmail) {
+  var user = getUserData(typeof clientEmail !== 'undefined' ? clientEmail : undefined);
+  assertPermission(user, "Add Request on Behalf");
+
+  var targetEmail = getSubstituteEmailByName(subName);
+  if (!targetEmail) {
+    throw new Error("Could not find substitute email for name: " + subName);
+  }
+
+  var ss = getSS();
+  var subAvailSheet = ss.getSheetByName("SubstituteAvailability");
+
+  if (!subAvailSheet) {
+    throw new Error("SubstituteAvailability sheet not found.");
+  }
+
+  var data = subAvailSheet.getDataRange().getValues();
+  var matchingRows = [];
+
+  for (var i = 1; i < data.length; i++) {
+    if (!data[i]) continue;
+    var cellVal = data[i][1];
+    var rowDateStr = (cellVal instanceof Date) ? _formatDateToYYYYMMDD(cellVal) : String(cellVal).trim();
+    if (String(data[i][0]).toLowerCase() === targetEmail && rowDateStr === dateStr) {
+      matchingRows.push(i + 1); // 1-based index for sheets
+    }
+  }
+
+  if (matchingRows.length > 0) {
+    // Update the first matching row with the new status (even if 'Not Available')
+    subAvailSheet.getRange(matchingRows[0], 3).setValue(status);
+
+    // Delete any subsequent duplicate rows (iterate backwards to avoid shifting issues)
+    for (var j = matchingRows.length - 1; j > 0; j--) {
+      subAvailSheet.deleteRow(matchingRows[j]);
+    }
+  } else {
+    subAvailSheet.appendRow([targetEmail, dateStr, status]);
+  }
+}
