@@ -2037,18 +2037,21 @@ function sendSubNotification(subEmail, type, details) {
                     "</ul>" +
                     "<p><strong>Special Instructions:</strong><br>" + (details.instructions ? details.instructions : "None provided") + "</p>";
 
+  var attendanceText = "\n\nPlease remember to take attendance here: https://powerschool.cathedral-irish.org/subs/pw.html";
+  var attendanceHtml = "<p><strong>Please remember to take attendance here: <a href='https://powerschool.cathedral-irish.org/subs/pw.html'>https://powerschool.cathedral-irish.org/subs/pw.html</a></strong></p>";
+
   if (type === 'Assigned') {
     subject = "Coverage Assignment: " + details.date + (details.period ? " Period " + details.period : "");
-    body = "You have been assigned to cover a class.\n\n" + detailsText + "\n\nPlease check the Cathedral Sub App for more information: " + appUrl;
-    htmlBody = "<p>You have been assigned to cover a class.</p>" + detailsHtml + "<p>Please check the <a href='" + appUrl + "'>Cathedral Sub App</a> for more information.</p>";
+    body = "You have been assigned to cover a class.\n\n" + detailsText + attendanceText + "\n\nPlease check the Cathedral Sub App for more information: " + appUrl;
+    htmlBody = "<p>You have been assigned to cover a class.</p>" + detailsHtml + attendanceHtml + "<p>Please check the <a href='" + appUrl + "'>Cathedral Sub App</a> for more information.</p>";
   } else if (type === 'Canceled') {
     subject = "CANCELED - Coverage Assignment: " + details.date + (details.period ? " Period " + details.period : "");
     body = "Your assigned coverage has been CANCELED. You are no longer needed for this assignment.\n\n" + detailsText + "\n\nGo to the Cathedral Sub App for more information: " + appUrl;
     htmlBody = "<p>Your assigned coverage has been CANCELED. You are no longer needed for this assignment.</p>" + detailsHtml + "<p>Go to the <a href='" + appUrl + "'>Cathedral Sub App</a> for more information.</p>";
   } else if (type === 'Modified') {
     subject = "UPDATED - Coverage Assignment: " + details.date + (details.period ? " Period " + details.period : "");
-    body = "There has been an update to your assigned coverage.\n\nUpdated Details:\n" + detailsText + "\n\nPlease check the Cathedral Sub App for more information: " + appUrl;
-    htmlBody = "<p>There has been an update to your assigned coverage.</p><h3>Updated Details:</h3>" + detailsHtml + "<p>Please check the <a href='" + appUrl + "'>Cathedral Sub App</a> for more information.</p>";
+    body = "There has been an update to your assigned coverage.\n\nUpdated Details:\n" + detailsText + attendanceText + "\n\nPlease check the Cathedral Sub App for more information: " + appUrl;
+    htmlBody = "<p>There has been an update to your assigned coverage.</p><h3>Updated Details:</h3>" + detailsHtml + attendanceHtml + "<p>Please check the <a href='" + appUrl + "'>Cathedral Sub App</a> for more information.</p>";
   }
 
   try {
