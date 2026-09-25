@@ -2079,13 +2079,9 @@
 
           <div id="suggestSubContent" class="hidden mt-4">
               <div class="overflow-x-auto border border-gray-200 rounded-lg mb-6">
-                  <table class="w-full text-left border-collapse">
-                      <thead class="bg-gray-50 border-b border-gray-200">
-                          <tr>
-                              <th class="p-3 text-sm font-bold text-gray-700 w-1/4">Teacher</th>
-                              <th class="p-3 text-sm font-bold text-gray-700 w-1/4">Period</th>
-                              <th class="p-3 text-sm font-bold text-gray-700 w-1/2">Suggestion</th>
-                          </tr>
+                  <table class="w-full text-left border-collapse min-w-max">
+                      <thead id="suggestSubTableHeader" class="bg-gray-50 border-b border-gray-200">
+                          <!-- Dynamically populated -->
                       </thead>
                       <tbody id="suggestSubTableBody" class="divide-y divide-gray-200">
                       </tbody>
@@ -7063,41 +7059,75 @@ function openSuggestSubModal() {
 
 function renderSuggestSubModal(suggestions) {
     currentSuggestions = suggestions;
+    const thead = document.getElementById('suggestSubTableHeader');
     const tbody = document.getElementById('suggestSubTableBody');
     let html = '';
+    let headerHtml = '';
 
-    let hasRows = false;
+    const activeRequests = suggestions.filter(req => req.status === 'Active');
 
-    suggestions.forEach(req => {
-        // Only show requests that need a sub or where we might want to suggest one
-        if (req.status !== 'Active') return;
+    if (activeRequests.length === 0) {
+        thead.innerHTML = `<tr><th class="p-3 text-sm font-bold text-gray-700">Suggestions</th></tr>`;
+        tbody.innerHTML = '<tr><td class="p-4 text-center text-gray-500 italic">No open absences found for this date.</td></tr>';
+        return;
+    }
 
-        hasRows = true;
-        html += `<tr>`;
-        html += `<td class="p-3 text-sm text-gray-800 border-b">${escapeHtml(req.teacherName)}</td>`;
-        html += `<td class="p-3 text-sm text-gray-800 border-b">Period ${escapeHtml(req.period)}</td>`;
+    const teacherMap = {};
+    const periodsSet = new Set(['1', '2', '3', '4', '5', '6', '7', '8']); // Standard periods
 
-        html += `<td class="p-3 text-sm border-b">`;
-        if (req.assignedSub) {
-            html += `<span class="text-gray-600 italic">Already assigned: ${escapeHtml(req.assignedSub)}</span>`;
-        } else {
-            const val = req.suggestedSub || "";
-            const highlightClass = val ? 'bg-green-100 border-green-300' : 'bg-white border-gray-300';
-
-            html += `<input type="text" id="suggestInput_${req.id}_${req.period}"
-                      list="dynamicStaffDataList"
-                      onfocus="updateDynamicStaffList('${escapeJs(req.date)}', '${escapeJs(req.period)}')"
-                      value="${escapeHtml(val)}"
-                      placeholder="Type a sub name..."
-                      class="w-full p-2 border rounded text-sm outline-none focus:ring-2 focus:ring-[#00843D] ${highlightClass}">`;
+    activeRequests.forEach(req => {
+        if (!teacherMap[req.teacherName]) {
+            teacherMap[req.teacherName] = {};
         }
-        html += `</td>`;
-        html += `</tr>`;
+        teacherMap[req.teacherName][req.period] = req;
+        periodsSet.add(String(req.period));
     });
 
-    if (!hasRows) {
-        html = '<tr><td colspan="3" class="p-4 text-center text-gray-500 italic">No open absences found for this date.</td></tr>';
-    }
+    // Sort periods logically
+    const periods = Array.from(periodsSet).sort((a, b) => {
+        const numA = parseInt(a);
+        const numB = parseInt(b);
+        if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+        if (isNaN(numA) && !isNaN(numB)) return 1;
+        if (!isNaN(numA) && isNaN(numB)) return -1;
+        return a.localeCompare(b);
+    });
+
+    // Build thead
+    headerHtml += `<tr>`;
+    headerHtml += `<th class="p-3 text-sm font-bold text-gray-700 sticky left-0 bg-gray-50 z-10 border-r border-gray-200">Teacher</th>`;
+    periods.forEach(p => {
+        headerHtml += `<th class="p-3 text-sm font-bold text-gray-700 min-w-[200px]">Period ${escapeHtml(p)}</th>`;
+    });
+    headerHtml += `</tr>`;
+    thead.innerHTML = headerHtml;
+
+    // Build tbody
+    Object.keys(teacherMap).sort().forEach(teacherName => {
+        html += `<tr class="hover:bg-gray-50 transition-colors">`;
+        html += `<td class="p-3 text-sm text-gray-800 border-b sticky left-0 bg-white z-10 border-r border-gray-200 whitespace-nowrap">${escapeHtml(teacherName)}</td>`;
+
+        periods.forEach(p => {
+            const req = teacherMap[teacherName][p];
+            html += `<td class="p-3 text-sm border-b">`;
+            if (req) {
+                if (req.assignedSub) {
+                    html += `<span class="text-gray-600 italic">Already assigned: ${escapeHtml(req.assignedSub)}</span>`;
+                } else {
+                    const val = req.suggestedSub || "";
+                    const highlightClass = val ? 'bg-green-100 border-green-300' : 'bg-white border-gray-300';
+                    html += `<input type="text" id="suggestInput_${req.id}_${req.period}"
+                              list="dynamicStaffDataList"
+                              onfocus="updateDynamicStaffList('${escapeJs(req.date)}', '${escapeJs(req.period)}')"
+                              value="${escapeHtml(val)}"
+                              placeholder="Type a sub name..."
+                              class="w-full p-2 border rounded text-sm outline-none focus:ring-2 focus:ring-[#00843D] ${highlightClass}">`;
+                }
+            }
+            html += `</td>`;
+        });
+        html += `</tr>`;
+    });
 
     tbody.innerHTML = html;
 }
