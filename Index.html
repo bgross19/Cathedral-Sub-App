@@ -1267,6 +1267,11 @@
                    </button>
                </div>
             </div>
+
+            <button id="suggestSubbingBtn" onclick="openSuggestSubModal()" class="hidden bg-[#00843D] hover:bg-[#00662F] text-white font-semibold py-1.5 px-4 rounded-lg transition-colors flex items-center gap-2 ml-4">
+                <span>✨</span> Suggest Subbing
+            </button>
+
             <div class="flex items-center gap-2 w-full sm:w-auto ml-auto">
                <button onclick="exportToCSV('At_A_Glance_Export.csv', 'atAGlanceTable')" class="bg-white hover:bg-gray-100 text-[#002147] text-sm font-bold py-1.5 px-4 rounded border border-[#002147] transition-colors shadow-sm flex items-center gap-2">
                    <span>📥</span> Export CSV
@@ -2050,6 +2055,47 @@
           </div>
           <div id="detailsContent" class="mt-4 space-y-4">
              <!-- Populated dynamically -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Suggest Sub Modal -->
+    <div id="suggestSubModal" class="modal transition-opacity duration-[250ms] ease-in-out opacity-0 pointer-events-none fixed w-full h-full top-0 left-0 flex items-center justify-center z-[110]" onclick="if(event.target === this) cancelSuggestions()">
+      <div class="modal-overlay absolute w-full h-full bg-gray-900 opacity-50" onclick="cancelSuggestions()"></div>
+      <div class="modal-container bg-white w-11/12 md:max-w-4xl mx-auto rounded-2xl shadow-2xl z-[110] overflow-y-auto max-h-[90vh]">
+        <div class="p-6">
+          <div class="flex justify-between items-center pb-3 border-b border-gray-200">
+            <p class="text-2xl font-bold text-[#002147]">Suggest Subbing</p>
+            <div class="modal-close cursor-pointer z-50 text-gray-500 hover:text-red-500 transition-colors" onclick="cancelSuggestions()">
+              <svg class="fill-current" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 18 18"><path d="M14.53 4.53l-1.06-1.06L9 7.94 4.53 3.47 3.47 4.53 7.94 9l-4.47 4.47 1.06 1.06L9 10.06l4.47 4.47 1.06-1.06L10.06 9z"/></svg>
+            </div>
+          </div>
+
+          <div id="suggestSubLoading" class="hidden text-center py-8">
+              <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-[#002147] mb-2"></div>
+              <p class="text-gray-500">Calculating suggestions...</p>
+          </div>
+
+          <div id="suggestSubContent" class="hidden mt-4">
+              <div class="overflow-x-auto border border-gray-200 rounded-lg mb-6">
+                  <table class="w-full text-left border-collapse">
+                      <thead class="bg-gray-50 border-b border-gray-200">
+                          <tr>
+                              <th class="p-3 text-sm font-bold text-gray-700 w-1/4">Teacher</th>
+                              <th class="p-3 text-sm font-bold text-gray-700 w-1/4">Period</th>
+                              <th class="p-3 text-sm font-bold text-gray-700 w-1/2">Suggestion</th>
+                          </tr>
+                      </thead>
+                      <tbody id="suggestSubTableBody" class="divide-y divide-gray-200">
+                      </tbody>
+                  </table>
+              </div>
+
+              <div class="flex justify-end gap-3 mt-6">
+                  <button onclick="cancelSuggestions()" class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-semibold transition-colors">Cancel</button>
+                  <button id="approveSuggestionsBtn" onclick="approveSuggestions()" class="px-4 py-2 bg-[#00843D] text-white rounded-lg hover:bg-[#00662F] font-semibold transition-colors shadow-sm">Approve All</button>
+              </div>
           </div>
         </div>
       </div>
@@ -4036,9 +4082,11 @@ const data = payload.userData;
 
         if (currentUserPermissions && (currentUserPermissions["Admin Dashboard"] || currentUserRole === 'admin' || currentUserRole === 'sub coordinator')) {
             document.getElementById('atAGlanceAssignableContainer').classList.remove('hidden');
+            document.getElementById('suggestSubbingBtn').classList.remove('hidden');
             renderAtAGlanceAssignableTable(todaysRecords);
         } else {
             document.getElementById('atAGlanceAssignableContainer').classList.add('hidden');
+            document.getElementById('suggestSubbingBtn').classList.add('hidden');
         }
       }
 
@@ -6961,5 +7009,141 @@ const data = payload.userData;
         </div>
     </div>
 
-  </body>
+  <script>
+
+let currentSuggestions = [];
+
+function openSuggestSubModal() {
+    const selectedDate = document.getElementById('atAGlanceDate').value;
+    if (!selectedDate) {
+        showToast("Please select a date first.", "error");
+        return;
+    }
+
+    document.getElementById('suggestSubModal').classList.remove('opacity-0', 'pointer-events-none');
+    document.getElementById('suggestSubLoading').classList.remove('hidden');
+    document.getElementById('suggestSubContent').classList.add('hidden');
+
+    // Fetch suggestions
+    google.script.run
+        .withSuccessHandler(function(res) {
+            document.getElementById('suggestSubLoading').classList.add('hidden');
+            if (res.success) {
+                renderSuggestSubModal(res.suggestions);
+                document.getElementById('suggestSubContent').classList.remove('hidden');
+            } else {
+                showToast(res.error || "Failed to load suggestions", "error");
+                cancelSuggestions(true);
+            }
+        })
+        .withFailureHandler(function(err) {
+            document.getElementById('suggestSubLoading').classList.add('hidden');
+            showToast("Error: " + err.message, "error");
+            cancelSuggestions(true);
+        })
+        .getSuggestedSubs(selectedDate);
+}
+
+function renderSuggestSubModal(suggestions) {
+    currentSuggestions = suggestions;
+    const tbody = document.getElementById('suggestSubTableBody');
+    let html = '';
+
+    let hasRows = false;
+
+    suggestions.forEach(req => {
+        // Only show requests that need a sub or where we might want to suggest one
+        if (req.status !== 'Active') return;
+
+        hasRows = true;
+        html += `<tr>`;
+        html += `<td class="p-3 text-sm text-gray-800 border-b">${escapeHtml(req.teacherName)}</td>`;
+        html += `<td class="p-3 text-sm text-gray-800 border-b">Period ${escapeHtml(req.period)}</td>`;
+
+        html += `<td class="p-3 text-sm border-b">`;
+        if (req.assignedSub) {
+            html += `<span class="text-gray-600 italic">Already assigned: ${escapeHtml(req.assignedSub)}</span>`;
+        } else {
+            const val = req.suggestedSub || "";
+            const highlightClass = val ? 'bg-green-100 border-green-300' : 'bg-white border-gray-300';
+
+            html += `<input type="text" id="suggestInput_${req.id}_${req.period}"
+                      list="dynamicStaffDataList"
+                      onfocus="updateDynamicStaffList('${escapeJs(req.date)}', '${escapeJs(req.period)}')"
+                      value="${escapeHtml(val)}"
+                      placeholder="Type a sub name..."
+                      class="w-full p-2 border rounded text-sm outline-none focus:ring-2 focus:ring-[#00843D] ${highlightClass}">`;
+        }
+        html += `</td>`;
+        html += `</tr>`;
+    });
+
+    if (!hasRows) {
+        html = '<tr><td colspan="3" class="p-4 text-center text-gray-500 italic">No open absences found for this date.</td></tr>';
+    }
+
+    tbody.innerHTML = html;
+}
+
+function cancelSuggestions(force = false) {
+    if (!force) {
+        if (!confirm("Are you sure you want to cancel your suggestions?")) {
+            return;
+        }
+    }
+    document.getElementById('suggestSubModal').classList.add('opacity-0', 'pointer-events-none');
+}
+
+function approveSuggestions() {
+    const assignments = [];
+
+    currentSuggestions.forEach(req => {
+        if (req.status === 'Active' && (!req.assignedSub || req.assignedSub === "")) {
+            const inputEl = document.getElementById(`suggestInput_${req.id}_${req.period}`);
+            if (inputEl) {
+                const subName = inputEl.value.trim();
+                if (subName) {
+                    assignments.push({
+                        id: req.id,
+                        period: req.period,
+                        subName: subName
+                    });
+                }
+            }
+        }
+    });
+
+    if (assignments.length === 0) {
+        showToast("No new suggestions to approve.", "info");
+        cancelSuggestions(true);
+        return;
+    }
+
+    const btn = document.getElementById('approveSuggestionsBtn');
+    btn.disabled = true;
+    btn.innerText = "Approving...";
+
+    google.script.run
+        .withSuccessHandler(function(res) {
+            btn.disabled = false;
+            btn.innerText = "Approve All";
+            if (res.success) {
+                showToast(`Successfully assigned ${res.count} substitute(s).`, "success");
+                cancelSuggestions(true);
+                // Refresh dashboard
+                loadAdminDashboardData(true);
+            } else {
+                showToast("Failed to assign: " + res.error, "error");
+            }
+        })
+        .withFailureHandler(function(err) {
+            btn.disabled = false;
+            btn.innerText = "Approve All";
+            showToast("Error: " + err.message, "error");
+        })
+        .batchAssignSubs(assignments, window.activeUserEmail);
+}
+
+</script>
+</body>
 </html>
