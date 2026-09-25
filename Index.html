@@ -6946,6 +6946,7 @@ const data = payload.userData;
           }
       }
 
+
       function showConfirm(message, callback) {
         document.getElementById('confirmModalMessage').innerText = message;
         currentConfirmCallback = callback;
@@ -6992,10 +6993,26 @@ const data = payload.userData;
       let oldAttemptCloseAllModals = "";
       try {
         oldAttemptCloseAllModals = attemptCloseAllModals.toString();
+
+        // Let's actually override it properly
+        window.attemptCloseAllModals = function() {
+          if (hasUnsavedData()) {
+            showConfirm("You have unsaved changes. Are you sure you want to close this modal and discard them?", () => {
+               originalModalData = {};
+               closeAllModals();
+            });
+            return;
+          }
+
+          // Reset the captured state
+          originalModalData = {};
+          closeAllModals();
+        };
       } catch(e) {
-        console.warn("SecurityError caught: ", e);
+        console.warn("Error overriding attemptCloseAllModals: ", e);
       }
-      // Wait, we need to inject this properly. Let's do it via regex on the actual function body later.
+
+
     </script>
 
     <!-- Version Update Modal -->
