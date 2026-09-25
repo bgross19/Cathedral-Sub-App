@@ -2565,7 +2565,7 @@ function getInitialPayload(clientEmail) {
           if (parts.length > 1) teacherName = parts[1].trim() + " " + parts[0].trim();
         }
 
-        var periodsRequested = String(row[4]).split(",").map(function(p) { return p.trim(); });
+        periodsRequested = String(row[4]).split(",").map(function(p) { return p.trim(); });
         var rowId = String(row[0]);
         var rawDate = Number(rowDate.getTime());
         var reason = String(row[5]);
@@ -4098,10 +4098,10 @@ function getSuggestedSubs(dateStr) {
   var suggestedByPeriod = {};
 
   // 5. Suggest subs
-  for (var i = 0; i < openRequests.length; i++) {
-    var req = openRequests[i];
+  for (i = 0; i < openRequests.length; i++) {
+    req = openRequests[i];
     var period = String(req.period);
-    var absentEmail = String(req.email).toLowerCase().trim();
+    absentEmail = String(req.email).toLowerCase().trim();
     var absentTeacher = staffMap[absentEmail] || null;
 
     if (!suggestedByPeriod[period]) {
@@ -4161,8 +4161,8 @@ function getSuggestedSubs(dateStr) {
              var h1 = String(candidate.homebase);
              var h2 = String(absentTeacher.homebase);
              if (h1.length === 4 && h2.length === 4) {
-                 var b1 = h1.charAt(0);
-                 var b2 = h2.charAt(0);
+                 b1 = h1.charAt(0);
+                 b2 = h2.charAt(0);
                  var f1 = h1.charAt(1);
                  var f2 = h2.charAt(1);
                  var w1 = parseInt(h1.substring(2));
@@ -4230,7 +4230,7 @@ function fetchAbsenceRequestsForDate(ss, dateStr) {
   var idxStatus = colMap['status'] !== undefined ? colMap['status'] : 11;
   var idxSub = colMap['assigned sub'] !== undefined ? colMap['assigned sub'] : 12;
 
-  for (var i = 1; i < data.length; i++) {
+  for (i = 1; i < data.length; i++) {
      var row = data[i];
      if (!row || row.length === 0 || !row[idxId]) continue;
 
@@ -4248,21 +4248,32 @@ function fetchAbsenceRequestsForDate(ss, dateStr) {
      var reqDateStr = Utilities.formatDate(reqDateObj, Session.getScriptTimeZone(), "yyyy-MM-dd");
 
      if (reqDateStr === dateStr) {
-        requests.push({
-           id: String(row[idxId]),
-           timestamp: row[idxTimestamp] instanceof Date ? Utilities.formatDate(row[idxTimestamp], Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss") : String(row[idxTimestamp]),
-           teacherName: String(row[idxName]),
-           email: String(row[idxEmail]),
-           date: reqDateStr,
-           period: String(row[idxPeriod]),
-           room: String(row[idxRoom] || ""),
-           urgency: String(row[idxUrgency] || ""),
-           type: String(row[idxType] || ""),
-           reason: String(row[idxReason] || ""),
-           notes: String(row[idxNotes] || ""),
-           status: String(row[idxStatus]),
-           assignedSub: String(row[idxSub] || "")
-        });
+        var periodsRequested = String(row[idxPeriod]).split(",").map(function(p) { return p.trim(); });
+        var allPeriods = ['1', '2', '3', '4', '5', '6', '7', '8', '0', 'Advisory'];
+
+        for (var pIdx = 0; pIdx < allPeriods.length; pIdx++) {
+           var p = allPeriods[pIdx];
+           if (periodsRequested.indexOf(String(p)) !== -1) {
+              var subColumnIndex = getSubColumnIndex(p) - 1;
+              var assignedSub = String(row[subColumnIndex] || "").trim();
+
+              requests.push({
+                 id: String(row[idxId]),
+                 timestamp: row[idxTimestamp] instanceof Date ? Utilities.formatDate(row[idxTimestamp], Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss") : String(row[idxTimestamp]),
+                 teacherName: String(row[idxName]),
+                 email: String(row[idxEmail]),
+                 date: reqDateStr,
+                 period: String(p),
+                 room: String(row[idxRoom] || ""),
+                 urgency: String(row[idxUrgency] || ""),
+                 type: String(row[idxType] || ""),
+                 reason: String(row[idxReason] || ""),
+                 notes: String(row[idxNotes] || ""),
+                 status: String(row[idxStatus]),
+                 assignedSub: assignedSub
+              });
+           }
+        }
      }
   }
   return requests;
@@ -4305,7 +4316,7 @@ function batchAssignSubs(assignments, clientEmail) {
 
     // Convert assignments to a map for easy lookup
     var assignmentMap = {};
-    for (var i = 0; i < assignments.length; i++) {
+    for (i = 0; i < assignments.length; i++) {
         var a = assignments[i];
         if (!assignmentMap[a.id]) {
             assignmentMap[a.id] = {};
@@ -4319,7 +4330,7 @@ function batchAssignSubs(assignments, clientEmail) {
     var notifications = [];
 
     // Scan sheet for matching requests
-    for (var i = 1; i < data.length; i++) {
+    for (i = 1; i < data.length; i++) {
        var row = data[i];
        if (!row || !row[idxId]) continue;
 
@@ -4377,7 +4388,7 @@ function batchAssignSubs(assignments, clientEmail) {
     }
 
     // Apply batch updates
-    for (var i = 0; i < batchUpdates.length; i++) {
+    for (i = 0; i < batchUpdates.length; i++) {
         var update = batchUpdates[i];
         reqSheet.getRange(update.row, update.colSub).setValue(update.valSub);
         reqSheet.getRange(update.row, update.colMod).setValue(update.valMod);
@@ -4387,7 +4398,7 @@ function batchAssignSubs(assignments, clientEmail) {
     logAuditAction("Batch Assign", "Multiple", "Assigned " + successCount + " subs");
 
     // Send notifications
-    for (var i = 0; i < notifications.length; i++) {
+    for (i = 0; i < notifications.length; i++) {
         var n = notifications[i];
         try {
            sendSubNotification(n.subEmail, "Assigned", n.details);
