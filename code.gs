@@ -4250,7 +4250,7 @@ function fetchAbsenceRequestsForDate(ss, dateStr) {
      if (reqDateStr === dateStr) {
         requests.push({
            id: String(row[idxId]),
-           timestamp: row[idxTimestamp],
+           timestamp: row[idxTimestamp] instanceof Date ? Utilities.formatDate(row[idxTimestamp], Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss") : String(row[idxTimestamp]),
            teacherName: String(row[idxName]),
            email: String(row[idxEmail]),
            date: reqDateStr,

@@ -5622,7 +5622,7 @@ const data = payload.userData;
             .withSuccessHandler(res => {
                 btn.disabled = false;
                 btn.innerText = 'Submit Feedback';
-                if (res.success) {
+                if (res && res.success) {
                     showToast("Feedback saved successfully!", 'success');
                     closeSubFeedbackModal();
 
@@ -7045,11 +7045,11 @@ function openSuggestSubModal() {
     google.script.run
         .withSuccessHandler(function(res) {
             document.getElementById('suggestSubLoading').classList.add('hidden');
-            if (res.success) {
+            if (res && res.success) {
                 renderSuggestSubModal(res.suggestions);
                 document.getElementById('suggestSubContent').classList.remove('hidden');
             } else {
-                showToast(res.error || "Failed to load suggestions", "error");
+                showToast((res && res.error) ? res.error : "Failed to load suggestions", "error");
                 cancelSuggestions(true);
             }
         })
@@ -7144,7 +7144,7 @@ function approveSuggestions() {
         .withSuccessHandler(function(res) {
             btn.disabled = false;
             btn.innerText = "Approve All";
-            if (res.success) {
+            if (res && res.success) {
                 showToast(`Successfully assigned ${res.count} substitute(s).`, "success");
                 cancelSuggestions(true);
                 // Refresh dashboard
