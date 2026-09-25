@@ -2712,12 +2712,18 @@ function getInitialPayload(clientEmail) {
           var display = staffName;
           if (duty) display = staffName + " - " + duty;
 
+          var department = rosterData[rsIdx].length > 4 ? String(rosterData[rsIdx][4] || "").trim() : "";
+          var homebase = rosterData[rsIdx].length > 5 ? String(rosterData[rsIdx][5] || "").trim() : "";
+          var building = rosterData[rsIdx].length > 6 ? String(rosterData[rsIdx][6] || "").trim() : "";
           staffList.push({
              name: staffName,
              display: display,
              duty: duty,
              role: staffRole,
              email: staffEmail,
+             department: department,
+             homebase: homebase,
+             building: building,
              availability: allSubAvail[staffEmail] || {},
              teacherSchedule: allSchedules[staffEmail] || []
           });
@@ -4032,5 +4038,370 @@ function saveSubstituteAvailabilityAdmin(subName, dateStr, status, clientEmail) 
     }
   } else {
     subAvailSheet.appendRow([targetEmail, dateStr, status]);
+  }
+}
+
+function getSuggestedSubs(dateStr) {
+  var ss = getSS();
+
+  // 1. Get all requests for the date
+  var requests = fetchAbsenceRequestsForDate(ss, dateStr);
+
+  // 2. Get Roster Data
+  var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
+  if (!rosterSheet) return { success: false, error: "Staff Roster sheet not found." };
+  var rosterData = rosterSheet.getDataRange().getValues();
+
+  // 3. Build a map of teachers by email for quick lookup
+  var staffMap = {};
+  var staffList = []; // Array to preserve some order if needed
+
+  for (var r = 1; r < rosterData.length; r++) {
+    var row = rosterData[r];
+    if (!row || !row[1]) continue;
+
+    var email = String(row[1]).toLowerCase().trim();
+    var staff = {
+      name: String(row[0] || "").trim(),
+      email: email,
+      role: String(row[2] || "").trim().toLowerCase(),
+      duty: String(row[3] || "").trim(),
+      department: String(row[4] || "").trim(),
+      homebase: String(row[5] || "").trim(),
+      building: String(row[6] || "").trim(),
+      absentPeriods: {} // Track which periods they are absent themselves
+    };
+    staffMap[email] = staff;
+    staffList.push(staff);
+  }
+
+  // 4. Determine which teachers are absent on this day (can't sub)
+  // And which requests need subs
+  var openRequests = [];
+
+  for (var i = 0; i < requests.length; i++) {
+    var req = requests[i];
+
+    // Mark the absent teacher as unavailable for this period
+    var absentEmail = String(req.email).toLowerCase().trim();
+    if (staffMap[absentEmail]) {
+       staffMap[absentEmail].absentPeriods[req.period] = true;
+    }
+
+    if (req.status === 'Active' && (!req.assignedSub || req.assignedSub === "")) {
+       // Needs a sub
+       openRequests.push(req);
+    }
+  }
+
+  // Track who we've already suggested for a specific period to avoid double booking
+  var suggestedByPeriod = {};
+
+  // 5. Suggest subs
+  for (var i = 0; i < openRequests.length; i++) {
+    var req = openRequests[i];
+    var period = String(req.period);
+    var absentEmail = String(req.email).toLowerCase().trim();
+    var absentTeacher = staffMap[absentEmail] || null;
+
+    if (!suggestedByPeriod[period]) {
+        suggestedByPeriod[period] = {};
+    }
+
+    var bestMatch = null;
+    var bestScore = -1;
+
+    for (var j = 0; j < staffList.length; j++) {
+      var candidate = staffList[j];
+
+      // Skip if it's the absent teacher
+      if (candidate.email === absentEmail) continue;
+
+      // Skip if candidate is absent this period
+      if (candidate.absentPeriods[period]) continue;
+
+      // Skip if candidate is already suggested for this period
+      if (suggestedByPeriod[period][candidate.email]) continue;
+
+      // Check if candidate has duty this period
+      var duties = candidate.duty.split(',').map(function(s) { return s.trim(); });
+      if (duties.indexOf(period) === -1) continue;
+
+      // Calculate score based on priority:
+      // Priority 1: Same Department
+      // Priority 2: Building Proximity (Cunningham=1, Loretto=2, Kelly Hall=3, default Kelly)
+      // Priority 3: Homebase Proximity (Same floor, closest wing)
+      var score = 0;
+
+      if (absentTeacher) {
+          // 1. Same Department (+1000)
+          if (candidate.department && candidate.department === absentTeacher.department) {
+             score += 1000;
+          }
+
+          // 2. Building Proximity
+          var getBuildingScore = function(b) {
+             b = b.toLowerCase();
+             if (b === 'cunningham') return 1;
+             if (b === 'loretto') return 2;
+             return 3; // default Kelly Hall
+          };
+          var b1 = getBuildingScore(candidate.building);
+          var b2 = getBuildingScore(absentTeacher.building);
+
+          // Max difference is 2 (e.g. 1 and 3).
+          // Smaller difference means closer.
+          var bDiff = Math.abs(b1 - b2);
+          // Add score based on closeness (+200 for same building, +100 for 1 apart, +0 for 2 apart)
+          if (bDiff === 0) score += 200;
+          else if (bDiff === 1) score += 100;
+
+          // 3. Homebase Proximity
+          if (candidate.homebase && absentTeacher.homebase) {
+             var h1 = String(candidate.homebase);
+             var h2 = String(absentTeacher.homebase);
+             if (h1.length === 4 && h2.length === 4) {
+                 var b1 = h1.charAt(0);
+                 var b2 = h2.charAt(0);
+                 var f1 = h1.charAt(1);
+                 var f2 = h2.charAt(1);
+                 var w1 = parseInt(h1.substring(2));
+                 var w2 = parseInt(h2.substring(2));
+
+                 // if same building and same floor
+                 if (b1 === b2 && f1 === f2 && !isNaN(w1) && !isNaN(w2)) {
+                    var wDiff = Math.abs(w1 - w2);
+                    // Add up to 99 points based on how close the wings are
+                    // wDiff is typically small (e.g. 0 to 20).
+                    // Use a formula that gives higher points for smaller wDiff
+                    var wingScore = 99 - Math.min(wDiff, 99);
+                    score += wingScore;
+                 }
+             }
+          }
+      } else {
+          // If absent teacher not found in roster, just give a baseline score
+          score = 10;
+      }
+
+      if (score > bestScore) {
+          bestScore = score;
+          bestMatch = candidate;
+      }
+    }
+
+    if (bestMatch) {
+       req.suggestedSub = bestMatch.name + (bestMatch.duty ? " - " + bestMatch.duty : "");
+       suggestedByPeriod[period][bestMatch.email] = true;
+    }
+  }
+
+  // Only return open requests that need a sub or where we have a suggestion,
+  // or return all so UI can render them properly?
+  // Returning all requests for this date (including assigned) is probably best
+  // so the UI can show the full picture.
+
+  return { success: true, suggestions: requests };
+}
+
+function fetchAbsenceRequestsForDate(ss, dateStr) {
+  var reqSheet = getSheetOrThrow(ss, "Absence Requests");
+  if (!reqSheet) return [];
+
+  var data = reqSheet.getDataRange().getValues();
+  var requests = [];
+  var headers = data[0] || [];
+  var colMap = {};
+  for (var i=0; i<headers.length; i++) {
+     colMap[String(headers[i]).toLowerCase()] = i;
+  }
+
+  var idxId = colMap['id'] !== undefined ? colMap['id'] : 0;
+  var idxTimestamp = colMap['timestamp'] !== undefined ? colMap['timestamp'] : 1;
+  var idxName = colMap['teacher name'] !== undefined ? colMap['teacher name'] : 2;
+  var idxEmail = colMap['teacher email'] !== undefined ? colMap['teacher email'] : 3;
+  var idxDate = colMap['date'] !== undefined ? colMap['date'] : 4;
+  var idxPeriod = colMap['period'] !== undefined ? colMap['period'] : 5;
+  var idxRoom = colMap['room'] !== undefined ? colMap['room'] : 6;
+  var idxUrgency = colMap['urgency'] !== undefined ? colMap['urgency'] : 7;
+  var idxType = colMap['absence type'] !== undefined ? colMap['absence type'] : 8;
+  var idxReason = colMap['reason'] !== undefined ? colMap['reason'] : 9;
+  var idxNotes = colMap['notes'] !== undefined ? colMap['notes'] : 10;
+  var idxStatus = colMap['status'] !== undefined ? colMap['status'] : 11;
+  var idxSub = colMap['assigned sub'] !== undefined ? colMap['assigned sub'] : 12;
+
+  for (var i = 1; i < data.length; i++) {
+     var row = data[i];
+     if (!row || row.length === 0 || !row[idxId]) continue;
+
+     // Note: Date parsing in GS can be tricky. We assume row[idxDate] is a Date object or string
+     var reqDateObj;
+     if (row[idxDate] instanceof Date) {
+        reqDateObj = row[idxDate];
+     } else {
+        reqDateObj = new Date(row[idxDate]);
+     }
+
+     if (isNaN(reqDateObj.getTime())) continue;
+
+     // Format req date to YYYY-MM-DD
+     var reqDateStr = Utilities.formatDate(reqDateObj, Session.getScriptTimeZone(), "yyyy-MM-dd");
+
+     if (reqDateStr === dateStr) {
+        requests.push({
+           id: String(row[idxId]),
+           timestamp: row[idxTimestamp],
+           teacherName: String(row[idxName]),
+           email: String(row[idxEmail]),
+           date: reqDateStr,
+           period: String(row[idxPeriod]),
+           room: String(row[idxRoom] || ""),
+           urgency: String(row[idxUrgency] || ""),
+           type: String(row[idxType] || ""),
+           reason: String(row[idxReason] || ""),
+           notes: String(row[idxNotes] || ""),
+           status: String(row[idxStatus]),
+           assignedSub: String(row[idxSub] || "")
+        });
+     }
+  }
+  return requests;
+}
+
+function batchAssignSubs(assignments, clientEmail) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(15000);
+    var ss = getSS();
+    var email = getActiveUserEmail(typeof clientEmail !== 'undefined' ? clientEmail : undefined);
+    var user = getUserData(ss, email);
+
+    // Ensure permission
+    if (!user || (!user.permissions["Admin Dashboard"] && user.role !== 'admin' && user.role !== 'sub coordinator')) {
+        return { success: false, error: "Insufficient permissions to assign substitutes." };
+    }
+
+    var reqSheet = getSheetOrThrow(ss, "Absence Requests");
+    if (!reqSheet) return { success: false, error: "Absence Requests sheet not found." };
+    var data = reqSheet.getDataRange().getValues();
+
+    var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
+    if (!rosterSheet) return { success: false, error: "Staff Roster sheet not found." };
+    var rosterData = rosterSheet.getDataRange().getValues();
+
+    var nameLookup = buildNameLookup(rosterData);
+
+    // Extract column indices
+    var headers = data[0] || [];
+    var colMap = {};
+    for (var i = 0; i < headers.length; i++) {
+       colMap[String(headers[i]).toLowerCase().trim()] = i;
+    }
+
+    var idxId = colMap['id'] !== undefined ? colMap['id'] : 0;
+    var idxPeriod = colMap['period'] !== undefined ? colMap['period'] : 5;
+    var idxAssignedSub = colMap['assigned sub'] !== undefined ? colMap['assigned sub'] : 12;
+    var idxLastModifiedBy = colMap['last modified by'] !== undefined ? colMap['last modified by'] : 19;
+
+    // Convert assignments to a map for easy lookup
+    var assignmentMap = {};
+    for (var i = 0; i < assignments.length; i++) {
+        var a = assignments[i];
+        if (!assignmentMap[a.id]) {
+            assignmentMap[a.id] = {};
+        }
+        assignmentMap[a.id][a.period] = a.subName;
+    }
+
+    var successCount = 0;
+    var errors = [];
+    var batchUpdates = []; // To keep track of ranges and values
+    var notifications = [];
+
+    // Scan sheet for matching requests
+    for (var i = 1; i < data.length; i++) {
+       var row = data[i];
+       if (!row || !row[idxId]) continue;
+
+       var reqId = String(row[idxId]);
+       var reqPeriod = String(row[idxPeriod]);
+
+       if (assignmentMap[reqId] && assignmentMap[reqId][reqPeriod] !== undefined) {
+           var subNameRaw = assignmentMap[reqId][reqPeriod];
+           var subName = subNameRaw;
+
+           // If 'No Sub Needed', bypass validation
+           var isNoSubNeeded = (String(subName).toLowerCase().trim() === "no sub needed");
+
+           // Clean name for validation (strip - Duty)
+           var cleanSubName = subName;
+           if (!isNoSubNeeded && cleanSubName) {
+              cleanSubName = cleanSubName.replace(/\s+-\s+.*$/, '').trim();
+
+              // Validate sub name
+              var subEmail = null;
+              for (var emailKey in nameLookup) {
+                 if (nameLookup[emailKey].toLowerCase() === cleanSubName.toLowerCase()) {
+                    subEmail = emailKey;
+                    break;
+                 }
+              }
+              if (!subEmail) {
+                 errors.push("Invalid sub name: " + subName);
+                 continue; // skip this assignment
+              }
+           }
+
+           // Prepare update
+           batchUpdates.push({
+               row: i + 1,
+               colSub: idxAssignedSub + 1, // +1 for 1-based indexing in sheets
+               valSub: subName,
+               colMod: idxLastModifiedBy + 1,
+               valMod: user.name + " (" + new Date().toLocaleString() + ")"
+           });
+
+           if (!isNoSubNeeded && subName) {
+               // Prepare notification data
+               var details = getAbsenceDetailsLocal(row, reqPeriod, null, nameLookup);
+               if (details) {
+                   notifications.push({
+                      subEmail: subEmail,
+                      details: details
+                   });
+               }
+           }
+
+           successCount++;
+       }
+    }
+
+    // Apply batch updates
+    for (var i = 0; i < batchUpdates.length; i++) {
+        var update = batchUpdates[i];
+        reqSheet.getRange(update.row, update.colSub).setValue(update.valSub);
+        reqSheet.getRange(update.row, update.colMod).setValue(update.valMod);
+    }
+
+    // Log audit
+    logAuditAction("Batch Assign", "Multiple", "Assigned " + successCount + " subs");
+
+    // Send notifications
+    for (var i = 0; i < notifications.length; i++) {
+        var n = notifications[i];
+        try {
+           sendSubNotification(n.subEmail, "Assigned", n.details);
+        } catch (e) {
+           console.error("Failed to send notification to " + n.subEmail, e);
+        }
+    }
+
+    return { success: true, count: successCount, errors: errors.length > 0 ? errors : null };
+
+  } catch (e) {
+    console.error("batchAssignSubs Error: " + e.stack);
+    return { success: false, error: e.toString() };
+  } finally {
+    lock.releaseLock();
   }
 }
