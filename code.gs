@@ -4221,7 +4221,7 @@ function fetchAbsenceRequestsForDate(ss, dateStr) {
   var idxName = colMap['teacher name'] !== undefined ? colMap['teacher name'] : 2;
   var idxEmail = colMap['teacher email'] !== undefined ? colMap['teacher email'] : 3;
   var idxDate = colMap['date'] !== undefined ? colMap['date'] : 4;
-  var idxPeriod = colMap['period'] !== undefined ? colMap['period'] : 5;
+  var idxPeriod = colMap['periods'] !== undefined ? colMap['periods'] : (colMap['period'] !== undefined ? colMap['period'] : 4);
   var idxRoom = colMap['room'] !== undefined ? colMap['room'] : 6;
   var idxUrgency = colMap['urgency'] !== undefined ? colMap['urgency'] : 7;
   var idxType = colMap['absence type'] !== undefined ? colMap['absence type'] : 8;
@@ -4299,7 +4299,7 @@ function batchAssignSubs(assignments, clientEmail) {
     }
 
     var idxId = colMap['id'] !== undefined ? colMap['id'] : 0;
-    var idxPeriod = colMap['period'] !== undefined ? colMap['period'] : 5;
+    var idxPeriod = colMap['periods'] !== undefined ? colMap['periods'] : (colMap['period'] !== undefined ? colMap['period'] : 4);
     var idxAssignedSub = colMap['assigned sub'] !== undefined ? colMap['assigned sub'] : 12;
     var idxLastModifiedBy = colMap['last modified by'] !== undefined ? colMap['last modified by'] : 19;
 
