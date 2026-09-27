@@ -528,10 +528,10 @@ function processEmailQueue() {
     // Optional: Cleanup old sent/failed emails
     // We could delete rows that are marked "Sent" to keep the sheet small
     var rowsToDelete = [];
-    for (let i = statuses.length - 1; i >= 1; i--) {
-      var status = String(statuses[i][0] || "");
+    for (let k = statuses.length - 1; k >= 1; k--) {
+      var status = String(statuses[k][0] || "");
       if (status === "Sent" || status.indexOf("Failed") > -1) {
-         rowsToDelete.push(i + 1);
+         rowsToDelete.push(k + 1);
       }
     }
 
