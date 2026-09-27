@@ -4077,7 +4077,9 @@ function getSuggestedSubs(dateStr) {
 
   // 4. Determine which teachers are absent on this day (can't sub)
   // And which requests need subs
+  // Track who is already assigned for a specific period to avoid double booking
   var openRequests = [];
+  var assignedByPeriod = {};
 
   for (var i = 0; i < requests.length; i++) {
     var req = requests[i];
@@ -4091,6 +4093,13 @@ function getSuggestedSubs(dateStr) {
     if (req.status === 'Active' && (!req.assignedSub || req.assignedSub === "")) {
        // Needs a sub
        openRequests.push(req);
+    } else if (req.status === 'Active' && req.assignedSub && req.assignedSub !== "") {
+       // Someone is already assigned to this request
+       var cleanSubName = String(req.assignedSub).replace(/\s+-\s+.*$/, '').trim().toLowerCase();
+       if (!assignedByPeriod[req.period]) {
+           assignedByPeriod[req.period] = {};
+       }
+       assignedByPeriod[req.period][cleanSubName] = true;
     }
   }
 
@@ -4122,6 +4131,10 @@ function getSuggestedSubs(dateStr) {
 
       // Skip if candidate is already suggested for this period
       if (suggestedByPeriod[period][candidate.email]) continue;
+
+      // Skip if candidate is already assigned for this period
+      var candidateCleanName = String(candidate.name).trim().toLowerCase();
+      if (assignedByPeriod[period] && assignedByPeriod[period][candidateCleanName]) continue;
 
       // Check if candidate has duty this period
       var duties = candidate.duty.split(',').map(function(s) { return s.trim(); });
