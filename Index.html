@@ -5876,8 +5876,7 @@ const data = payload.userData;
                 }
 
                 if (!selectedPeriods) {
-                    showToast("Please select at least one period for coverage on " + dateStr + ".", 'error');
-                    return;
+                    selectedPeriods = "None";
                 }
 
                 requests.push({
@@ -5893,12 +5892,11 @@ const data = payload.userData;
                 });
             }
         } else {
-            const selectedPeriods = Array.from(document.querySelectorAll('#singleDatePeriodsBlock .period-cb:checked'))
+            let selectedPeriods = Array.from(document.querySelectorAll('#singleDatePeriodsBlock .period-cb:checked'))
                                          .map(cb => cb.value).join(', ');
 
             if (!selectedPeriods) {
-              showToast("Please select at least one period for coverage.", 'error');
-              return;
+                selectedPeriods = "None";
             }
 
             const newDateVal = document.getElementById('absDate').value;
