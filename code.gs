@@ -4339,8 +4339,8 @@ function batchAssignSubs(assignments, clientEmail) {
 
     var successCount = 0;
     var errors = [];
-    var batchUpdates = []; // To keep track of ranges and values
     var notifications = [];
+    var hasChanges = false;
 
     // Scan sheet for matching requests
     for (i = 1; i < data.length; i++) {
@@ -4376,14 +4376,10 @@ function batchAssignSubs(assignments, clientEmail) {
               }
            }
 
-           // Prepare update
-           batchUpdates.push({
-               row: i + 1,
-               colSub: idxAssignedSub + 1, // +1 for 1-based indexing in sheets
-               valSub: subName,
-               colMod: idxLastModifiedBy + 1,
-               valMod: user.name + " (" + new Date().toLocaleString() + ")"
-           });
+           // Prepare update by modifying the in-memory array directly
+           data[i][idxAssignedSub] = subName;
+           data[i][idxLastModifiedBy] = user.name + " (" + new Date().toLocaleString() + ")";
+           hasChanges = true;
 
            if (!isNoSubNeeded && subName) {
                // Prepare notification data
@@ -4400,11 +4396,9 @@ function batchAssignSubs(assignments, clientEmail) {
        }
     }
 
-    // Apply batch updates
-    for (i = 0; i < batchUpdates.length; i++) {
-        var update = batchUpdates[i];
-        reqSheet.getRange(update.row, update.colSub).setValue(update.valSub);
-        reqSheet.getRange(update.row, update.colMod).setValue(update.valMod);
+    // Apply all updates at once with a single setValues call
+    if (hasChanges && data.length > 0) {
+        reqSheet.getRange(1, 1, data.length, data[0].length).setValues(data);
     }
 
     // Log audit

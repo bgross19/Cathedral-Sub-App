@@ -500,6 +500,60 @@ function benchmarkEnqueueEmail() {
 }
 
 /**
+ * Temporary benchmark to measure performance improvement of `batchAssignSubs`
+ * from O(N) API writes to a single O(1) bulk write.
+ * Requires a large number of assignments in the 'Absence Requests' sheet.
+ */
+function benchmarkBatchAssignSubs() {
+  Logger.log("--- Starting batchAssignSubs Benchmark ---");
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName("Absence Requests");
+  if (!sheet) {
+    Logger.log("Absence Requests sheet not found. Cannot run benchmark.");
+    return;
+  }
+
+  var data = sheet.getDataRange().getValues();
+  if (data.length < 2) {
+    Logger.log("Not enough data in sheet to benchmark.");
+    return;
+  }
+
+  // Construct dummy assignments based on the first few rows
+  var assignments = [];
+  for (var i = 1; i < Math.min(11, data.length); i++) {
+    var row = data[i];
+    var id = row[0];
+    var period = row[4] || row[3]; // Periods or Period
+    if (id && period) {
+       assignments.push({
+           id: id,
+           period: period,
+           subName: "Test Sub Name" // Assuming 'Test Sub Name' is somewhat valid or bypassable
+       });
+    }
+  }
+
+  if (assignments.length === 0) {
+     Logger.log("No valid requests found to build assignment benchmark.");
+     return;
+  }
+
+  Logger.log("Benchmarking with " + assignments.length + " assignments.");
+
+  var start = new Date().getTime();
+
+  // NOTE: This will actually write to the spreadsheet.
+  // Make sure you are testing on a safe/test copy.
+  var res = batchAssignSubs(assignments, "admin@example.com");
+
+  var end = new Date().getTime();
+  Logger.log("batchAssignSubs executed in " + (end - start) + " ms");
+  Logger.log("Result: " + JSON.stringify(res));
+  Logger.log("--- End Benchmark ---");
+}
+
+/**
  * Benchmark to measure the performance improvement of passing settings directly
  * to sendEmailHelper rather than it calling getSettings() internally.
  */
