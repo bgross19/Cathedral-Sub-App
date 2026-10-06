@@ -2943,7 +2943,8 @@ function getInitialPayload(clientEmail) {
       settings: settings,
         rates: {
           green: settings["Green Day Pay Rate"] || "10",
-          blueGold: settings["Blue/Gold Day Pay Rate"] || "20"
+          blueGold: settings["Blue/Gold Day Pay Rate"] || "20",
+          special: settings["Special Pay Rates"] || "[]"
         }
       };
     }
@@ -3480,9 +3481,15 @@ function generatePrincipalsDigestHTML(dateObj) {
   nextWeekFriday.setHours(23, 59, 59, 999);
 
   // Extract HR rates
+  var specialRatesArray = [];
+  try {
+      specialRatesArray = JSON.parse(settings["Special Pay Rates"] || "[]");
+  } catch(e) {}
+
   var hrRates = {
     green: parseFloat(settings["Green Day Pay Rate"] || "10"),
-    blueGold: parseFloat(settings["Blue/Gold Day Pay Rate"] || "20")
+    blueGold: parseFloat(settings["Blue/Gold Day Pay Rate"] || "20"),
+    special: specialRatesArray
   };
 
   // Get data
@@ -3612,7 +3619,17 @@ function generatePrincipalsDigestHTML(dateObj) {
 
             if (!isSubstituteRole) {
                if (!isDuty) {
-                   if (dayColor.toLowerCase() === "blue" || dayColor.toLowerCase() === "gold") {
+                   var specialPayRate = null;
+                   for (var sIdx = 0; sIdx < hrRates.special.length; sIdx++) {
+                       if (hrRates.special[sIdx].date === dateFormatted) {
+                           specialPayRate = parseFloat(hrRates.special[sIdx].rate || 0);
+                           break;
+                       }
+                   }
+
+                   if (specialPayRate !== null) {
+                       currentWeekCoverage[assignedSub].pay += specialPayRate;
+                   } else if (dayColor.toLowerCase() === "blue" || dayColor.toLowerCase() === "gold") {
                        currentWeekCoverage[assignedSub].pay += hrRates.blueGold;
                    } else {
                        currentWeekCoverage[assignedSub].pay += hrRates.green;

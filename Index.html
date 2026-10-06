@@ -598,6 +598,53 @@
 
       // === Pay Periods Logic ===
       let currentPayPeriodsSettings = [];
+      let currentSpecialPayRates = [];
+
+      function renderSpecialPayRates() {
+          const list = document.getElementById('specialPayRatesList');
+          list.innerHTML = '';
+          if (currentSpecialPayRates.length === 0) {
+              list.innerHTML = '<p class="text-sm text-gray-400 italic">No special pay rates configured.</p>';
+              return;
+          }
+          currentSpecialPayRates.forEach((rateObj, index) => {
+              const div = document.createElement('div');
+              div.className = 'flex justify-between items-center p-3 bg-gray-50 border rounded-lg';
+              div.innerHTML = `
+                  <div>
+                      <span class="font-bold text-gray-700">${escapeHtml(rateObj.date)}</span>
+                      <span class="ml-2 text-gray-600">Rate: $${escapeHtml(String(rateObj.rate))}</span>
+                  </div>
+                  <button onclick="removeSpecialPayRate(${index})" class="text-red-500 hover:text-red-700 font-bold px-2 py-1">Remove</button>
+              `;
+              list.appendChild(div);
+          });
+      }
+
+      function addSpecialPayRate() {
+          const dateInput = document.getElementById('newSpecialPayRateDate');
+          const valueInput = document.getElementById('newSpecialPayRateValue');
+          if (!dateInput.value || !valueInput.value) {
+              showToast("Please enter both a date and a rate.", "error");
+              return;
+          }
+          const existing = currentSpecialPayRates.find(r => r.date === dateInput.value);
+          if (existing) {
+              existing.rate = valueInput.value;
+          } else {
+              currentSpecialPayRates.push({ date: dateInput.value, rate: valueInput.value });
+          }
+          // Sort by date
+          currentSpecialPayRates.sort((a, b) => a.date.localeCompare(b.date));
+          dateInput.value = '';
+          valueInput.value = '';
+          renderSpecialPayRates();
+      }
+
+      function removeSpecialPayRate(index) {
+          currentSpecialPayRates.splice(index, 1);
+          renderSpecialPayRates();
+      }
 
       function saveDayPayRates() {
         const btn = document.getElementById('saveDayPayRatesBtn');
@@ -607,7 +654,8 @@
 
         const newSettings = {
           "Green Day Pay Rate": document.getElementById('settingsGreenDayRate').value,
-          "Blue/Gold Day Pay Rate": document.getElementById('settingsBlueGoldDayRate').value
+          "Blue/Gold Day Pay Rate": document.getElementById('settingsBlueGoldDayRate').value,
+          "Special Pay Rates": JSON.stringify(currentSpecialPayRates)
         };
 
         google.script.run
@@ -635,6 +683,12 @@
              if (settings) {
                 document.getElementById('settingsGreenDayRate').value = settings["Green Day Pay Rate"] || "10";
                 document.getElementById('settingsBlueGoldDayRate').value = settings["Blue/Gold Day Pay Rate"] || "20";
+                try {
+                    currentSpecialPayRates = JSON.parse(settings["Special Pay Rates"] || "[]");
+                } catch (e) {
+                    currentSpecialPayRates = [];
+                }
+                renderSpecialPayRates();
              }
           })
           .getSettingsForFrontend(window.activeUserEmail);
@@ -1488,11 +1542,33 @@
              <label class="block text-sm font-bold mb-1">Blue/Gold Day Rate ($)</label>
              <input type="number" step="0.01" id="settingsBlueGoldDayRate" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none" placeholder="20">
           </div>
-          <div class="md:col-span-2">
-             <button onclick="saveDayPayRates()" id="saveDayPayRatesBtn" class="bg-[#002147] hover:bg-blue-900 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-sm text-sm">
-                 Save Pay Rates
-             </button>
-          </div>
+        </div>
+
+        <h3 class="text-lg font-bold text-[#002147] mb-4 border-b pb-2">Special Pay Rates</h3>
+        <p class="text-sm text-gray-600 mb-4">Add date-specific pay overrides (e.g. day before fall break). This will override both Green and Blue/Gold rates for that date.</p>
+        <div id="specialPayRatesList" class="mb-4 space-y-2">
+            <!-- Special rates populated here -->
+        </div>
+        <div class="flex items-end gap-2 mb-8">
+            <div class="flex-1">
+                <label class="block text-sm font-bold mb-1">Date</label>
+                <input type="date" id="newSpecialPayRateDate" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none">
+            </div>
+            <div class="flex-1">
+                <label class="block text-sm font-bold mb-1">Rate ($)</label>
+                <input type="number" step="0.01" id="newSpecialPayRateValue" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none" placeholder="25">
+            </div>
+            <div>
+                <button onclick="addSpecialPayRate()" class="bg-[#00843D] hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition-colors shadow-sm text-sm h-[42px]">
+                    Add Special Rate
+                </button>
+            </div>
+        </div>
+
+        <div class="mb-8">
+            <button onclick="saveDayPayRates()" id="saveDayPayRatesBtn" class="bg-[#002147] hover:bg-blue-900 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-sm text-sm">
+                Save Pay Rates
+            </button>
         </div>
 
         <div class="flex justify-between items-center mb-4 border-b pb-2">
@@ -2483,7 +2559,7 @@
       let hrDataRaw = [];
       let hrPayPeriods = [];
       let hrDateColors = {};
-      let hrRates = { green: 10, blueGold: 20 };
+      let hrRates = { green: 10, blueGold: 20, special: "[]" };
       let globalDateColors = {};
       let hrDashboardLoaded = false;
       let hrCurrentView = 'absences'; // 'absences' or 'subs'
@@ -2759,7 +2835,7 @@ const data = payload.userData;
                   hrDataRaw = payload.hrData.requests || [];
                   hrPayPeriods = payload.hrData.payPeriods || [];
                   hrDateColors = payload.dateColors || payload.hrData.dateColors || {};
-                  hrRates = payload.hrData.rates || { green: 10, blueGold: 20 };
+                  hrRates = payload.hrData.rates || { green: 10, blueGold: 20, special: "[]" };
               }
             }
 
@@ -6083,7 +6159,7 @@ const data = payload.userData;
             hrDataRaw = data.requests || [];
             hrPayPeriods = data.payPeriods || [];
             hrDateColors = data.dateColors || {};
-            hrRates = data.rates || { green: 10, blueGold: 20 };
+            hrRates = data.rates || { green: 10, blueGold: 20, special: "[]" };
 
             const today = new Date();
             const offset = today.getTimezoneOffset() * 60000;
@@ -6369,7 +6445,7 @@ const data = payload.userData;
                     }
 
                     if (!aggregated[subName]) {
-                        aggregated[subName] = { duties: 0, extras: 0, total: 0, greenExtras: 0, blueGoldExtras: 0, details: [] };
+                        aggregated[subName] = { duties: 0, extras: 0, total: 0, greenExtras: 0, blueGoldExtras: 0, specialPayTotal: 0, details: [] };
                     }
 
                     let teacherDuty = dutyLookup[subName];
@@ -6378,13 +6454,26 @@ const data = payload.userData;
 
                     let dateColor = hrDateColors[req.date] || "Gold";
                     let individualPay = 0;
-                    let payTypeStr = isDuty ? "Duty" : dateColor;
+
+                    let specialPayRate = null;
+                    try {
+                        const parsedSpecial = JSON.parse(hrRates.special || "[]");
+                        const specialObj = parsedSpecial.find(r => r.date === req.date);
+                        if (specialObj) {
+                            specialPayRate = parseFloat(specialObj.rate || 0);
+                        }
+                    } catch (e) {}
+
+                    let payTypeStr = isDuty ? "Duty" : (specialPayRate !== null ? "Special" : dateColor);
 
                     if (isDuty) {
                         aggregated[subName].duties += 1;
                     } else {
                         aggregated[subName].extras += 1;
-                        if (dateColor.toLowerCase() === "green") {
+                        if (specialPayRate !== null) {
+                            individualPay = specialPayRate;
+                            aggregated[subName].specialPayTotal += specialPayRate;
+                        } else if (dateColor.toLowerCase() === "green") {
                             aggregated[subName].greenExtras += 1;
                             individualPay = parseFloat(hrRates.green || 0);
                         } else {
@@ -6420,7 +6509,7 @@ const data = payload.userData;
                 if (aggregated[name].total > 0) {
                     let greenPay = aggregated[name].greenExtras * parseFloat(hrRates.green || 0);
                     let blueGoldPay = aggregated[name].blueGoldExtras * parseFloat(hrRates.blueGold || 0);
-                    let extraPay = greenPay + blueGoldPay;
+                    let extraPay = greenPay + blueGoldPay + (aggregated[name].specialPayTotal || 0);
 
                     if (filterUnpaid && extraPay <= 0) {
                         continue;
@@ -6443,6 +6532,7 @@ const data = payload.userData;
                         total: aggregated[name].total,
                         greenExtras: aggregated[name].greenExtras,
                         blueGoldExtras: aggregated[name].blueGoldExtras,
+                        specialPayTotal: aggregated[name].specialPayTotal,
                         extraPay: extraPay,
                         details: aggregated[name].details
                     });
