@@ -3398,15 +3398,26 @@ const data = payload.userData;
                 room: req.room || "N/A",
                 req: req
             };
-            activePeriods.add(parseInt(req.period));
+            activePeriods.add(req.period.toString());
         });
 
-        const sortedActivePeriods = Array.from(activePeriods).sort((a, b) => a - b);
+        const hasPeriod1 = activePeriods.has('1');
+        const advisorySortValue = hasPeriod1 ? 1.5 : 5.5;
+
+        const sortedActivePeriods = Array.from(activePeriods).sort((a, b) => {
+            const valA = a.toLowerCase() === 'advisory' ? advisorySortValue : parseInt(a);
+            const valB = b.toLowerCase() === 'advisory' ? advisorySortValue : parseInt(b);
+            return valA - valB;
+        });
 
         // 2. Build Header
         let headerHtml = `<th class="p-3 border border-gray-300 min-w-[200px] sticky left-0 z-20 bg-gray-50 shadow-[1px_0_0_0_#d1d5db]">Teacher Name</th>`;
         sortedActivePeriods.forEach(p => {
-            headerHtml += `<th class="p-3 border border-gray-300 text-center w-64">Period ${escapeHtml(p)}</th>`;
+            if (p.toLowerCase() === 'advisory') {
+                headerHtml += `<th class="p-3 border border-gray-300 text-center w-64">Advisory</th>`;
+            } else {
+                headerHtml += `<th class="p-3 border border-gray-300 text-center w-64">Period ${escapeHtml(p)}</th>`;
+            }
         });
         thead.innerHTML = headerHtml;
 
