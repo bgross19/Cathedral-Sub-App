@@ -643,6 +643,129 @@ function runTests() {
       assert(adminSettings["PS_CLIENT_ID"] === "my-client-id", "Admin settings should include PS_CLIENT_ID");
       assert(adminSettings["PS_CLIENT_SECRET"] === MASKED_SECRET_VALUE, "Admin settings must mask PS_CLIENT_SECRET");
     });
+
+    it("Performance & Reliability: submitMultipleAbsenceRequests batch write and processEmailQueue failed-row preservation", function() {
+      var origGetSS = getSS;
+      var origLockService = typeof LockService !== 'undefined' ? LockService : undefined;
+      var origUtilities = typeof Utilities !== 'undefined' ? Utilities : undefined;
+      var origSession = typeof Session !== 'undefined' ? Session : undefined;
+      var origCacheService = typeof CacheService !== 'undefined' ? CacheService : undefined;
+      var origEnqueueEmail = enqueueEmail;
+
+      var setValuesCalls = 0;
+      var appendedBatchRows = null;
+      var deletedEmailRowRanges = [];
+      var updatedEmailStatuses = null;
+
+      _globalRosterCache = [
+        ["Name", "Email", "Role", "Duty"],
+        ["Teacher One", "teacher1@gocathedral.com", "Teacher", ""]
+      ];
+      _globalSettingsCache = {
+        "Email Mode": "Live",
+        "App URL": "https://example.com",
+        "Urgency Cutoff Time": "15",
+        "Absence Reasons": JSON.stringify([{ reason: "Personal", hrRequired: false, principalRequired: false }]),
+        "RolePermissions": "{}"
+      };
+
+      global.LockService = {
+        getScriptLock: function() {
+          return {
+            waitLock: function() {},
+            tryLock: function() { return true; },
+            releaseLock: function() {}
+          };
+        }
+      };
+      global.Session = {
+        getScriptTimeZone: function() { return "America/Indiana/Indianapolis"; },
+        getActiveUser: function() { return { getEmail: function() { return "teacher1@gocathedral.com"; } }; }
+      };
+      var uuidCounter = 0;
+      global.Utilities = {
+        getUuid: function() { uuidCounter++; return "uuid-" + uuidCounter; },
+        formatDate: function() { return "2026-10-28"; }
+      };
+      global.CacheService = {
+        getScriptCache: function() {
+          return { get: function() { return null; }, put: function() {}, remove: function() {} };
+        }
+      };
+      enqueueEmail = function() {};
+
+      var emailQueueData = [
+        ["Timestamp", "To", "Subject", "Body", "Options", "Status"],
+        [new Date(), "ok@gocathedral.com", "Subj 1", "Body 1", "{}", "Pending"],
+        [new Date(), "fail@gocathedral.com", "Subj 2", "Body 2", "{}", "Pending"]
+      ];
+
+      getSS = function() {
+        return {
+          getSheetByName: function(name) {
+            if (name === "Absence Requests") {
+              return {
+                getLastRow: function() { return 1; },
+                getRange: function(row, col, numRows, numCols) {
+                  return {
+                    setValues: function(vals) {
+                      setValuesCalls++;
+                      appendedBatchRows = vals;
+                    }
+                  };
+                }
+              };
+            }
+            if (name === "Email Queue") {
+              return {
+                getDataRange: function() {
+                  return { getValues: function() { return emailQueueData; } };
+                },
+                getRange: function() {
+                  return {
+                    setValues: function(vals) { updatedEmailStatuses = vals; }
+                  };
+                },
+                deleteRows: function(startRow, numRows) {
+                  deletedEmailRowRanges.push({ startRow: startRow, numRows: numRows });
+                }
+              };
+            }
+            return null;
+          }
+        };
+      };
+
+      var multiRes = submitMultipleAbsenceRequests([
+        { date: "2026-11-02", periods: "1, 10", reason: "Personal", duration: "Full Day", urgency: "Standard", specialInstructions: "Day 1" },
+        { date: "2026-11-03", periods: "2, 4", reason: "Personal", duration: "Full Day", urgency: "Standard", specialInstructions: "Day 2" }
+      ], "teacher1@gocathedral.com");
+
+      assert(multiRes.success === true && multiRes.count === 2, "Expected 2 multi-day absence requests to be saved");
+      assert(setValuesCalls === 1, "Expected a single batch setValues call for multi-day submission");
+      assert(appendedBatchRows.length === 2, "Expected 2 rows in batch write");
+
+      // Test processEmailQueue: make 2nd email throw so its status becomes Failed
+      var origSendEmailHelper = sendEmailHelper;
+      sendEmailHelper = function(to) {
+        if (to === "fail@gocathedral.com") throw new Error("Quota exceeded");
+        return "SENT";
+      };
+
+      processEmailQueue();
+
+      assert(updatedEmailStatuses[1][0] === "Sent", "First email should be marked Sent");
+      assert(updatedEmailStatuses[2][0].indexOf("Failed:") === 0, "Second email should be marked Failed");
+      assert(deletedEmailRowRanges.length === 1 && deletedEmailRowRanges[0].startRow === 2 && deletedEmailRowRanges[0].numRows === 1, "Only the Sent row (row 2) should be deleted; Failed row (row 3) must be preserved");
+
+      sendEmailHelper = origSendEmailHelper;
+      getSS = origGetSS;
+      enqueueEmail = origEnqueueEmail;
+      if (origLockService !== undefined) global.LockService = origLockService;
+      if (origUtilities !== undefined) global.Utilities = origUtilities;
+      if (origSession !== undefined) global.Session = origSession;
+      if (origCacheService !== undefined) global.CacheService = origCacheService;
+    });
   });
 
   // Teardown

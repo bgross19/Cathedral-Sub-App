@@ -180,7 +180,7 @@ function getMasterScheduleData() {
     }
 
     const data = sheet.getDataRange().getValues();
-    if (data && data.length > 0) {
+    if (data && data.length > 1) {
       global_master_schedule_cache = data;
 
       try {
@@ -194,7 +194,13 @@ function getMasterScheduleData() {
 
       return data;
     }
-    return [];
+
+    Logger.log("Master Schedule Cache sheet is empty. Attempting to fetch from API as fallback.");
+    const fallbackData = fetchMasterScheduleFromAPI();
+    if (fallbackData && fallbackData.length > 1) {
+      global_master_schedule_cache = fallbackData;
+    }
+    return fallbackData || [];
   } catch (e) {
     Logger.log("Error reading Master Schedule Cache sheet: " + e.toString());
     return [];
@@ -224,6 +230,15 @@ function warmMasterScheduleCache() {
     // Clear old data and write new data
     sheet.clearContents();
     sheet.getRange(1, 1, scheduleData.length, scheduleData[0].length).setValues(scheduleData);
+    global_master_schedule_cache = scheduleData;
+    try {
+      const stringified = JSON.stringify(scheduleData);
+      if (stringified.length < 100000) {
+        CacheService.getScriptCache().put("master_schedule_data", stringified, 1800);
+      }
+    } catch (e) {
+      /* ignored */
+    }
 
     Logger.log("Master Schedule Cache sheet updated successfully with " + scheduleData.length + " rows.");
 
@@ -282,19 +297,12 @@ function syncMasterScheduleToStaffRoster(scheduleData, ss) {
   }
 
   const newRows = [];
+  const addedNames = [];
   let addedCount = 0;
   for (const key in newTeachers) {
     const teacher = newTeachers[key];
     newRows.push([teacher.name, teacher.email, "Teacher", ""]);
-
-    // Log the action
-    try {
-      if (typeof logAuditAction === 'function') {
-        logAuditAction("STAFF_ADDED_SYNC", teacher.email, "Added staff member from Master Schedule: " + teacher.name + " (Teacher)");
-      }
-    } catch (e) {
-      Logger.log("Failed to log audit action for " + teacher.email + ": " + e.message);
-    }
+    addedNames.push(teacher.name + " <" + teacher.email + ">");
     addedCount++;
   }
 
@@ -302,6 +310,14 @@ function syncMasterScheduleToStaffRoster(scheduleData, ss) {
     const startRow = rosterSheet.getLastRow() + 1;
     rosterSheet.getRange(startRow, 1, newRows.length, 4).setValues(newRows);
     Logger.log("Successfully synced " + addedCount + " new teachers to Staff Roster.");
+
+    try {
+      if (typeof logAuditAction === 'function') {
+        logAuditAction("STAFF_ADDED_SYNC", "Multiple (" + addedCount + ")", "Synced new teachers from Master Schedule: " + addedNames.join(", "));
+      }
+    } catch (e) {
+      Logger.log("Failed to log audit action for staff sync: " + e.message);
+    }
 
     // Invalidate roster cache
     try {

@@ -2450,7 +2450,7 @@
           .getAuditLogs(startDate, endDate, window.activeUserEmail);
       }
 
-      // --- PUB-SUB EVENT EMITTER ---
+      // --- PUB-SUB EVENT EMITTER WITH COALESCED REFRESH BATCHING ---
       const EventBus = {
         listeners: {},
         subscribe: function(event, callback) {
@@ -2466,14 +2466,51 @@
         }
       };
 
-      // Subscribe UI components to data refresh events
-      EventBus.subscribe('refresh_myAbsences', () => loadMyAbsences());
-      EventBus.subscribe('refresh_myPastAbsences', () => loadMyPastAbsences());
-      EventBus.subscribe('refresh_mySubDuties', () => loadMySubDuties());
-      EventBus.subscribe('refresh_myPastSubDuties', () => loadMyPastSubDuties());
-      EventBus.subscribe('refresh_todaysAbsences', () => loadTodaysAbsences());
-      EventBus.subscribe('refresh_quickCover', () => loadQuickCover());
-      EventBus.subscribe('refresh_adminData', (data) => { loadAdminDataRawSilent(); loadAdminDashboardData(data && data.renderAtAGlance); });
+      let _pendingRefreshComponents = new Set();
+      let _pendingRefreshRenderAtAGlance = false;
+      let _pendingRefreshTimer = null;
+
+      function queueComponentRefresh(component, options = {}) {
+        _pendingRefreshComponents.add(component);
+        if (options && options.renderAtAGlance) {
+          _pendingRefreshRenderAtAGlance = true;
+        }
+        if (_pendingRefreshTimer) return;
+        _pendingRefreshTimer = setTimeout(() => {
+          const components = Array.from(_pendingRefreshComponents);
+          const renderAtAGlance = _pendingRefreshRenderAtAGlance;
+          _pendingRefreshComponents.clear();
+          _pendingRefreshRenderAtAGlance = false;
+          _pendingRefreshTimer = null;
+
+          if (components.length === 0) return;
+
+          google.script.run
+            .withSuccessHandler(res => {
+              if (!res) return;
+              if (res.myAbsences !== undefined) renderMyAbsences(res.myAbsences);
+              if (res.myPastAbsences !== undefined) renderMyPastAbsences(res.myPastAbsences);
+              if (res.mySubDuties !== undefined) renderMySubDuties(res.mySubDuties);
+              if (res.myPastSubDuties !== undefined) renderMyPastSubDuties(res.myPastSubDuties);
+              if (res.todaysAbsences !== undefined) renderTodaysAbsences(res.todaysAbsences);
+              if (res.quickCover !== undefined) renderQuickCover(res.quickCover);
+              if (res.adminData !== undefined) renderAdminDashboardData(res.adminData, renderAtAGlance);
+            })
+            .withFailureHandler(err => {
+              console.error("Batch refresh failed:", err);
+            })
+            .refreshData(components, window.activeUserEmail);
+        }, 15);
+      }
+
+      // Subscribe UI components to coalesced data refresh events
+      EventBus.subscribe('refresh_myAbsences', () => queueComponentRefresh('myAbsences'));
+      EventBus.subscribe('refresh_myPastAbsences', () => queueComponentRefresh('myPastAbsences'));
+      EventBus.subscribe('refresh_mySubDuties', () => queueComponentRefresh('mySubDuties'));
+      EventBus.subscribe('refresh_myPastSubDuties', () => queueComponentRefresh('myPastSubDuties'));
+      EventBus.subscribe('refresh_todaysAbsences', () => queueComponentRefresh('todaysAbsences'));
+      EventBus.subscribe('refresh_quickCover', () => queueComponentRefresh('quickCover'));
+      EventBus.subscribe('refresh_adminData', (data) => queueComponentRefresh('adminData', { renderAtAGlance: !!(data && data.renderAtAGlance) }));
       // -------------------------------
 
       function toggleSection(wrapperId, iconId) {
