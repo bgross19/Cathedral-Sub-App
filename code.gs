@@ -16,7 +16,7 @@ function getActiveUserEmail(clientEmail) {
  */
 function parsePeriod(period) {
   var p = String(period).toLowerCase().trim();
-  if (p === 'a' || p === 'advisory') return 'advisory';
+  if (p === 'a' || p === 'advisory') return '10';
   return p;
 }
 
@@ -27,7 +27,7 @@ function parsePeriod(period) {
 function getSubColumnIndex(period) {
   var p = parsePeriod(period);
   if (p === '0') return 18; // Col R
-  if (p === 'advisory') return 19; // Col S
+  if (p === '10') return 19; // Col S
   var pNum = parseInt(p);
   if (!isNaN(pNum) && pNum >= 1 && pNum <= 8) {
     return 10 + pNum - 1; // Col J is 10 for Period 1
@@ -41,7 +41,7 @@ function getSubColumnIndex(period) {
 function getScheduleJoinPeriod(period) {
   var p = parsePeriod(period);
   if (p === '0') return '9';
-  if (p === 'advisory') return '10';
+  if (p === '10') return '10';
   return String(period);
 }
 
@@ -1720,7 +1720,7 @@ function cancelAbsence(absenceId, clientEmail) {
       sheet.getRange(i + 1, 20).setValue("Canceled");
       logAuditAction("ABSENCE_CANCELLED", absenceId, "Cancelled entire absence request");
 
-      var allPeriods = ['1', '2', '3', '4', '5', '6', '7', '8', '0', 'Advisory'];
+      var allPeriods = ['1', '2', '3', '4', '5', '6', '7', '8', '0', '10'];
       for (var pIdx = 0; pIdx < allPeriods.length; pIdx++) {
         var p = allPeriods[pIdx];
         var subIndex = getSubColumnIndex(p) - 1;
@@ -1843,7 +1843,7 @@ function updateAbsence(absenceId, formData, clientEmail) {
 
       // Identify sub clears
       var subClearUpdates = [];
-      var allPeriods = ['1', '2', '3', '4', '5', '6', '7', '8', '0', 'Advisory'];
+      var allPeriods = ['1', '2', '3', '4', '5', '6', '7', '8', '0', '10'];
       for (var pIdx = 0; pIdx < allPeriods.length; pIdx++) {
         var p = allPeriods[pIdx];
         var subIndex = getSubColumnIndex(p) - 1;
@@ -2344,7 +2344,7 @@ function hasPermission(role, view, rolePermissionsStr) {
 
 
 function getPeriodSortValue(p) {
-  if (String(p).toLowerCase() === 'advisory') return 1.5;
+  if (String(p).toLowerCase() === '10') return 1.5;
   var num = parseInt(p, 10);
   return isNaN(num) ? 99 : num;
 }
@@ -2580,7 +2580,7 @@ function getInitialPayload(clientEmail) {
         var duration = String(row[6]);
         var instructions = String(row[8]);
 
-        var allPeriods = ['1', '2', '3', '4', '5', '6', '7', '8', '0', 'Advisory'];
+        var allPeriods = ['1', '2', '3', '4', '5', '6', '7', '8', '0', '10'];
       for (var pIdx = 0; pIdx < allPeriods.length; pIdx++) {
         var p = allPeriods[pIdx];
           if (periodsRequested.indexOf(String(p)) !== -1) {
@@ -2787,7 +2787,7 @@ function getInitialPayload(clientEmail) {
           var dur = String(row[6]);
           var inst = String(row[8]);
 
-          var aPeriods = ['1', '2', '3', '4', '5', '6', '7', '8', '0', 'Advisory'];
+          var aPeriods = ['1', '2', '3', '4', '5', '6', '7', '8', '0', '10'];
       for (let prIdx = 0; prIdx < aPeriods.length; prIdx++) {
         var prd = aPeriods[prIdx];
             if (prdsRequested.indexOf(String(prd)) !== -1) {
@@ -2835,11 +2835,10 @@ function getInitialPayload(clientEmail) {
 
         for (var pdsIdx = 0; pdsIdx < pds.length; pdsIdx++) {
           var rawPd = pds[pdsIdx];
-          var isAdvisory = String(rawPd).toLowerCase() === 'advisory';
           var pdNum = parseInt(rawPd, 10);
 
-          if (!isNaN(pdNum) || isAdvisory) {
-            var pd = isAdvisory ? rawPd : pdNum;
+          if (!isNaN(pdNum)) {
+            var pd = pdNum;
             var schedKey = adTeacherEmail + "-" + getScheduleJoinPeriod(pd);
             adminData.push({
               id: String(adRow[0] || ""),
@@ -3924,7 +3923,7 @@ function sendDailySubFeedbackRequests() {
 
         var periodsRequested = String(row[4]).split(",").map(function(p) { return p.trim(); });
         var rowId = String(row[0]);
-        var allPeriods = ['1', '2', '3', '4', '5', '6', '7', '8', '0', 'Advisory'];
+        var allPeriods = ['1', '2', '3', '4', '5', '6', '7', '8', '0', '10'];
 
         for (var pIdx = 0; pIdx < allPeriods.length; pIdx++) {
           var p = allPeriods[pIdx];
@@ -4291,7 +4290,7 @@ function fetchAbsenceRequestsForDate(ss, dateStr) {
 
      if (reqDateStr === dateStr) {
         var periodsRequested = String(row[idxPeriod]).split(",").map(function(p) { return p.trim(); });
-        var allPeriods = ['1', '2', '3', '4', '5', '6', '7', '8', '0', 'Advisory'];
+        var allPeriods = ['1', '2', '3', '4', '5', '6', '7', '8', '0', '10'];
 
         for (var pIdx = 0; pIdx < allPeriods.length; pIdx++) {
            var p = allPeriods[pIdx];

@@ -384,13 +384,15 @@ function runTests() {
       assert(getSubColumnIndex("  5  ") === 14, "Period 5 with whitespace should return 14");
     });
 
-    it("Valid periods - special periods 0 and Advisory", function() {
+    it("Valid periods - special periods 0 and Advisory (10)", function() {
       assert(getSubColumnIndex(0) === 18, "Number 0 should return 18");
       assert(getSubColumnIndex("0") === 18, "String '0' should return 18");
       assert(getSubColumnIndex("a") === 19, "String 'a' should return 19");
       assert(getSubColumnIndex("A") === 19, "String 'A' should return 19");
       assert(getSubColumnIndex("advisory") === 19, "String 'advisory' should return 19");
       assert(getSubColumnIndex("  Advisory  ") === 19, "String '  Advisory  ' should return 19");
+      assert(getSubColumnIndex(10) === 19, "Number 10 should return 19");
+      assert(getSubColumnIndex("10") === 19, "String '10' should return 19");
     });
 
     it("Invalid periods", function() {
