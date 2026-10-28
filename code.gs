@@ -2342,6 +2342,13 @@ function hasPermission(role, view, rolePermissionsStr) {
   }
 }
 
+
+function getPeriodSortValue(p) {
+  if (String(p).toLowerCase() === 'advisory') return 1.5;
+  var num = parseInt(p, 10);
+  return isNaN(num) ? 99 : num;
+}
+
 function getInitialPayload(clientEmail) {
   try {
     var ss = getSS();
@@ -2636,13 +2643,13 @@ function getInitialPayload(clientEmail) {
 
     var sortJobs = function(a, b) {
       if (a.rawDate === b.rawDate) {
-        return parseInt(a.period) - parseInt(b.period);
+        return getPeriodSortValue(a.period) - getPeriodSortValue(b.period);
       }
       return a.rawDate - b.rawDate;
     };
     var sortJobsDesc = function(a, b) {
       if (a.rawDate === b.rawDate) {
-        return parseInt(a.period) - parseInt(b.period);
+        return getPeriodSortValue(a.period) - getPeriodSortValue(b.period);
       }
       return b.rawDate - a.rawDate;
     };
@@ -2827,8 +2834,12 @@ function getInitialPayload(clientEmail) {
         var pds = pdsStr.split(',').map(function(p) { return p.trim(); });
 
         for (var pdsIdx = 0; pdsIdx < pds.length; pdsIdx++) {
-          var pd = parseInt(pds[pdsIdx]);
-          if (!isNaN(pd)) {
+          var rawPd = pds[pdsIdx];
+          var isAdvisory = String(rawPd).toLowerCase() === 'advisory';
+          var pdNum = parseInt(rawPd, 10);
+
+          if (!isNaN(pdNum) || isAdvisory) {
+            var pd = isAdvisory ? rawPd : pdNum;
             var schedKey = adTeacherEmail + "-" + getScheduleJoinPeriod(pd);
             adminData.push({
               id: String(adRow[0] || ""),
@@ -2854,7 +2865,7 @@ function getInitialPayload(clientEmail) {
       adminData.sort(function(a, b) {
         if (a.date < b.date) return -1;
         if (a.date > b.date) return 1;
-        return a.period - b.period;
+        return getPeriodSortValue(a.period) - getPeriodSortValue(b.period);
       });
       payload.adminData = adminData;
     }
