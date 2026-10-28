@@ -1,13 +1,17 @@
 
 function getActiveUserEmail(clientEmail) {
+  try {
+    var sessionEmail = Session.getActiveUser().getEmail();
+    if (sessionEmail && typeof sessionEmail === 'string' && sessionEmail.indexOf('@') > 0) {
+      return sessionEmail.trim().toLowerCase();
+    }
+  } catch(e) {
+    // Session unavailable or restricted; fall back to clientEmail below
+  }
   if (clientEmail && typeof clientEmail === 'string' && clientEmail.indexOf('@') > 0) {
     return clientEmail.trim().toLowerCase();
   }
-  try {
-    return Session.getActiveUser().getEmail().toLowerCase();
-  } catch(e) {
-    return "";
-  }
+  return "";
 }
 
 
@@ -105,6 +109,28 @@ function extractSubFeedbackRaw(row) {
 
 const APP_VERSION = "1.0.0";
 const DEFAULT_APP_URL = "https://script.google.com/a/macros/gocathedral.com/s/AKfycbwKZrBo4R-9O97aVNCjOHk9PddWCb6XNKviDS1lj4nNc49khl3T9OL8pGUDa7E1XE0/exec";
+const MASKED_SECRET_VALUE = "••••••••";
+
+/**
+ * Returns a copy of settings safe to send to client payloads.
+ * - When includeAdminFields is false (general initial payload), strips PowerSchool API credentials.
+ * - When includeAdminFields is true (Settings page), masks PS_CLIENT_SECRET if present.
+ */
+function sanitizeSettingsForClient(settings, includeAdminFields) {
+  var safe = {};
+  if (!settings) return safe;
+  var sensitiveKeys = { "PS_CLIENT_SECRET": true, "PS_CLIENT_ID": true, "PS_URL": true };
+  for (var k in settings) {
+    if (!Object.prototype.hasOwnProperty.call(settings, k)) continue;
+    if (!includeAdminFields && sensitiveKeys[k]) continue;
+    if (includeAdminFields && k === "PS_CLIENT_SECRET") {
+      safe[k] = settings[k] ? MASKED_SECRET_VALUE : "";
+    } else {
+      safe[k] = settings[k];
+    }
+  }
+  return safe;
+}
 
 
 function notifyAdminOfError(funcName, e) {
@@ -831,7 +857,7 @@ function updateStaffRoleInlineAdmin(email, newRole, clientEmail) {
 
     if (rowIndexToUpdate !== -1) {
        rosterSheet.getRange(rowIndexToUpdate, 1, 1, 4).setValues([[currentName, targetEmail, newRole, currentDuty]]);
-       logAuditAction("STAFF_UPDATED", targetEmail, "Updated staff role inline: " + currentName + " to " + newRole);
+       logAuditAction("STAFF_UPDATED", targetEmail, "Updated staff role inline: " + currentName + " to " + newRole, clientEmail);
        clearRosterCache();
        return { success: true };
     }
@@ -881,7 +907,7 @@ function updateStaffDutyInlineAdmin(email, newDuty, clientEmail) {
 
     if (rowIndexToUpdate !== -1) {
        rosterSheet.getRange(rowIndexToUpdate, 1, 1, 4).setValues([[currentName, targetEmail, currentRole, newDuty]]);
-       logAuditAction("STAFF_UPDATED", targetEmail, "Updated staff duty inline: " + currentName + " to " + newDuty);
+       logAuditAction("STAFF_UPDATED", targetEmail, "Updated staff duty inline: " + currentName + " to " + newDuty, clientEmail);
        clearRosterCache();
        return { success: true };
     }
@@ -941,7 +967,7 @@ function saveStaffMemberAdmin(staffData, clientEmail) {
     if (rowIndexToUpdate !== -1) {
        // Update existing
        rosterSheet.getRange(rowIndexToUpdate, 1, 1, 4).setValues([[newName, newEmail, newRole, newDuty]]);
-       logAuditAction("STAFF_UPDATED", newEmail, "Updated staff member: " + newName + " (" + newRole + ", " + newDuty + ")");
+       logAuditAction("STAFF_UPDATED", newEmail, "Updated staff member: " + newName + " (" + newRole + ", " + newDuty + ")", clientEmail);
     } else {
        // Check if new email already exists to prevent duplicates
        for (let i = 1; i < data.length; i++) {
@@ -953,7 +979,7 @@ function saveStaffMemberAdmin(staffData, clientEmail) {
        }
        // Append new
        rosterSheet.appendRow([newName, newEmail, newRole, newDuty]);
-       logAuditAction("STAFF_ADDED", newEmail, "Added staff member: " + newName + " (" + newRole + ", " + newDuty + ")");
+       logAuditAction("STAFF_ADDED", newEmail, "Added staff member: " + newName + " (" + newRole + ", " + newDuty + ")", clientEmail);
     }
 
     clearRosterCache();
@@ -1001,7 +1027,7 @@ function deleteStaffMemberAdmin(email, clientEmail) {
     }
 
     if (targetIndex !== -1) {
-      logAuditAction("STAFF_DELETED", targetEmail, "Deleted staff member");
+      logAuditAction("STAFF_DELETED", targetEmail, "Deleted staff member", clientEmail);
       rosterSheet.deleteRow(targetIndex + 1);
       clearRosterCache();
       return {
@@ -1045,7 +1071,7 @@ function clearAllStaffDuties(clientEmail) {
       rosterSheet.getRange(2, 4, lastRow - 1, 1).clearContent();
     }
 
-    logAuditAction("STAFF_DUTIES_CLEARED", "All", "Admin cleared all staff duties");
+    logAuditAction("STAFF_DUTIES_CLEARED", "All", "Admin cleared all staff duties", clientEmail);
     clearRosterCache();
 
     return {
@@ -1143,7 +1169,7 @@ function bulkUpsertStaffRoster(updates, clientEmail) {
        rosterSheet.getRange(startRow, 1, newRows.length, 4).setValues(newRows);
     }
 
-    logAuditAction("STAFF_BULK_UPLOAD", "Multiple", "Processed " + processedCount + " staff records");
+    logAuditAction("STAFF_BULK_UPLOAD", "Multiple", "Processed " + processedCount + " staff records", clientEmail);
     clearRosterCache();
     return {
       success: true, updated: processedCount };
@@ -1193,7 +1219,7 @@ function getSettingsForFrontend(clientEmail) {
     var ss = getSS();
     var user = getUserData(ss, typeof clientEmail !== 'undefined' ? clientEmail : undefined);
     assertPermission(user, "Settings");
-    return getSettings();
+    return sanitizeSettingsForClient(getSettings(ss), true);
   } catch (err) {
     throw new Error("Failed to fetch settings: " + err.message);
   }
@@ -1223,6 +1249,10 @@ function updateSettings(newSettings, clientEmail) {
     var dataChanged = false;
 
     for (var key in newSettings) {
+      if (key === "PS_CLIENT_SECRET" && newSettings[key] === MASKED_SECRET_VALUE) {
+        // Preserve existing secret when the masked placeholder is submitted unchanged
+        continue;
+      }
       if (settingsMap[key] !== undefined) {
         if (data[settingsMap[key]][1] !== newSettings[key]) {
           data[settingsMap[key]][1] = newSettings[key];
@@ -1241,7 +1271,7 @@ function updateSettings(newSettings, clientEmail) {
       settingsSheet.getRange(settingsSheet.getLastRow() + 1, 1, rowsToAppend.length, 2).setValues(rowsToAppend);
     }
 
-    logAuditAction("SETTINGS_UPDATED", "Global", "Updated application settings");
+    logAuditAction("SETTINGS_UPDATED", "Global", "Updated application settings", clientEmail);
 
     // Clear the cache
     _globalSettingsCache = null;
@@ -1441,7 +1471,9 @@ function submitAbsence(formData, clientEmail) {
     var instructions = formData.specialInstructions || "";
 
     // Handle "On Behalf" submissions
-    if (formData.onBehalfTeacher) {
+    if (formData.onBehalfTeacher && String(formData.onBehalfTeacher).trim() !== "") {
+      assertPermission(submitterData, "Add Request on Behalf", "Unauthorized to submit absence requests on behalf of another teacher.");
+
       // Find the teacher's email based on the provided name
       var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
       var rosterData = rosterSheet.getDataRange().getValues();
@@ -1637,7 +1669,7 @@ function cancelMySubDuty(absenceId, period, clientEmail) {
           var details = getAbsenceDetailsLocal(data[i], period, scheduleLookup, nameLookup);
 
           sheet.getRange(i + 1, subColumnIndex).setValue("");
-          logAuditAction("SUB_DUTY_CANCELLED", absenceId, "Cancelled coverage for period " + period);
+          logAuditAction("SUB_DUTY_CANCELLED", absenceId, "Cancelled coverage for period " + period, clientEmail);
 
           if (coordinatorEmail && details) {
             var subject = "SUB CANCELLATION: " + userName + " cancelled coverage";
@@ -1781,7 +1813,7 @@ function cancelAbsence(absenceId, clientEmail) {
       }
 
       sheet.getRange(i + 1, 20).setValue("Canceled");
-      logAuditAction("ABSENCE_CANCELLED", absenceId, "Cancelled entire absence request");
+      logAuditAction("ABSENCE_CANCELLED", absenceId, "Cancelled entire absence request", clientEmail);
 
       var allPeriods = ['1', '2', '3', '4', '5', '6', '7', '8', '0', '10'];
       for (var pIdx = 0; pIdx < allPeriods.length; pIdx++) {
@@ -1979,7 +2011,7 @@ function updateAbsence(absenceId, formData, clientEmail) {
       if (formData.subPlanUrl !== undefined) {
         sheet.getRange(i + 1, 21).setValue(newSubPlanUrl);
       }
-      logAuditAction("ABSENCE_UPDATED", absenceId, "Updated absence details (Date: " + formData.date + ", Periods: " + formData.periods + ")");
+      logAuditAction("ABSENCE_UPDATED", absenceId, "Updated absence details (Date: " + formData.date + ", Periods: " + formData.periods + ")", clientEmail);
 
 
       var rawDate = data[i][3];
@@ -2152,6 +2184,16 @@ function assignSubToPeriod(absenceId, period, subName, forceOverride, clientEmai
   try {
     var ss = getSS();
     var sheet = getSheetOrThrow(ss, "Absence Requests");
+    var callerUser = getUserData(ss, typeof clientEmail !== 'undefined' ? clientEmail : undefined);
+    var callerRoleLower = String(callerUser.role || "").toLowerCase().trim();
+    var settingsForPerm = getSettings(ss);
+    var rolePermsStr = settingsForPerm["RolePermissions"] || "{}";
+    var canManageAllSubs = (
+      callerRoleLower === "admin" ||
+      callerRoleLower === "sub coordinator" ||
+      hasPermission(callerRoleLower, "Admin Dashboard", rolePermsStr) ||
+      hasPermission(callerRoleLower, "Today at a Glance", rolePermsStr)
+    );
 
     var rosterData = getRosterDataCached(ss);
 
@@ -2189,6 +2231,19 @@ function assignSubToPeriod(absenceId, period, subName, forceOverride, clientEmai
       var existingSub = String(data[i][subColumnIndex - 1] || "").trim(); // array is 0-indexed, so subColumnIndex - 1
       var newSub = String(subName || "").trim();
 
+      // Normalize "No Sub Needed" early for consistent authorization & comparison checks
+      if (newSub.toLowerCase() === "no sub needed") {
+          newSub = "No Sub Needed";
+      }
+
+      if (!canManageAllSubs) {
+        var callerCleanName = String(callerUser.name || "").trim().toLowerCase();
+        var isSelfSignup = (newSub !== "" && newSub !== "No Sub Needed" && newSub.toLowerCase() === callerCleanName && existingSub === "");
+        if (!isSelfSignup) {
+          throw new Error("Unauthorized to assign or modify substitute coverage for other users.");
+        }
+      }
+
       if (existingSub === newSub) {
              return {
       success: true }; // No change
@@ -2208,11 +2263,6 @@ function assignSubToPeriod(absenceId, period, subName, forceOverride, clientEmai
             break;
           }
         }
-      }
-
-      // Normalize "No Sub Needed"
-      if (newSub.toLowerCase() === "no sub needed") {
-          newSub = "No Sub Needed";
       }
 
       // Check if the new sub is available based on Dates and SubstituteAvailability or Master Schedule
@@ -2342,7 +2392,7 @@ function assignSubToPeriod(absenceId, period, subName, forceOverride, clientEmai
 
       // Write the subname
       sheet.getRange(i + 1, subColumnIndex).setValue(newSub);
-      logAuditAction("SUB_ASSIGNED", absenceId, "Assigned " + (newSub || "NO ONE") + " to period " + period);
+      logAuditAction("SUB_ASSIGNED", absenceId, "Assigned " + (newSub || "NO ONE") + " to period " + period, clientEmail);
 
       // Notify new sub if there is one
       if (newSub && newSub !== "No Sub Needed") {
@@ -2737,6 +2787,8 @@ function getInitialPayload(clientEmail) {
     todaysAbsences.sort(sortJobs);
 
 
+    var safeSettings = sanitizeSettingsForClient(settings, false);
+
     var payload = {
       userData: userData,
       myAbsences: myUpcomingAbsences,
@@ -2746,7 +2798,7 @@ function getInitialPayload(clientEmail) {
       todaysAbsences: todaysAbsences,
       permissions: permissions,
       dateColors: dateColors,
-      settings: settings
+      settings: safeSettings
     };
 
 
@@ -3032,7 +3084,7 @@ function getInitialPayload(clientEmail) {
         requests: hrData,
         payPeriods: payPeriods,
         dateColors: dateColors,
-      settings: settings,
+        settings: safeSettings,
         rates: {
           green: settings["Green Day Pay Rate"] || "10",
           blueGold: settings["Blue/Gold Day Pay Rate"] || "20",
@@ -3107,8 +3159,9 @@ function refreshData(components, clientEmail) {
  * @param {string} actionType - The type of action (e.g., "ASSIGN_SUB", "CANCEL_ABSENCE").
  * @param {string} targetId - The ID of the affected record.
  * @param {string} details - A description of the action.
+ * @param {string} [clientEmail] - Optional fallback email from caller.
  */
-function logAuditAction(actionType, targetId, details) {
+function logAuditAction(actionType, targetId, details, clientEmail) {
   try {
     var ss = getSS();
     var auditSheet = ss.getSheetByName("Audit Log");
@@ -3209,7 +3262,7 @@ function archiveAbsenceRequests(cutoffDateStr, clientEmail) {
       mainSheet.clearContents();
       mainSheet.getRange(1, 1, rowsToKeep.length, rowsToKeep[0].length).setValues(rowsToKeep);
 
-      logAuditAction("ARCHIVE_DATA", "N/A", "Archived " + rowsToArchive.length + " absence requests older than " + cutoffDateStr);
+      logAuditAction("ARCHIVE_DATA", "N/A", "Archived " + rowsToArchive.length + " absence requests older than " + cutoffDateStr, clientEmail);
     }
 
     return {
@@ -3322,7 +3375,7 @@ function approvePayPeriod(periodNumber, rangeString, csvString, clientEmail) {
 
     sendEmailHelper(toEmail, subject, body, options);
 
-    logAuditAction("PAY_PERIOD_APPROVED", "Period " + periodNumber, user.name + " approved pay period " + periodNumber);
+    logAuditAction("PAY_PERIOD_APPROVED", "Period " + periodNumber, user.name + " approved pay period " + periodNumber, clientEmail);
 
     return { success: true };
   } catch (err) {
@@ -3362,7 +3415,7 @@ function bulkUpsertPayPeriods(updates, clientEmail) {
        sheet.getRange(startRow, 1, newRows.length, 4).setValues(newRows);
     }
 
-    logAuditAction("PAY_PERIODS_BULK_UPLOAD", "Multiple", "Added " + newRows.length + " pay periods");
+    logAuditAction("PAY_PERIODS_BULK_UPLOAD", "Multiple", "Added " + newRows.length + " pay periods", clientEmail);
 
     // Clear cache because PayPeriods data changed
     // In hrData, pay periods are retrieved directly from the sheet, so it's live
@@ -3401,7 +3454,7 @@ function deleteAllPayPeriods(clientEmail) {
        sheet.getRange(2, 1, lastRow - 1, 4).clearContent();
     }
 
-    logAuditAction("PAY_PERIODS_DELETE_ALL", "All", "Deleted all pay periods");
+    logAuditAction("PAY_PERIODS_DELETE_ALL", "All", "Deleted all pay periods", clientEmail);
 
     return {
       success: true };
@@ -3689,8 +3742,8 @@ function generatePrincipalsDigestHTML(dateObj) {
             
             var isSubstituteRole = false;
             var teacherDuty = dutyLookup[assignedSub];
-            var teacherDutyArr = teacherDuty ? String(teacherDuty).split(',').map(function(d){return d.trim();}) : [];
-            var isDuty = teacherDutyArr.includes(String(p));
+            var teacherDutyArr = teacherDuty ? String(teacherDuty).split(',').map(function(d){return parsePeriod(d);}) : [];
+            var isDuty = teacherDutyArr.includes(parsePeriod(p));
 
             if (subEmailLookup) {
                 for (var rsIdx = 1; rsIdx < rosterData.length; rsIdx++) {
@@ -3837,6 +3890,20 @@ function sendPrincipalsDigest(dateObj) {
 }
 
 function generatePrincipalsDigestPreview(dateStr, clientEmail) {
+  var ss = getSS();
+  var user = getUserData(ss, typeof clientEmail !== 'undefined' ? clientEmail : undefined);
+  var roleLower = String(user.role || "").toLowerCase().trim();
+  var settings = getSettings(ss);
+  var rolePermsStr = settings["RolePermissions"] || "{}";
+  var isAuthorized = (
+    roleLower === "admin" ||
+    roleLower === "principal" ||
+    hasPermission(roleLower, "Settings", rolePermsStr) ||
+    hasPermission(roleLower, "Admin Dashboard", rolePermsStr)
+  );
+  if (!isAuthorized) {
+    throw new Error("Unauthorized to preview Principal's Digest.");
+  }
   var dateObj = dateStr ? new Date(dateStr) : new Date();
   return generatePrincipalsDigestHTML(dateObj);
 }
@@ -4158,8 +4225,23 @@ function saveSubstituteAvailabilityAdmin(subName, dateStr, status, clientEmail) 
   }
 }
 
-function getSuggestedSubs(dateStr) {
+function getSuggestedSubs(dateStr, clientEmail) {
   var ss = getSS();
+  var email = getActiveUserEmail(typeof clientEmail !== 'undefined' ? clientEmail : undefined);
+  var user = getUserData(ss, email);
+  var roleLower = user && user.role ? String(user.role).toLowerCase().trim() : "";
+  var settings = getSettings(ss);
+  var rolePermissionsStr = settings["RolePermissions"] || "{}";
+  var isAuthorized = user && (
+    roleLower === 'admin' ||
+    roleLower === 'sub coordinator' ||
+    (user.permissions && (user.permissions["Admin Dashboard"] === true || user.permissions["Today at a Glance"] === true)) ||
+    hasPermission(roleLower, "Admin Dashboard", rolePermissionsStr) ||
+    hasPermission(roleLower, "Today at a Glance", rolePermissionsStr)
+  );
+  if (!isAuthorized) {
+    return { success: false, error: "Insufficient permissions to view substitute suggestions." };
+  }
 
   // 1. Get all requests for the date
   var requests = fetchAbsenceRequestsForDate(ss, dateStr);
@@ -4549,7 +4631,7 @@ function batchAssignSubs(assignments, clientEmail) {
     }
 
     // Log audit
-    logAuditAction("Batch Assign", "Multiple", "Assigned " + successCount + " subs");
+    logAuditAction("Batch Assign", "Multiple", "Assigned " + successCount + " subs", clientEmail);
 
     // Send notifications
     for (i = 0; i < notifications.length; i++) {

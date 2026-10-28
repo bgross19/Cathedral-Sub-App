@@ -1769,7 +1769,7 @@
                     </div>
                     <div>
                       <label class="block text-sm font-bold mb-1">PowerSchool Client Secret</label>
-                      <input type="text" id="settingsPsClientSecret" value="${escapeHtml(settings.PS_CLIENT_SECRET || "")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none bg-white">
+                      <input type="password" id="settingsPsClientSecret" value="${escapeHtml(settings.PS_CLIENT_SECRET || "")}" placeholder="Enter new secret to update" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none bg-white">
                     </div>
                   </div>
               </div>
@@ -3620,16 +3620,17 @@ const data = payload.userData;
                  google.script.run
                     .withSuccessHandler(result => {
                        if (result && result.success) {
-                          if (subName) {
-                             showToast('Sub assigned successfully!', 'success');
-                          } else {
-                             showToast('Sub Removed Successfully', 'success');
+                          showToast("Successfully signed up for " + formatPeriodLabel(period) + "!", "success");
+                          EventBus.publish('refresh_todaysAbsences');
+                          EventBus.publish('refresh_mySubDuties');
+                          if (!document.getElementById('adminSection').classList.contains('hidden')) {
+                             EventBus.publish('refresh_quickCover');
+                             EventBus.publish('refresh_adminData');
                           }
-                          if (isFromModal) {
-                             closeAllModals();
-                          }
-                          EventBus.publish('refresh_quickCover');
-                          updateLocalAdminData(absenceId, period, subName);
+                       } else {
+                          showToast(result ? result.error : "Unknown error", 'error');
+                          btn.disabled = false;
+                          btn.innerText = originalText;
                        }
                     })
                     .withFailureHandler(forceErr => {
@@ -7186,7 +7187,7 @@ function openSuggestSubModal() {
             showToast("Error: " + err.message, "error");
             cancelSuggestions(true);
         })
-        .getSuggestedSubs(selectedDate);
+        .getSuggestedSubs(selectedDate, window.activeUserEmail);
 }
 
 function renderSuggestSubModal(suggestions) {

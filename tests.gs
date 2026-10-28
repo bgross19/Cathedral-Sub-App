@@ -608,6 +608,41 @@ function runTests() {
       if (origSession !== undefined) global.Session = origSession;
       if (origCacheService !== undefined) global.CacheService = origCacheService;
     });
+
+    it("Security & Access Control: getActiveUserEmail, sanitizeSettingsForClient, and endpoint permissions", function() {
+      var origSession = typeof Session !== 'undefined' ? Session : undefined;
+
+      // 1. Session email takes precedence over spoofed clientEmail
+      global.Session = {
+        getActiveUser: function() { return { getEmail: function() { return "teacher1@gocathedral.com"; } }; }
+      };
+      assert(getActiveUserEmail("admin@gocathedral.com") === "teacher1@gocathedral.com", "Must prefer verified Session email over spoofed clientEmail");
+
+      // 2. Falls back to clientEmail only when Session email is empty
+      global.Session = {
+        getActiveUser: function() { return { getEmail: function() { return ""; } }; }
+      };
+      assert(getActiveUserEmail("SubUser@example.com") === "subuser@example.com", "Should fall back to clientEmail when Session email is empty");
+
+      if (origSession !== undefined) global.Session = origSession;
+
+      // 3. Settings sanitization strips secrets for regular payload and masks secret for Admin Settings UI
+      var rawSettings = {
+        "Email Mode": "Live",
+        "PS_URL": "https://powerschool.example.com",
+        "PS_CLIENT_ID": "my-client-id",
+        "PS_CLIENT_SECRET": "super-secret-value"
+      };
+      var publicSettings = sanitizeSettingsForClient(rawSettings, false);
+      assert(publicSettings["Email Mode"] === "Live", "Public settings should preserve non-sensitive keys");
+      assert(publicSettings["PS_CLIENT_SECRET"] === undefined, "Public settings must strip PS_CLIENT_SECRET");
+      assert(publicSettings["PS_CLIENT_ID"] === undefined, "Public settings must strip PS_CLIENT_ID");
+      assert(publicSettings["PS_URL"] === undefined, "Public settings must strip PS_URL");
+
+      var adminSettings = sanitizeSettingsForClient(rawSettings, true);
+      assert(adminSettings["PS_CLIENT_ID"] === "my-client-id", "Admin settings should include PS_CLIENT_ID");
+      assert(adminSettings["PS_CLIENT_SECRET"] === MASKED_SECRET_VALUE, "Admin settings must mask PS_CLIENT_SECRET");
+    });
   });
 
   // Teardown
