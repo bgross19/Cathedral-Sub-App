@@ -2265,7 +2265,7 @@
                 <label class="flex items-center gap-2 p-2 border rounded-lg cursor-pointer hover:bg-gray-50"><input type="checkbox" value="7" class="period-cb h-4 w-4"> 7</label>
                                 <label class="flex items-center gap-2 p-2 border rounded-lg cursor-pointer hover:bg-gray-50"><input type="checkbox" value="8" class="period-cb h-4 w-4"> 8</label>
                 <label class="flex items-center gap-2 p-2 border rounded-lg cursor-pointer hover:bg-gray-50"><input type="checkbox" value="0" class="period-cb h-4 w-4"> 0</label>
-                <label class="flex items-center gap-2 p-2 border rounded-lg cursor-pointer hover:bg-gray-50"><input type="checkbox" value="Advisory" class="period-cb h-4 w-4"> Advisory</label>
+                <label class="flex items-center gap-2 p-2 border rounded-lg cursor-pointer hover:bg-gray-50"><input type="checkbox" value="10" class="period-cb h-4 w-4"> Advisory</label>
               </div>
             </div>
 
@@ -2538,6 +2538,16 @@
           .replace(/>/g, '&gt;')
           .replace(/"/g, '&quot;')
           .replace(/'/g, '&#39;');
+      }
+
+      function formatPeriodLabel(period) {
+        if (String(period) === '10') return 'Advisory';
+        return `Period ${escapeHtml(period)}`;
+      }
+
+      function formatPeriodValue(period) {
+        if (String(period) === '10') return 'Advisory';
+        return escapeHtml(period);
       }
 
       function escapeJs(str) {
@@ -3207,7 +3217,7 @@ const data = payload.userData;
                     <label class="flex items-center gap-2 p-1 border rounded cursor-pointer hover:bg-white bg-white text-sm"><input type="checkbox" value="7" class="multi-period-cb h-3 w-3"> 7</label>
                     <label class="flex items-center gap-2 p-1 border rounded cursor-pointer hover:bg-white bg-white text-sm"><input type="checkbox" value="8" class="multi-period-cb h-3 w-3"> 8</label>
                     <label class="flex items-center gap-2 p-1 border rounded cursor-pointer hover:bg-white bg-white text-sm"><input type="checkbox" value="0" class="multi-period-cb h-3 w-3"> 0</label>
-                    <label class="flex items-center gap-2 p-1 border rounded cursor-pointer hover:bg-white bg-white text-sm"><input type="checkbox" value="Advisory" class="multi-period-cb h-3 w-3"> Adv</label>
+                    <label class="flex items-center gap-2 p-1 border rounded cursor-pointer hover:bg-white bg-white text-sm"><input type="checkbox" value="10" class="multi-period-cb h-3 w-3"> Adv</label>
                   </div>
               `;
               multiContainer.appendChild(block);
@@ -3405,18 +3415,18 @@ const data = payload.userData;
         const advisorySortValue = hasPeriod1 ? 1.5 : 5.5;
 
         const sortedActivePeriods = Array.from(activePeriods).sort((a, b) => {
-            const valA = a.toLowerCase() === 'advisory' ? advisorySortValue : parseInt(a);
-            const valB = b.toLowerCase() === 'advisory' ? advisorySortValue : parseInt(b);
+            const valA = String(a) === '10' ? advisorySortValue : parseInt(a);
+            const valB = String(b) === '10' ? advisorySortValue : parseInt(b);
             return valA - valB;
         });
 
         // 2. Build Header
         let headerHtml = `<th class="p-3 border border-gray-300 min-w-[200px] sticky left-0 z-20 bg-gray-50 shadow-[1px_0_0_0_#d1d5db]">Teacher Name</th>`;
         sortedActivePeriods.forEach(p => {
-            if (p.toLowerCase() === 'advisory') {
+            if (String(p) === '10') {
                 headerHtml += `<th class="p-3 border border-gray-300 text-center w-64">Advisory</th>`;
             } else {
-                headerHtml += `<th class="p-3 border border-gray-300 text-center w-64">Period ${escapeHtml(p)}</th>`;
+                headerHtml += `<th class="p-3 border border-gray-300 text-center w-64">${formatPeriodLabel(p)}</th>`;
             }
         });
         thead.innerHTML = headerHtml;
@@ -3504,7 +3514,7 @@ const data = payload.userData;
                     <p class="text-sm text-gray-600 font-semibold">${escapeHtml(req.teacherName)}</p>
 
                     <div class="mt-2 flex flex-col sm:flex-row flex-wrap gap-2 items-start sm:items-center">
-                       <span class="inline-block bg-orange-100 text-orange-800 text-xs font-bold px-3 py-1 rounded-full border border-orange-200">Period ${escapeHtml(req.period)}</span>
+                       <span class="inline-block bg-orange-100 text-orange-800 text-xs font-bold px-3 py-1 rounded-full border border-orange-200">${formatPeriodLabel(req.period)}</span>
                        <span class="inline-block ${roomPillClass} text-xs font-bold px-3 py-1 rounded-full border">Room: ${escapeHtml(req.room)}</span>
                        <span class="inline-block ${coursePillClass} text-xs font-bold px-3 py-1 rounded-full border truncate max-w-xs">Course: ${escapeHtml(req.course)}</span>
                     </div>
@@ -3545,7 +3555,7 @@ const data = payload.userData;
       function handleSignMeUp(absenceId, period, btnId, teacherName, courseName) {
         let confirmMsg = "Are you sure you want to cover this period?";
         if (teacherName && courseName) {
-            confirmMsg = `Are you sure you want to cover Period ${escapeHtml(period)}, ${escapeHtml(courseName)}, for ${escapeHtml(teacherName)}?`;
+            confirmMsg = `Are you sure you want to cover ${formatPeriodLabel(period)}, ${escapeHtml(courseName)}, for ${escapeHtml(teacherName)}?`;
         }
 
         showConfirm(confirmMsg, () => {
@@ -3782,7 +3792,7 @@ const data = payload.userData;
                     <p class="text-sm text-gray-600 font-semibold">${escapeHtml(req.teacherName)}</p>
 
                     <div class="mt-2 flex flex-col sm:flex-row flex-wrap gap-2 items-start sm:items-center">
-                       <span class="inline-block bg-orange-100 text-orange-800 text-xs font-bold px-3 py-1 rounded-full border border-orange-200">Period ${escapeHtml(req.period)}</span>
+                       <span class="inline-block bg-orange-100 text-orange-800 text-xs font-bold px-3 py-1 rounded-full border border-orange-200">${formatPeriodLabel(req.period)}</span>
                        <span class="inline-block ${roomPillClass} text-xs font-bold px-3 py-1 rounded-full border">Room: ${escapeHtml(req.room)}</span>
                        <span class="inline-block ${coursePillClass} text-xs font-bold px-3 py-1 rounded-full border truncate max-w-xs">Course: ${escapeHtml(req.course)}</span>
                     </div>
@@ -4210,7 +4220,7 @@ const data = payload.userData;
         // 2. Build Header
         let headerHtml = `<th class="p-3 border border-gray-300 min-w-[200px] sticky left-0 z-20 bg-gray-50 shadow-[1px_0_0_0_#d1d5db]">Teacher Name</th>`;
         sortedActivePeriods.forEach(p => {
-            headerHtml += `<th class="p-3 border border-gray-300 text-center w-32">Period ${escapeHtml(p)}</th>`;
+            headerHtml += `<th class="p-3 border border-gray-300 text-center w-32">${formatPeriodLabel(p)}</th>`;
         });
         thead.innerHTML = headerHtml;
 
@@ -4294,7 +4304,7 @@ const data = payload.userData;
         // 2. Build Header
         let headerHtml = `<th class="p-3 border border-gray-300 min-w-[200px] sticky left-0 z-20 bg-gray-50 shadow-[1px_0_0_0_#d1d5db]">Teacher Name</th>`;
         sortedActivePeriods.forEach(p => {
-            headerHtml += `<th class="p-3 border border-gray-300 text-center w-64">Period ${escapeHtml(p)}</th>`;
+            headerHtml += `<th class="p-3 border border-gray-300 text-center w-64">${formatPeriodLabel(p)}</th>`;
         });
         thead.innerHTML = headerHtml;
 
@@ -4522,8 +4532,8 @@ const data = payload.userData;
             let valB = b[adminSortCol] || '';
 
             if (adminSortCol === 'period') {
-               valA = String(valA).toLowerCase() === 'advisory' ? 1.5 : (parseInt(valA) || 0);
-               valB = String(valB).toLowerCase() === 'advisory' ? 1.5 : (parseInt(valB) || 0);
+               valA = String(valA) === '10' ? 1.5 : (parseInt(valA) || 0);
+               valB = String(valB) === '10' ? 1.5 : (parseInt(valB) || 0);
             } else {
                valA = String(valA).toLowerCase();
                valB = String(valB).toLowerCase();
@@ -4576,7 +4586,7 @@ const data = payload.userData;
                     <div class="flex justify-between items-start mb-2">
                         <div>
                             <div class="font-bold text-[#002147]"><a href="mailto:${escapeHtml(req.teacherEmail)}" class="hover:underline text-blue-600" onclick="event.stopPropagation()">${escapeHtml(req.teacherName)}</a></div>
-                            <div class="text-sm text-gray-500">${escapeHtml(req.date)} &bull; <span class="font-bold text-gray-700">Period ${escapeHtml(req.period)}</span></div>
+                            <div class="text-sm text-gray-500">${escapeHtml(req.date)} &bull; <span class="font-bold text-gray-700">${formatPeriodLabel(req.period)}</span></div>
                         </div>
                     </div>
                     <div class="grid grid-cols-2 gap-2 text-sm text-gray-600 mb-2">
@@ -4595,7 +4605,7 @@ const data = payload.userData;
                 <!-- Desktop Table View -->
                 <td class="p-3 text-sm text-gray-800 font-medium hidden sm:table-cell"><a href="mailto:${escapeHtml(req.teacherEmail)}" class="hover:underline text-blue-600" onclick="event.stopPropagation()">${escapeHtml(req.teacherName)}</a></td>
                 <td class="p-3 text-sm text-gray-600 hidden sm:table-cell">${escapeHtml(req.date)}</td>
-                <td class="p-3 text-sm font-bold text-gray-700 hidden sm:table-cell">Period ${escapeHtml(req.period)}</td>
+                <td class="p-3 text-sm font-bold text-gray-700 hidden sm:table-cell">${formatPeriodLabel(req.period)}</td>
                 <td class="p-3 text-sm text-gray-600 hidden sm:table-cell">${courseHtml}</td>
                 <td class="p-3 text-sm text-gray-600 hidden sm:table-cell">${roomHtml}</td>
                 <td class="p-3 text-sm hidden sm:table-cell" onclick="event.stopPropagation()">${subHtmlDesktop}</td>
@@ -4676,7 +4686,7 @@ const data = payload.userData;
                 <div><span class="font-bold text-gray-700">Teacher:</span> ${escapeHtml(req.teacherName)}</div>
                 <div><span class="font-bold text-gray-700">Email:</span> <a href="mailto:${escapeHtml(req.teacherEmail)}" class="text-blue-600 hover:underline">${escapeHtml(req.teacherEmail)}</a></div>
                 <div><span class="font-bold text-gray-700">Date:</span> ${escapeHtml(req.date)}</div>
-                <div><span class="font-bold text-gray-700">Period:</span> ${escapeHtml(req.period)}</div>
+                <div><span class="font-bold text-gray-700">Period:</span> ${formatPeriodValue(req.period)}</div>
                 <div><span class="font-bold text-gray-700">Room:</span> ${escapeHtml(req.room)}</div>
                 <div><span class="font-bold text-gray-700">Course:</span> ${escapeHtml(req.course)}</div>
              </div>
@@ -4942,7 +4952,7 @@ const data = payload.userData;
                 <div><span class="font-bold text-gray-700">Teacher:</span> ${escapeHtml(req.teacherName)}</div>
                 <div><span class="font-bold text-gray-700">Email:</span> <a href="mailto:${escapeHtml(req.teacherEmail)}" class="text-blue-600 hover:underline">${escapeHtml(req.teacherEmail)}</a></div>
                 <div><span class="font-bold text-gray-700">Date:</span> ${escapeHtml(req.date)}</div>
-                <div><span class="font-bold text-gray-700">Period:</span> ${escapeHtml(req.period)}</div>
+                <div><span class="font-bold text-gray-700">Period:</span> ${formatPeriodValue(req.period)}</div>
                 <div><span class="font-bold text-gray-700">Room:</span> ${escapeHtml(req.room)}</div>
                 <div><span class="font-bold text-gray-700">Course:</span> ${escapeHtml(req.course)}</div>
              </div>
@@ -5120,7 +5130,7 @@ const data = payload.userData;
                     <p class="text-sm text-gray-600 font-semibold">${escapeHtml(duty.teacherName)}</p>
 
                     <div class="mt-2 flex flex-col gap-1 items-start">
-                       <span class="inline-block bg-orange-100 text-orange-800 text-xs font-bold px-3 py-1 rounded-full border border-orange-200">Period ${escapeHtml(duty.period)}</span>
+                       <span class="inline-block bg-orange-100 text-orange-800 text-xs font-bold px-3 py-1 rounded-full border border-orange-200">${formatPeriodLabel(duty.period)}</span>
                        <span class="inline-block ${roomPillClass} text-xs font-bold px-3 py-1 rounded-full border">Room: ${escapeHtml(duty.room)}</span>
                        <span class="inline-block ${coursePillClass} text-xs font-bold px-3 py-1 rounded-full border truncate max-w-xs">Course: ${escapeHtml(duty.course)}</span>
                     </div>
@@ -5158,7 +5168,7 @@ const data = payload.userData;
                 <div><span class="font-bold text-gray-700">Teacher:</span> ${escapeHtml(req.teacherName)}</div>
                 <div><span class="font-bold text-gray-700">Email:</span> <a href="mailto:${escapeHtml(req.teacherEmail)}" class="text-blue-600 hover:underline">${escapeHtml(req.teacherEmail)}</a></div>
                 <div><span class="font-bold text-gray-700">Date:</span> ${escapeHtml(req.date)}</div>
-                <div><span class="font-bold text-gray-700">Period:</span> ${escapeHtml(req.period)}</div>
+                <div><span class="font-bold text-gray-700">Period:</span> ${formatPeriodValue(req.period)}</div>
                 <div><span class="font-bold text-gray-700">Room:</span> ${escapeHtml(req.room)}</div>
                 <div><span class="font-bold text-gray-700">Course:</span> ${escapeHtml(req.course)}</div>
              </div>
@@ -5560,7 +5570,7 @@ const data = payload.userData;
                           const ratingStars = '★'.repeat(fb.rating) + '☆'.repeat(5 - fb.rating);
                           feedbackHtml += `
                             <div class="mb-2">
-                               <p class="text-xs font-bold text-gray-700">Period ${escapeHtml(fb.period)} - ${escapeHtml(fb.subName)}</p>
+                               <p class="text-xs font-bold text-gray-700">${formatPeriodLabel(fb.period)} - ${escapeHtml(fb.subName)}</p>
                                <p class="text-xs text-yellow-500">${ratingStars}</p>
                                <p class="text-xs text-gray-500 italic mt-0.5">${escapeHtml(fb.note) || "No notes provided"}</p>
                             </div>
@@ -5637,7 +5647,7 @@ const data = payload.userData;
                 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 border rounded-xl shadow-sm ${bgClass} gap-4 opacity-75">
                   <div>
                     <div class="flex items-center gap-2">
-                       <p class="font-bold ${textClass} text-lg">${escapeHtml(job.date)} - Period ${escapeHtml(job.period)}</p>
+                       <p class="font-bold ${textClass} text-lg">${escapeHtml(job.date)} - ${formatPeriodLabel(job.period)}</p>
                     </div>
                     <p class="text-sm text-gray-500 font-semibold">${escapeHtml(job.teacherName)}</p>
                     <p class="text-xs text-gray-400 mt-1">Room: ${escapeHtml(job.room)} | Course: ${escapeHtml(job.course)}</p>
@@ -6533,8 +6543,8 @@ const data = payload.userData;
                         if (dateA.getTime() !== dateB.getTime()) {
                             return dateA - dateB;
                         }
-                        const pA = String(a.period).toLowerCase() === 'advisory' ? 1.5 : (parseInt(a.period) || 0);
-                        const pB = String(b.period).toLowerCase() === 'advisory' ? 1.5 : (parseInt(b.period) || 0);
+                        const pA = String(a.period) === '10' ? 1.5 : (parseInt(a.period) || 0);
+                        const pB = String(b.period) === '10' ? 1.5 : (parseInt(b.period) || 0);
                         return pA - pB;
                     });
 
@@ -7198,7 +7208,7 @@ function renderSuggestSubModal(suggestions) {
     headerHtml += `<tr>`;
     headerHtml += `<th class="p-3 text-sm font-bold text-gray-700 sticky left-0 bg-gray-50 z-10 border-r border-gray-200">Teacher</th>`;
     periods.forEach(p => {
-        headerHtml += `<th class="p-3 text-sm font-bold text-gray-700 min-w-[200px]">Period ${escapeHtml(p)}</th>`;
+        headerHtml += `<th class="p-3 text-sm font-bold text-gray-700 min-w-[200px]">${formatPeriodLabel(p)}</th>`;
     });
     headerHtml += `</tr>`;
     thead.innerHTML = headerHtml;
