@@ -479,6 +479,137 @@ function runTests() {
     });
   });
 
+  describe("Data Integrity & Schema Fixes", function() {
+    it("formatPeriodDisplay, formatPeriodLabelDisplay, and formatPeriodsListDisplay translate 10 to Advisory", function() {
+      assert(formatPeriodDisplay("10") === "Advisory", "10 should display as Advisory");
+      assert(formatPeriodDisplay(10) === "Advisory", "number 10 should display as Advisory");
+      assert(formatPeriodDisplay("1") === "1", "1 should display as 1");
+      assert(formatPeriodLabelDisplay("10") === "Advisory", "10 label should be Advisory");
+      assert(formatPeriodLabelDisplay("2") === "Period 2", "2 label should be Period 2");
+      assert(formatPeriodsListDisplay("1, 10, 2, A") === "1, Advisory, 2, Advisory", "Period list should format 10 and A as Advisory");
+    });
+
+    it("extractSubPlanUrl and extractSubFeedbackRaw separate Col 21 and Col 22 with legacy fallback", function() {
+      var rowNormal = new Array(22);
+      rowNormal[20] = "https://docs.google.com/document/d/123";
+      rowNormal[21] = '[{"subName":"Jane Doe","period":"1","rating":5,"note":"Great"}]';
+      assert(extractSubPlanUrl(rowNormal) === "https://docs.google.com/document/d/123", "Should read Sub Plan URL from index 20");
+      assert(extractSubFeedbackRaw(rowNormal) === '[{"subName":"Jane Doe","period":"1","rating":5,"note":"Great"}]', "Should read Sub Feedback from index 21");
+
+      var rowLegacy = new Array(21);
+      rowLegacy[20] = '[{"subName":"Jane Doe","period":"2","rating":4,"note":"Legacy"}]';
+      assert(extractSubPlanUrl(rowLegacy) === "", "Should not treat legacy JSON feedback in index 20 as a Sub Plan URL");
+      assert(extractSubFeedbackRaw(rowLegacy) === '[{"subName":"Jane Doe","period":"2","rating":4,"note":"Legacy"}]', "Should fall back to legacy JSON feedback in index 20 when index 21 is empty");
+    });
+
+    it("fetchAbsenceRequestsForDate and batchAssignSubs preserve Status and target period columns", function() {
+      var headers = [
+        "ID", "Timestamp", "Email", "Date", "Periods", "Reason", "Duration",
+        "Urgency", "Instructions", "Period 1 Sub", "Period 2 Sub", "Period 3 Sub",
+        "Period 4 Sub", "Period 5 Sub", "Period 6 Sub", "Period 7 Sub", "Period 8 Sub",
+        "Period 0 Sub", "Advisory Sub", "Status", "Sub Plan URL", "Sub Feedback"
+      ];
+      var sampleRow = [
+        "req-1", "2026-10-28 08:00:00", "teacher1@gocathedral.com", "2026-10-28", "1, 3, Advisory",
+        "Personal", "Full Day", "Standard (Advanced Notice)", "See sub plan",
+        "", "", "", "", "", "", "", "", "", "", "Active", "https://example.com/plan", "[]"
+      ];
+      var absenceSheetData = [headers, sampleRow];
+      var rosterSheetData = [
+        ["Name", "Email", "Role", "Duty", "Department", "Homebase", "Building"],
+        ["Admin User", "admin@gocathedral.com", "Admin", "", "", "", ""],
+        ["Teacher One", "teacher1@gocathedral.com", "Teacher", "", "Math", "K201", "Kelly Hall"],
+        ["Sub Candidate", "sub1@gocathedral.com", "Teacher", "1, 3, Advisory", "Math", "K202", "Kelly Hall"]
+      ];
+
+      var origGetSS = getSS;
+      var origLockService = typeof LockService !== 'undefined' ? LockService : undefined;
+      var origUtilities = typeof Utilities !== 'undefined' ? Utilities : undefined;
+      var origSession = typeof Session !== 'undefined' ? Session : undefined;
+      var origCacheService = typeof CacheService !== 'undefined' ? CacheService : undefined;
+      var origEnqueueEmail = enqueueEmail;
+
+      _globalRosterCache = null;
+      _globalSettingsCache = { "RolePermissions": "{}" };
+
+      global.LockService = {
+        getScriptLock: function() {
+          return { waitLock: function() {}, releaseLock: function() {} };
+        }
+      };
+      global.Session = {
+        getScriptTimeZone: function() { return "America/Indiana/Indianapolis"; },
+        getActiveUser: function() { return { getEmail: function() { return "admin@gocathedral.com"; } }; }
+      };
+      global.Utilities = {
+        formatDate: function(d) { return "2026-10-28"; }
+      };
+      global.CacheService = {
+        getScriptCache: function() {
+          return { get: function() { return null; }, put: function() {}, remove: function() {} };
+        }
+      };
+      enqueueEmail = function() {};
+
+      getSS = function() {
+        return {
+          getSheetByName: function(name) {
+            if (name === "Absence Requests") {
+              return {
+                getDataRange: function() {
+                  return { getValues: function() { return absenceSheetData; } };
+                },
+                getRange: function() {
+                  return {
+                    setValues: function(newData) { absenceSheetData = newData; }
+                  };
+                }
+              };
+            }
+            if (name === "Staff Roster") {
+              return {
+                getDataRange: function() {
+                  return { getValues: function() { return rosterSheetData; } };
+                }
+              };
+            }
+            return null;
+          }
+        };
+      };
+
+      var fetched = fetchAbsenceRequestsForDate(getSS(), "2026-10-28");
+      assert(fetched.length === 3, "Expected 3 open period requests (1, 3, and 10/Advisory)");
+      assert(fetched[0].email === "teacher1@gocathedral.com", "Expected email from Col C");
+      assert(fetched[0].teacherName === "Teacher One", "Expected teacherName resolved from Staff Roster");
+      assert(fetched[2].period === "10", "Expected Advisory normalized to period 10");
+
+      var suggestionsRes = getSuggestedSubs("2026-10-28");
+      assert(suggestionsRes.success === true, "Expected getSuggestedSubs to succeed");
+      assert(suggestionsRes.suggestions[0].suggestedSub.indexOf("Sub Candidate") === 0, "Expected Sub Candidate to be suggested");
+
+      var batchRes = batchAssignSubs([
+        { id: "req-1", period: "1", subName: "Sub Candidate - 1, 3, Advisory" },
+        { id: "req-1", period: "3", subName: "No Sub Needed" },
+        { id: "req-1", period: "Advisory", subName: "Sub Candidate" }
+      ], "admin@gocathedral.com");
+
+      assert(batchRes.success === true && batchRes.count === 3, "Expected all 3 period assignments to succeed");
+      assert(absenceSheetData[1][9] === "Sub Candidate", "Period 1 Sub (index 9) should be 'Sub Candidate'");
+      assert(absenceSheetData[1][11] === "No Sub Needed", "Period 3 Sub (index 11) should be 'No Sub Needed'");
+      assert(absenceSheetData[1][18] === "Sub Candidate", "Advisory Sub (index 18) should be 'Sub Candidate'");
+      assert(absenceSheetData[1][19] === "Active", "Status (index 19) MUST remain 'Active'");
+
+      // Restore globals
+      getSS = origGetSS;
+      enqueueEmail = origEnqueueEmail;
+      if (origLockService !== undefined) global.LockService = origLockService;
+      if (origUtilities !== undefined) global.Utilities = origUtilities;
+      if (origSession !== undefined) global.Session = origSession;
+      if (origCacheService !== undefined) global.CacheService = origCacheService;
+    });
+  });
+
   // Teardown
   if (originalGetSettings) getSettings = originalGetSettings;
   if (typeof GmailApp !== 'undefined') {

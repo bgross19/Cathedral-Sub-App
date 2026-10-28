@@ -21,6 +21,37 @@ function parsePeriod(period) {
 }
 
 /**
+ * Helper to format a single period value ('10' -> 'Advisory') for user-facing display/emails.
+ */
+function formatPeriodDisplay(period) {
+  var p = parsePeriod(period);
+  if (p === '10') return 'Advisory';
+  return String(period).trim();
+}
+
+/**
+ * Helper to format a single period with "Period " prefix (or "Advisory" for 10) for email subjects/lists.
+ */
+function formatPeriodLabelDisplay(period) {
+  var p = parsePeriod(period);
+  if (p === '10') return 'Advisory';
+  return 'Period ' + String(period).trim();
+}
+
+/**
+ * Helper to format a comma-separated periods string (e.g. "1, 10, 2" -> "1, Advisory, 2") for user-facing display/emails.
+ */
+function formatPeriodsListDisplay(periodsStr) {
+  if (!periodsStr) return "";
+  return String(periodsStr)
+    .split(",")
+    .map(function(p) { return p.trim(); })
+    .filter(function(p) { return p !== ""; })
+    .map(function(p) { return formatPeriodDisplay(p); })
+    .join(", ");
+}
+
+/**
  * Helper to get the 1-based column index for a given period.
  * 0-based array index is one less.
  */
@@ -43,6 +74,33 @@ function getScheduleJoinPeriod(period) {
   if (p === '0') return '9';
   if (p === '10') return '10';
   return String(period);
+}
+
+/**
+ * Helper to extract Sub Plan URL from an Absence Requests row (Col 21 / index 20),
+ * ignoring legacy Sub Feedback JSON arrays if they were previously written into Col 21.
+ */
+function extractSubPlanUrl(row) {
+  if (!row || row.length <= 20) return "";
+  var val = String(row[20] || "").trim();
+  if (val.indexOf("[") === 0) return "";
+  return val;
+}
+
+/**
+ * Helper to extract Sub Feedback JSON string from an Absence Requests row (Col 22 / index 21),
+ * falling back to Col 21 (index 20) if legacy feedback JSON was stored there.
+ */
+function extractSubFeedbackRaw(row) {
+  if (!row) return "[]";
+  if (row.length > 21 && row[21] !== undefined && row[21] !== null && String(row[21]).trim() !== "") {
+    return String(row[21]).trim();
+  }
+  if (row.length > 20) {
+    var legacyVal = String(row[20] || "").trim();
+    if (legacyVal.indexOf("[") === 0) return legacyVal;
+  }
+  return "[]";
 }
 
 const APP_VERSION = "1.0.0";
@@ -1312,10 +1370,11 @@ function sendUrgentCoverageEmail(ss, teacherName, formData, instructions) {
     var settings = getSettings();
     var appUrl = settings["App URL"] || DEFAULT_APP_URL;
 
+    var displayPeriods = formatPeriodsListDisplay(formData.periods);
     var body = "An urgent absence request has been submitted requiring immediate attention.\n\n" +
                "Teacher: " + teacherName + "\n" +
                "Date Needed: " + formData.date + "\n" +
-               "Periods: " + formData.periods + "\n" +
+               "Periods: " + displayPeriods + "\n" +
                "Reason: " + formData.reason + "\n\n" +
                "Instructions: " + (instructions ? instructions : "None") + "\n\n" +
                "Please log into the Cathedral Sub App to assign a sub: " + appUrl;
@@ -1324,7 +1383,7 @@ function sendUrgentCoverageEmail(ss, teacherName, formData, instructions) {
                    "<ul>" +
                    "<li><strong>Teacher:</strong> " + teacherName + "</li>" +
                    "<li><strong>Date Needed:</strong> " + formData.date + "</li>" +
-                   "<li><strong>Periods:</strong> " + formData.periods + "</li>" +
+                   "<li><strong>Periods:</strong> " + displayPeriods + "</li>" +
                    "<li><strong>Reason:</strong> " + formData.reason + "</li>" +
                    "</ul>" +
                    "<p><strong>Instructions:</strong> " + (instructions ? instructions : "None") + "</p>" +
@@ -1410,11 +1469,12 @@ function submitAbsence(formData, clientEmail) {
     if (formData.hrConfirmed) instructions = "[HR Docs Provided] " + instructions;
 
     var uniqueId = Utilities.getUuid();
+    var subPlanUrl = formData.subPlanUrl ? String(formData.subPlanUrl).trim() : "";
 
     var newRow = [
       uniqueId, timestamp, targetEmail, formData.date, "'" + formData.periods,
       formData.reason, formData.duration, urgencyFormatted, instructions,
-      "", "", "", "", "", "", "", "", "", "", "Active"
+      "", "", "", "", "", "", "", "", "", "", "Active", subPlanUrl, "[]"
     ];
     mainSheet.appendRow(newRow);
 
@@ -1447,6 +1507,8 @@ function submitAbsence(formData, clientEmail) {
         }
     }
 
+    var displayPeriods = formatPeriodsListDisplay(formData.periods);
+
     if (hrRequired) {
         var hrEmails = getEmailsByRole(ss, "hr");
         for (var h = 0; h < hrEmails.length; h++) {
@@ -1455,7 +1517,7 @@ function submitAbsence(formData, clientEmail) {
             var hrBody = "An absence request has been submitted requiring attention.\n\n" +
                          "Teacher: " + teacherName + "\n" +
                          "Date Needed: " + formData.date + "\n" +
-                         "Periods: " + formData.periods + "\n" +
+                         "Periods: " + displayPeriods + "\n" +
                          "Reason: " + formData.reason + "\n\n" +
                          "Instructions: " + (instructions ? instructions : "None") + "\n\n" +
                          "Please log into the Cathedral Sub App for more information: " + appUrl;
@@ -1464,7 +1526,7 @@ function submitAbsence(formData, clientEmail) {
                              "<ul>" +
                              "<li><strong>Teacher:</strong> " + teacherName + "</li>" +
                              "<li><strong>Date Needed:</strong> " + formData.date + "</li>" +
-                             "<li><strong>Periods:</strong> " + formData.periods + "</li>" +
+                             "<li><strong>Periods:</strong> " + displayPeriods + "</li>" +
                              "<li><strong>Reason:</strong> " + formData.reason + "</li>" +
                              "</ul>" +
                              "<p><strong>Instructions:</strong> " + (instructions ? instructions : "None") + "</p>" +
@@ -1482,7 +1544,7 @@ function submitAbsence(formData, clientEmail) {
             var prinBody = "An absence request has been submitted requiring attention.\n\n" +
                            "Teacher: " + teacherName + "\n" +
                            "Date Needed: " + formData.date + "\n" +
-                           "Periods: " + formData.periods + "\n" +
+                           "Periods: " + displayPeriods + "\n" +
                            "Reason: " + formData.reason + "\n\n" +
                            "Instructions: " + (instructions ? instructions : "None") + "\n\n" +
                            "Please log into the Cathedral Sub App for more information: " + appUrl;
@@ -1491,7 +1553,7 @@ function submitAbsence(formData, clientEmail) {
                                "<ul>" +
                                "<li><strong>Teacher:</strong> " + teacherName + "</li>" +
                                "<li><strong>Date Needed:</strong> " + formData.date + "</li>" +
-                               "<li><strong>Periods:</strong> " + formData.periods + "</li>" +
+                               "<li><strong>Periods:</strong> " + displayPeriods + "</li>" +
                                "<li><strong>Reason:</strong> " + formData.reason + "</li>" +
                                "</ul>" +
                                "<p><strong>Instructions:</strong> " + (instructions ? instructions : "None") + "</p>" +
@@ -1508,7 +1570,7 @@ function submitAbsence(formData, clientEmail) {
     var confBody = "Your absence request has been successfully submitted.\n\n" +
                    "Details:\n" +
                    "Date: " + formData.date + "\n" +
-                   "Periods: " + formData.periods + "\n" +
+                   "Periods: " + displayPeriods + "\n" +
                    "Reason: " + formData.reason + "\n" +
                    "Duration: " + formData.duration + "\n" +
                    "Instructions: " + (instructions ? instructions : "None") + "\n\n" +
@@ -1518,7 +1580,7 @@ function submitAbsence(formData, clientEmail) {
                        "<h3>Details:</h3>" +
                        "<ul>" +
                        "<li><strong>Date:</strong> " + formData.date + "</li>" +
-                       "<li><strong>Periods:</strong> " + formData.periods + "</li>" +
+                       "<li><strong>Periods:</strong> " + displayPeriods + "</li>" +
                        "<li><strong>Reason:</strong> " + formData.reason + "</li>" +
                        "<li><strong>Duration:</strong> " + formData.duration + "</li>" +
                        "</ul>" +
@@ -1582,9 +1644,10 @@ function cancelMySubDuty(absenceId, period, clientEmail) {
             var settings = getSettings();
             var appUrl = settings["App URL"] || DEFAULT_APP_URL;
 
+            var displayCancelPeriod = formatPeriodDisplay(details.period);
             var body = userName + " has cancelled their assigned coverage.\n\n" +
                        "Date: " + details.date + "\n" +
-                       "Period: " + details.period + "\n" +
+                       "Period: " + displayCancelPeriod + "\n" +
                        "Teacher to Cover: " + details.teacherName + "\n" +
                        "Room: " + details.room + "\n" +
                        "Course: " + details.course + "\n\n" +
@@ -1593,7 +1656,7 @@ function cancelMySubDuty(absenceId, period, clientEmail) {
             var htmlBody = "<p>" + userName + " has cancelled their assigned coverage.</p>" +
                            "<ul>" +
                            "<li><strong>Date:</strong> " + details.date + "</li>" +
-                           "<li><strong>Period:</strong> " + details.period + "</li>" +
+                           "<li><strong>Period:</strong> " + displayCancelPeriod + "</li>" +
                            "<li><strong>Teacher to Cover:</strong> " + details.teacherName + "</li>" +
                            "<li><strong>Room:</strong> " + details.room + "</li>" +
                            "<li><strong>Course:</strong> " + details.course + "</li>" +
@@ -1744,15 +1807,16 @@ function cancelAbsence(absenceId, clientEmail) {
           } catch(e) { console.error("Error formatting date: " + e.message); }
       }
 
+      var canceledPeriodsDisplay = formatPeriodsListDisplay(data[i][4]);
       var teacherSubject = "Absence Request Canceled";
       var teacherBody = "Your absence request for " + formattedDateForEmail + " has been canceled.\n\n" +
                         "Reason: " + data[i][5] + "\n" +
-                        "Periods: " + data[i][4] + "\n\n" +
+                        "Periods: " + canceledPeriodsDisplay + "\n\n" +
                         "If you have questions, please contact the sub coordinator.";
 
       var teacherHtml = "<p>Your absence request for <strong>" + formattedDateForEmail + "</strong> has been canceled.</p>" +
                         "<ul><li><strong>Reason:</strong> " + data[i][5] + "</li>" +
-                        "<li><strong>Periods:</strong> " + data[i][4] + "</li></ul>" +
+                        "<li><strong>Periods:</strong> " + canceledPeriodsDisplay + "</li></ul>" +
                         "<p>If you have questions, please contact the sub coordinator.</p>";
 
       enqueueEmail(teacherEmail, teacherSubject, teacherBody, {htmlBody: teacherHtml});
@@ -1819,8 +1883,8 @@ function updateAbsence(absenceId, formData, clientEmail) {
         assertPermission(user, "Admin Dashboard", "Unauthorized to modify this absence.");
       }
 
-      var oldPeriods = String(data[i][4]).split(",").map(function(p){return p.trim()});
-      var newPeriods = String(formData.periods).split(",").map(function(p){return p.trim()});
+      var oldPeriods = String(data[i][4]).split(",").map(function(p){return parsePeriod(p);});
+      var newPeriods = String(formData.periods).split(",").map(function(p){return parsePeriod(p);});
       var oldDateRaw = data[i][3];
       var oldDateFormatted = "";
       if (oldDateRaw instanceof Date) {
@@ -1840,6 +1904,8 @@ function updateAbsence(absenceId, formData, clientEmail) {
       var urgencyFormatted = formData.urgency === 'Urgent' ? 'Urgent (Less than 24 hr notice)' : 'Standard (Advanced Notice)';
       var instructions = formData.specialInstructions;
       if (formData.hrConfirmed) instructions = "[HR Docs Provided] " + instructions;
+      var oldSubPlanUrl = extractSubPlanUrl(data[i]);
+      var newSubPlanUrl = formData.subPlanUrl !== undefined ? String(formData.subPlanUrl || "").trim() : oldSubPlanUrl;
 
       // Identify sub clears
       var subClearUpdates = [];
@@ -1870,7 +1936,8 @@ function updateAbsence(absenceId, formData, clientEmail) {
                var detailsChanged = (oldReason !== formData.reason) ||
                                     (oldDuration !== formData.duration) ||
                                     (oldUrgency !== urgencyFormatted) ||
-                                    (oldInstructions !== instructions);
+                                    (oldInstructions !== instructions) ||
+                                    (oldSubPlanUrl !== newSubPlanUrl);
 
                if (detailsChanged) {
                   var modDetails = getAbsenceDetailsLocal(data[i], p, scheduleLookup, nameLookup);
@@ -1909,6 +1976,9 @@ function updateAbsence(absenceId, formData, clientEmail) {
 
       // Single API call to update both the basic info and all sub clearing at once
       sheet.getRange(i + 1, 4, 1, 16).setValues([updatedRowBlock]);
+      if (formData.subPlanUrl !== undefined) {
+        sheet.getRange(i + 1, 21).setValue(newSubPlanUrl);
+      }
       logAuditAction("ABSENCE_UPDATED", absenceId, "Updated absence details (Date: " + formData.date + ", Periods: " + formData.periods + ")");
 
 
@@ -1922,18 +1992,19 @@ function updateAbsence(absenceId, formData, clientEmail) {
           } catch(e) { console.error("Error formatting date: " + e.message); }
       }
 
+      var updatedPeriodsDisplay = formatPeriodsListDisplay(formData.periods);
       var teacherSubject = "Absence Request Updated";
       var teacherBody = "Your absence request for " + formattedDateForEmail + " has been updated.\n\n" +
                         "Updated Details:\n" +
                         "Date: " + formData.date + "\n" +
-                        "Periods: " + formData.periods + "\n" +
+                        "Periods: " + updatedPeriodsDisplay + "\n" +
                         "Reason: " + formData.reason + "\n" +
                         "Duration: " + formData.duration + "\n\n" +
                         "If you have questions, please contact the sub coordinator.";
 
       var teacherHtml = "<p>Your absence request for <strong>" + formattedDateForEmail + "</strong> has been updated.</p>" +
                         "<ul><li><strong>Date:</strong> " + formData.date + "</li>" +
-                        "<li><strong>Periods:</strong> " + formData.periods + "</li>" +
+                        "<li><strong>Periods:</strong> " + updatedPeriodsDisplay + "</li>" +
                         "<li><strong>Reason:</strong> " + formData.reason + "</li>" +
                         "<li><strong>Duration:</strong> " + formData.duration + "</li></ul>" +
                         "<p>If you have questions, please contact the sub coordinator.</p>";
@@ -2020,8 +2091,11 @@ function sendSubNotification(subEmail, type, details) {
   var settings = getSettings();
   var appUrl = settings["App URL"] || DEFAULT_APP_URL;
 
+  var displayPeriod = details.period ? formatPeriodDisplay(details.period) : "";
+  var displayPeriodLabel = details.period ? formatPeriodLabelDisplay(details.period) : "";
+
   var detailsText = "Date: " + details.date + "\n";
-  if (details.period) detailsText += "Period: " + details.period + "\n";
+  if (details.period) detailsText += "Period: " + displayPeriod + "\n";
   detailsText += "Teacher: " + details.teacherName + "\n";
   if (details.period) {
     detailsText += "Room: " + details.room + "\n";
@@ -2031,7 +2105,7 @@ function sendSubNotification(subEmail, type, details) {
 
   var detailsHtml = "<ul>" +
                     "<li><strong>Date:</strong> " + details.date + "</li>" +
-                    (details.period ? "<li><strong>Period:</strong> " + details.period + "</li>" : "") +
+                    (details.period ? "<li><strong>Period:</strong> " + displayPeriod + "</li>" : "") +
                     "<li><strong>Teacher:</strong> " + details.teacherName + "</li>" +
                     (details.period ? "<li><strong>Room:</strong> " + details.room + "</li>" : "") +
                     (details.period ? "<li><strong>Course:</strong> " + details.course + "</li>" : "") +
@@ -2042,15 +2116,15 @@ function sendSubNotification(subEmail, type, details) {
   var attendanceHtml = "<p><strong>Please remember to take attendance here: <a href='https://powerschool.cathedral-irish.org/subs/pw.html'>https://powerschool.cathedral-irish.org/subs/pw.html</a></strong></p>";
 
   if (type === 'Assigned') {
-    subject = "Coverage Assignment: " + details.date + (details.period ? " Period " + details.period : "");
+    subject = "Coverage Assignment: " + details.date + (details.period ? " " + displayPeriodLabel : "");
     body = "You have been assigned to cover a class.\n\n" + detailsText + attendanceText + "\n\nPlease check the Cathedral Sub App for more information: " + appUrl;
     htmlBody = "<p>You have been assigned to cover a class.</p>" + detailsHtml + attendanceHtml + "<p>Please check the <a href='" + appUrl + "'>Cathedral Sub App</a> for more information.</p>";
   } else if (type === 'Canceled') {
-    subject = "CANCELED - Coverage Assignment: " + details.date + (details.period ? " Period " + details.period : "");
+    subject = "CANCELED - Coverage Assignment: " + details.date + (details.period ? " " + displayPeriodLabel : "");
     body = "Your assigned coverage has been CANCELED. You are no longer needed for this assignment.\n\n" + detailsText + "\n\nGo to the Cathedral Sub App for more information: " + appUrl;
     htmlBody = "<p>Your assigned coverage has been CANCELED. You are no longer needed for this assignment.</p>" + detailsHtml + "<p>Go to the <a href='" + appUrl + "'>Cathedral Sub App</a> for more information.</p>";
   } else if (type === 'Modified') {
-    subject = "UPDATED - Coverage Assignment: " + details.date + (details.period ? " Period " + details.period : "");
+    subject = "UPDATED - Coverage Assignment: " + details.date + (details.period ? " " + displayPeriodLabel : "");
     body = "There has been an update to your assigned coverage.\n\nUpdated Details:\n" + detailsText + attendanceText + "\n\nPlease check the Cathedral Sub App for more information: " + appUrl;
     htmlBody = "<p>There has been an update to your assigned coverage.</p><h3>Updated Details:</h3>" + detailsHtml + attendanceHtml + "<p>Please check the <a href='" + appUrl + "'>Cathedral Sub App</a> for more information.</p>";
   }
@@ -2104,9 +2178,9 @@ function assignSubToPeriod(absenceId, period, subName, forceOverride, clientEmai
 
     if (targetIndex !== -1) {
       i = targetIndex;
-      var periodsRequested = String(data[i][4]).split(",").map(function(p) { return p.trim(); });
+      var periodsRequested = String(data[i][4]).split(",").map(function(p) { return parsePeriod(p); });
 
-      if (periodsRequested.indexOf(String(period)) === -1) {
+      if (periodsRequested.indexOf(parsePeriod(period)) === -1) {
           throw new Error("Period " + period + " was not requested for this absence.");
       }
 
@@ -2531,16 +2605,18 @@ function getInitialPayload(clientEmail) {
       // My Absences
       if (rowTeacherEmail === targetEmail) {
         var urgencyStr = String(row[7] || '');
-        let subFeedbackRaw = String(row[20] || "[]");
+        let subFeedbackRaw = extractSubFeedbackRaw(row);
+        var subPlanUrl = extractSubPlanUrl(row);
 
         var periodsRequested = String(row[4] || "").split(",").map(function(p) { return p.trim(); }).filter(function(p) { return p !== ""; });
         var periodsWithSubs = periodsRequested.map(function(p) {
           var subColIdx = getSubColumnIndex(p);
           var subName = (subColIdx > 0 && subColIdx <= row.length) ? row[subColIdx - 1] : "";
+          var displayP = formatPeriodDisplay(p);
           if (subName && String(subName).trim() !== "") {
-            return p + " (" + String(subName).trim() + ")";
+            return displayP + " (" + String(subName).trim() + ")";
           } else {
-            return p + " (Not Yet Assigned)";
+            return displayP + " (Not Yet Assigned)";
           }
         }).join(", ");
 
@@ -2556,6 +2632,7 @@ function getInitialPayload(clientEmail) {
           urgency: urgencyStr.includes('Urgent') ? 'Urgent' : 'Standard',
           duration: String(row[6]),
           instructions: String(row[8]),
+          subPlanUrl: subPlanUrl,
           subFeedback: subFeedbackRaw
         };
         if (isDateValid && rowDate < today) {
@@ -2573,12 +2650,13 @@ function getInitialPayload(clientEmail) {
           if (parts.length > 1) teacherName = parts[1].trim() + " " + parts[0].trim();
         }
 
-        periodsRequested = String(row[4]).split(",").map(function(p) { return p.trim(); });
+        periodsRequested = String(row[4]).split(",").map(function(p) { return parsePeriod(p); });
         var rowId = String(row[0]);
         var rawDate = Number(rowDate.getTime());
         var reason = String(row[5]);
         var duration = String(row[6]);
         var instructions = String(row[8]);
+        var jobSubPlanUrl = extractSubPlanUrl(row);
 
         var allPeriods = ['1', '2', '3', '4', '5', '6', '7', '8', '0', '10'];
       for (var pIdx = 0; pIdx < allPeriods.length; pIdx++) {
@@ -2605,13 +2683,14 @@ function getInitialPayload(clientEmail) {
                 reason: reason,
                 duration: duration,
                 instructions: instructions,
+                subPlanUrl: jobSubPlanUrl,
                 assignedSub: assignedSub
             };
 
             // My Sub Duties
             if (assignedSub === userName) {
               if (rowDate < today && rowDate >= cutoffDate) {
-                 let subFeedbackRaw = String(row[20] || "[]");
+                 let subFeedbackRaw = extractSubFeedbackRaw(row);
                  var subFeedbackParsed = [];
                  try {
                      subFeedbackParsed = JSON.parse(subFeedbackRaw);
@@ -2778,7 +2857,7 @@ function getInitialPayload(clientEmail) {
             if (prts.length > 1) tName = prts[1].trim() + " " + prts[0].trim();
           }
 
-          var prdsRequested = String(row[4]).split(",").map(function(p) { return p.trim(); });
+          var prdsRequested = String(row[4]).split(",").map(function(p) { return parsePeriod(p); });
           var rId = String(row[0]);
           var fmtDate = String(Utilities.formatDate(rDate, Session.getScriptTimeZone(), "MMM d, yyyy"));
           var fDateString = String(Utilities.formatDate(rDate, Session.getScriptTimeZone(), "yyyy-MM-dd"));
@@ -2786,6 +2865,7 @@ function getInitialPayload(clientEmail) {
           var rsn = String(row[5]);
           var dur = String(row[6]);
           var inst = String(row[8]);
+          var qcSubPlanUrl = extractSubPlanUrl(row);
 
           var aPeriods = ['1', '2', '3', '4', '5', '6', '7', '8', '0', '10'];
       for (let prIdx = 0; prIdx < aPeriods.length; prIdx++) {
@@ -2807,7 +2887,8 @@ function getInitialPayload(clientEmail) {
                   course: schedInfo && schedInfo.course ? String(schedInfo.course) : "No Class Assigned",
                   reason: rsn,
                   duration: dur,
-                  instructions: inst
+                  instructions: inst,
+                  subPlanUrl: qcSubPlanUrl
                 });
               }
             }
@@ -2835,7 +2916,7 @@ function getInitialPayload(clientEmail) {
 
         for (var pdsIdx = 0; pdsIdx < pds.length; pdsIdx++) {
           var rawPd = pds[pdsIdx];
-          var pdNum = parseInt(rawPd, 10);
+          var pdNum = parseInt(parsePeriod(rawPd), 10);
 
           if (!isNaN(pdNum)) {
             var pd = pdNum;
@@ -2856,7 +2937,7 @@ function getInitialPayload(clientEmail) {
               reason: String(adRow[5] || "").trim(),
               duration: String(adRow[6] || "").trim(),
               instructions: String(adRow[8] || "").trim(),
-              subPlanUrl: String(adRow[20] || "").trim()
+              subPlanUrl: extractSubPlanUrl(adRow)
             });
           }
         }
@@ -3802,7 +3883,7 @@ function saveSubFeedback(absenceId, period, rating, note, clientEmail) {
     }
 
     var row = data[targetIndex];
-    let subFeedbackRaw = String(row[20] || "[]");
+    let subFeedbackRaw = extractSubFeedbackRaw(row);
     var subFeedbackParsed = [];
     try {
       subFeedbackParsed = JSON.parse(subFeedbackRaw);
@@ -3810,9 +3891,10 @@ function saveSubFeedback(absenceId, period, rating, note, clientEmail) {
       // Ignore parse error
     }
 
+    var normalizedPeriod = parsePeriod(period);
     var existingIndex = -1;
     for (var j = 0; j < subFeedbackParsed.length; j++) {
-       if (subFeedbackParsed[j].period === String(period) && String(subFeedbackParsed[j].subName).toLowerCase() === subName.toLowerCase()) {
+       if (parsePeriod(subFeedbackParsed[j].period) === normalizedPeriod && String(subFeedbackParsed[j].subName).toLowerCase() === subName.toLowerCase()) {
            existingIndex = j;
            break;
        }
@@ -3820,7 +3902,7 @@ function saveSubFeedback(absenceId, period, rating, note, clientEmail) {
 
     var feedbackObj = {
         subName: subName,
-        period: String(period),
+        period: normalizedPeriod,
         rating: parseInt(rating) || 0,
         note: String(note || "").trim()
     };
@@ -3831,7 +3913,11 @@ function saveSubFeedback(absenceId, period, rating, note, clientEmail) {
        subFeedbackParsed.push(feedbackObj);
     }
 
-    sheet.getRange(targetIndex + 1, 21).setValue(JSON.stringify(subFeedbackParsed));
+    // Write Sub Feedback to Column 22 (index 21), keeping Column 21 (index 20) for Sub Plan URL
+    sheet.getRange(targetIndex + 1, 22).setValue(JSON.stringify(subFeedbackParsed));
+    if (row.length > 20 && String(row[20] || "").trim().indexOf("[") === 0) {
+       sheet.getRange(targetIndex + 1, 21).setValue("");
+    }
 
     var teacherEmail = String(row[2]).toLowerCase().trim();
     var absenceDateVal = row[3];
@@ -3844,13 +3930,15 @@ function saveSubFeedback(absenceId, period, rating, note, clientEmail) {
         if (parts.length > 1) teacherName = parts[1].trim() + " " + parts[0].trim();
     }
 
-    var subject = "Substitute Feedback Received - Period " + period;
+    var displayFeedbackPeriod = formatPeriodDisplay(period);
+    var displayFeedbackPeriodLabel = formatPeriodLabelDisplay(period);
+    var subject = "Substitute Feedback Received - " + displayFeedbackPeriodLabel;
     var parsedRating = parseInt(rating) || 0;
     var ratingStars = "★".repeat(parsedRating) + "☆".repeat(Math.max(0, 5 - parsedRating));
 
     var bodyText = "Hello " + teacherName + ",\n\n";
     bodyText += subName + " just submitted feedback for covering your class on " + absenceDateStr + ":\n\n";
-    bodyText += "- Period: " + period + "\n";
+    bodyText += "- Period: " + displayFeedbackPeriod + "\n";
     bodyText += "- Rating: " + rating + "/5\n";
     bodyText += "- Notes: " + (note || "No notes") + "\n\n";
     bodyText += "Thank you!";
@@ -3858,7 +3946,7 @@ function saveSubFeedback(absenceId, period, rating, note, clientEmail) {
     var bodyHtml = "<p>Hello " + teacherName + ",</p>";
     bodyHtml += "<p>" + subName + " just submitted feedback for covering your class on " + absenceDateStr + ":</p>";
     bodyHtml += "<ul>";
-    bodyHtml += "<li><strong>Period:</strong> " + period + "</li>";
+    bodyHtml += "<li><strong>Period:</strong> " + displayFeedbackPeriod + "</li>";
     bodyHtml += "<li><strong>Rating:</strong> " + ratingStars + " (" + rating + "/5)</li>";
     bodyHtml += "<li><strong>Notes:</strong> " + (note || "<em>No notes provided</em>") + "</li>";
     bodyHtml += "</ul><p>Thank you!</p>";
@@ -3921,7 +4009,7 @@ function sendDailySubFeedbackRequests() {
           if (parts.length > 1) teacherName = parts[1].trim() + " " + parts[0].trim();
         }
 
-        var periodsRequested = String(row[4]).split(",").map(function(p) { return p.trim(); });
+        var periodsRequested = String(row[4]).split(",").map(function(p) { return parsePeriod(p); });
         var rowId = String(row[0]);
         var allPeriods = ['1', '2', '3', '4', '5', '6', '7', '8', '0', '10'];
 
@@ -3960,9 +4048,10 @@ function sendDailySubFeedbackRequests() {
 
         for (var j = 0; j < subData.jobs.length; j++) {
             var job = subData.jobs[j];
+            var jobPeriodLabel = formatPeriodLabelDisplay(job.period);
             var jobLink = appUrl + "?feedbackAbsenceId=" + encodeURIComponent(job.id) + "&feedbackPeriod=" + encodeURIComponent(job.period);
-            bodyText += "- Period " + job.period + " (" + job.teacherName + "): " + jobLink + "\n";
-            bodyHtml += "<li>Period " + job.period + " (" + job.teacherName + "): <a href='" + jobLink + "'>Leave Feedback</a></li>";
+            bodyText += "- " + jobPeriodLabel + " (" + job.teacherName + "): " + jobLink + "\n";
+            bodyHtml += "<li>" + jobPeriodLabel + " (" + job.teacherName + "): <a href='" + jobLink + "'>Leave Feedback</a></li>";
         }
 
         bodyText += "\nThank you!";
@@ -4165,8 +4254,8 @@ function getSuggestedSubs(dateStr) {
       if (assignedByPeriod[period] && assignedByPeriod[period][candidateCleanName]) continue;
 
       // Check if candidate has duty this period
-      var duties = candidate.duty.split(',').map(function(s) { return s.trim(); });
-      if (duties.indexOf(period) === -1) continue;
+      var duties = candidate.duty.split(',').map(function(s) { return parsePeriod(s); });
+      if (duties.indexOf(parsePeriod(period)) === -1) continue;
 
       // Calculate score based on priority:
       // Priority 1: Same Department
@@ -4253,23 +4342,23 @@ function fetchAbsenceRequestsForDate(ss, dateStr) {
   var requests = [];
   var headers = data[0] || [];
   var colMap = {};
-  for (var i=0; i<headers.length; i++) {
-     colMap[String(headers[i]).toLowerCase()] = i;
+  for (var i = 0; i < headers.length; i++) {
+     colMap[String(headers[i]).toLowerCase().trim()] = i;
   }
+
+  var rosterData = getRosterDataCached(ss);
+  var nameLookup = buildNameLookup(rosterData || []);
 
   var idxId = colMap['id'] !== undefined ? colMap['id'] : 0;
   var idxTimestamp = colMap['timestamp'] !== undefined ? colMap['timestamp'] : 1;
-  var idxName = colMap['teacher name'] !== undefined ? colMap['teacher name'] : 2;
-  var idxEmail = colMap['teacher email'] !== undefined ? colMap['teacher email'] : 3;
-  var idxDate = colMap['date'] !== undefined ? colMap['date'] : 4;
+  var idxEmail = colMap['email'] !== undefined ? colMap['email'] : (colMap['teacher email'] !== undefined ? colMap['teacher email'] : 2);
+  var idxDate = colMap['date'] !== undefined ? colMap['date'] : 3;
   var idxPeriod = colMap['periods'] !== undefined ? colMap['periods'] : (colMap['period'] !== undefined ? colMap['period'] : 4);
-  var idxRoom = colMap['room'] !== undefined ? colMap['room'] : 6;
+  var idxReason = colMap['reason'] !== undefined ? colMap['reason'] : 5;
+  var idxDuration = colMap['duration'] !== undefined ? colMap['duration'] : (colMap['absence type'] !== undefined ? colMap['absence type'] : 6);
   var idxUrgency = colMap['urgency'] !== undefined ? colMap['urgency'] : 7;
-  var idxType = colMap['absence type'] !== undefined ? colMap['absence type'] : 8;
-  var idxReason = colMap['reason'] !== undefined ? colMap['reason'] : 9;
-  var idxNotes = colMap['notes'] !== undefined ? colMap['notes'] : 10;
-  var idxStatus = colMap['status'] !== undefined ? colMap['status'] : 11;
-  var idxSub = colMap['assigned sub'] !== undefined ? colMap['assigned sub'] : 12;
+  var idxNotes = colMap['instructions'] !== undefined ? colMap['instructions'] : (colMap['notes'] !== undefined ? colMap['notes'] : 8);
+  var idxStatus = colMap['status'] !== undefined ? colMap['status'] : 19;
 
   for (i = 1; i < data.length; i++) {
      var row = data[i];
@@ -4289,8 +4378,13 @@ function fetchAbsenceRequestsForDate(ss, dateStr) {
      var reqDateStr = Utilities.formatDate(reqDateObj, Session.getScriptTimeZone(), "yyyy-MM-dd");
 
      if (reqDateStr === dateStr) {
-        var periodsRequested = String(row[idxPeriod]).split(",").map(function(p) { return p.trim(); });
+        var rowEmail = String(row[idxEmail] || "").trim();
+        var teacherName = colMap['teacher name'] !== undefined
+          ? String(row[colMap['teacher name']] || "").trim()
+          : (nameLookup[rowEmail.toLowerCase()] || rowEmail);
+        var periodsRequested = String(row[idxPeriod] || "").split(",").map(function(p) { return parsePeriod(p); });
         var allPeriods = ['1', '2', '3', '4', '5', '6', '7', '8', '0', '10'];
+        var rowStatus = String(row[idxStatus] || "Active").trim();
 
         for (var pIdx = 0; pIdx < allPeriods.length; pIdx++) {
            var p = allPeriods[pIdx];
@@ -4301,16 +4395,16 @@ function fetchAbsenceRequestsForDate(ss, dateStr) {
               requests.push({
                  id: String(row[idxId]),
                  timestamp: row[idxTimestamp] instanceof Date ? Utilities.formatDate(row[idxTimestamp], Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss") : String(row[idxTimestamp]),
-                 teacherName: String(row[idxName]),
-                 email: String(row[idxEmail]),
+                 teacherName: String(teacherName),
+                 email: rowEmail,
                  date: reqDateStr,
                  period: String(p),
-                 room: String(row[idxRoom] || ""),
+                 room: colMap['room'] !== undefined ? String(row[colMap['room']] || "") : "",
                  urgency: String(row[idxUrgency] || ""),
-                 type: String(row[idxType] || ""),
+                 type: String(row[idxDuration] || ""),
                  reason: String(row[idxReason] || ""),
                  notes: String(row[idxNotes] || ""),
-                 status: String(row[idxStatus]),
+                 status: rowStatus,
                  assignedSub: assignedSub
               });
            }
@@ -4328,8 +4422,17 @@ function batchAssignSubs(assignments, clientEmail) {
     var email = getActiveUserEmail(typeof clientEmail !== 'undefined' ? clientEmail : undefined);
     var user = getUserData(ss, email);
 
-    // Ensure permission
-    if (!user || (!user.permissions["Admin Dashboard"] && user.role !== 'admin' && user.role !== 'sub coordinator')) {
+    // Ensure permission using role and configured RolePermissions
+    var roleLower = user && user.role ? String(user.role).toLowerCase().trim() : "";
+    var settings = getSettings(ss);
+    var rolePermissionsStr = settings["RolePermissions"] || "{}";
+    var isAuthorized = user && (
+      roleLower === 'admin' ||
+      roleLower === 'sub coordinator' ||
+      (user.permissions && user.permissions["Admin Dashboard"] === true) ||
+      hasPermission(roleLower, "Admin Dashboard", rolePermissionsStr)
+    );
+    if (!isAuthorized) {
         return { success: false, error: "Insufficient permissions to assign substitutes." };
     }
 
@@ -4342,6 +4445,15 @@ function batchAssignSubs(assignments, clientEmail) {
     var rosterData = rosterSheet.getDataRange().getValues();
 
     var nameLookup = buildNameLookup(rosterData);
+    var canonicalSubLookup = {};
+    for (var r = 1; r < rosterData.length; r++) {
+       if (!rosterData[r]) continue;
+       var rName = String(rosterData[r][0] || "").trim();
+       var rEmail = String(rosterData[r][1] || "").trim().toLowerCase();
+       if (rName) {
+          canonicalSubLookup[rName.toLowerCase()] = { name: rName, email: rEmail };
+       }
+    }
 
     // Extract column indices
     var headers = data[0] || [];
@@ -4352,17 +4464,19 @@ function batchAssignSubs(assignments, clientEmail) {
 
     var idxId = colMap['id'] !== undefined ? colMap['id'] : 0;
     var idxPeriod = colMap['periods'] !== undefined ? colMap['periods'] : (colMap['period'] !== undefined ? colMap['period'] : 4);
-    var idxAssignedSub = colMap['assigned sub'] !== undefined ? colMap['assigned sub'] : 12;
-    var idxLastModifiedBy = colMap['last modified by'] !== undefined ? colMap['last modified by'] : 19;
+    var idxStatus = colMap['status'] !== undefined ? colMap['status'] : 19;
 
-    // Convert assignments to a map for easy lookup
+    // Convert assignments to a map keyed by request ID and normalized period
     var assignmentMap = {};
     for (i = 0; i < assignments.length; i++) {
         var a = assignments[i];
-        if (!assignmentMap[a.id]) {
-            assignmentMap[a.id] = {};
+        if (!a || !a.id || a.period === undefined) continue;
+        var reqKey = String(a.id);
+        var normPeriod = parsePeriod(a.period);
+        if (!assignmentMap[reqKey]) {
+            assignmentMap[reqKey] = {};
         }
-        assignmentMap[a.id][a.period] = a.subName;
+        assignmentMap[reqKey][normPeriod] = a.subName;
     }
 
     var successCount = 0;
@@ -4376,51 +4490,56 @@ function batchAssignSubs(assignments, clientEmail) {
        if (!row || !row[idxId]) continue;
 
        var reqId = String(row[idxId]);
-       var reqPeriod = String(row[idxPeriod]);
+       if (!assignmentMap[reqId]) continue;
 
-       if (assignmentMap[reqId] && assignmentMap[reqId][reqPeriod] !== undefined) {
-           var subNameRaw = assignmentMap[reqId][reqPeriod];
-           var subName = subNameRaw;
+       var rowStatus = String(row[idxStatus] || "Active").trim();
+       if (rowStatus === "Canceled") continue;
 
-           // If 'No Sub Needed', bypass validation
-           var isNoSubNeeded = (String(subName).toLowerCase().trim() === "no sub needed");
+       var periodsRequested = String(row[idxPeriod] || "").split(",").map(function(p) { return parsePeriod(p); });
+       var periodsToAssign = assignmentMap[reqId];
 
-           // Clean name for validation (strip - Duty)
-           var cleanSubName = subName;
-           if (!isNoSubNeeded && cleanSubName) {
-              cleanSubName = cleanSubName.replace(/\s+-\s+.*$/, '').trim();
+       for (var targetPeriod in periodsToAssign) {
+          if (!Object.prototype.hasOwnProperty.call(periodsToAssign, targetPeriod)) continue;
 
-              // Validate sub name
-              var subEmail = null;
-              for (var emailKey in nameLookup) {
-                 if (nameLookup[emailKey].toLowerCase() === cleanSubName.toLowerCase()) {
-                    subEmail = emailKey;
-                    break;
-                 }
-              }
-              if (!subEmail) {
-                 errors.push("Invalid sub name: " + subName);
-                 continue; // skip this assignment
-              }
-           }
+          var subColIdx = getSubColumnIndex(targetPeriod); // 1-based column (10..19)
+          if (subColIdx === -1 || periodsRequested.indexOf(targetPeriod) === -1) {
+             errors.push("Period " + targetPeriod + " was not requested for absence " + reqId);
+             continue;
+          }
 
-           // Prepare update by modifying the in-memory array directly
-           data[i][idxAssignedSub] = subName;
-           data[i][idxLastModifiedBy] = user.name + " (" + new Date().toLocaleString() + ")";
-           hasChanges = true;
+          var subNameRaw = String(periodsToAssign[targetPeriod] || "").trim();
+          var isNoSubNeeded = (subNameRaw.toLowerCase() === "no sub needed");
+          var finalSubName = subNameRaw;
+          var subEmail = null;
 
-           if (!isNoSubNeeded && subName) {
-               // Prepare notification data
-               var details = getAbsenceDetailsLocal(row, reqPeriod, null, nameLookup);
-               if (details) {
-                   notifications.push({
-                      subEmail: subEmail,
-                      details: details
-                   });
-               }
-           }
+          if (isNoSubNeeded) {
+             finalSubName = "No Sub Needed";
+          } else if (subNameRaw !== "") {
+             var cleanSubName = subNameRaw.replace(/\s+-\s+.*$/, '').trim();
+             var matchedSub = canonicalSubLookup[cleanSubName.toLowerCase()];
+             if (!matchedSub) {
+                errors.push("Invalid sub name: " + subNameRaw);
+                continue;
+             }
+             finalSubName = matchedSub.name;
+             subEmail = matchedSub.email;
+          }
 
-           successCount++;
+          // Update only the specific period's substitute column (0-based index is subColIdx - 1)
+          data[i][subColIdx - 1] = finalSubName;
+          hasChanges = true;
+
+          if (!isNoSubNeeded && finalSubName && subEmail) {
+             var details = getAbsenceDetailsLocal(row, targetPeriod, null, nameLookup);
+             if (details) {
+                notifications.push({
+                   subEmail: subEmail,
+                   details: details
+                });
+             }
+          }
+
+          successCount++;
        }
     }
 
