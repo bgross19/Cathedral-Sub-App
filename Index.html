@@ -4522,8 +4522,8 @@ const data = payload.userData;
             let valB = b[adminSortCol] || '';
 
             if (adminSortCol === 'period') {
-               valA = parseInt(valA) || 0;
-               valB = parseInt(valB) || 0;
+               valA = String(valA).toLowerCase() === 'advisory' ? 1.5 : (parseInt(valA) || 0);
+               valB = String(valB).toLowerCase() === 'advisory' ? 1.5 : (parseInt(valB) || 0);
             } else {
                valA = String(valA).toLowerCase();
                valB = String(valB).toLowerCase();
@@ -6533,7 +6533,9 @@ const data = payload.userData;
                         if (dateA.getTime() !== dateB.getTime()) {
                             return dateA - dateB;
                         }
-                        return parseInt(a.period) - parseInt(b.period);
+                        const pA = String(a.period).toLowerCase() === 'advisory' ? 1.5 : (parseInt(a.period) || 0);
+                        const pB = String(b.period).toLowerCase() === 'advisory' ? 1.5 : (parseInt(b.period) || 0);
+                        return pA - pB;
                     });
 
                     resultList.push({
