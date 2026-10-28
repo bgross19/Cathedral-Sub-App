@@ -766,6 +766,22 @@ function runTests() {
       if (origSession !== undefined) global.Session = origSession;
       if (origCacheService !== undefined) global.CacheService = origCacheService;
     });
+
+    it("include helper returns HTML partial content from HtmlService", function() {
+      var origHtmlService = typeof HtmlService !== 'undefined' ? HtmlService : undefined;
+      global.HtmlService = {
+        createHtmlOutputFromFile: function(name) {
+          return {
+            getContent: function() { return "<!-- Partial: " + name + " -->"; }
+          };
+        }
+      };
+
+      var result = include("JS_Core");
+      assert(result === "<!-- Partial: JS_Core -->", "Expected include() to return partial content for JS_Core");
+
+      if (origHtmlService !== undefined) global.HtmlService = origHtmlService;
+    });
   });
 
   // Teardown

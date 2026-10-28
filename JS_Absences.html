@@ -1,0 +1,2048 @@
+<!-- ====================================================================== -->
+<!-- JS_ABSENCES.HTML — Absence Requests, Sub Duties, Calendars & Feedback  -->
+<!-- ====================================================================== -->
+<script>
+      function toggleSubAvailabilityOnBehalfModal(show) {
+        const modal = document.getElementById('subAvailabilityOnBehalfModal');
+        const body = document.querySelector('body');
+
+        if (show) {
+            modal.classList.remove('opacity-0');
+            modal.classList.remove('pointer-events-none');
+            body.classList.add('overflow-hidden');
+
+            // Reset state
+            document.getElementById('onBehalfSub').value = "";
+            document.getElementById('onBehalfSubCalendarSection').classList.add('hidden');
+            document.getElementById('onBehalfSubLoading').classList.add('hidden');
+            onBehalfSubAvailabilityData = {};
+
+            // Set calendar month to current
+            currentOnBehalfSubAvailabilityMonth = new Date();
+            currentOnBehalfSubAvailabilityMonth.setDate(1);
+        } else {
+            modal.classList.add('opacity-0');
+            modal.classList.add('pointer-events-none');
+            body.classList.remove('overflow-hidden');
+        }
+      }
+
+      function toggleModal(isEdit = false, absId = null, isOnBehalf = false) {
+        const body = document.querySelector('body');
+        const modal = document.querySelector('#modal');
+        const overlay = document.querySelector('#genericModalOverlay');
+
+        if (modal.classList.contains('opacity-0')) {
+          // Opening
+          modal.classList.remove('opacity-0');
+          modal.classList.remove('pointer-events-none');
+          overlay.classList.remove('opacity-0');
+          overlay.classList.remove('pointer-events-none');
+          body.classList.add('overflow-hidden');
+
+          if (!isEdit) {
+             if(window.absDatePicker) {
+                 window.absDatePicker.set("mode", "multiple");
+                 window.absDatePicker.clear();
+             }
+             document.getElementById("singleDatePeriodsBlock").classList.remove("hidden");
+             document.getElementById("multiDatePeriodsContainer").classList.add("hidden");
+             document.getElementById("multiDatePeriodsContainer").innerHTML = "";
+             document.getElementById('requestModalTitle').innerText = isOnBehalf ? "Request Sub for Teacher" : "Request Sub";
+             document.getElementById('absenceForm').reset();
+             document.getElementById('editAbsenceId').value = "";
+             document.getElementById('submitBtn').innerText = "Submit Request";
+             setUrgency('Standard');
+             checkSpecialReason();
+             document.getElementById('adminDeleteBtn').classList.add('hidden');
+
+             // Uncheck all periods
+             document.querySelectorAll('.period-cb').forEach(cb => cb.checked = false);
+
+             if (isOnBehalf) {
+               document.getElementById('onBehalfSection').classList.remove('hidden');
+               document.getElementById('onBehalfTeacher').required = true;
+             } else {
+               document.getElementById('onBehalfSection').classList.add('hidden');
+               document.getElementById('onBehalfTeacher').required = false;
+               document.getElementById('onBehalfTeacher').value = "";
+             }
+          } else {
+             if(window.absDatePicker) {
+                 window.absDatePicker.set("mode", "single");
+             }
+             document.getElementById("singleDatePeriodsBlock").classList.remove("hidden");
+             document.getElementById("multiDatePeriodsContainer").classList.add("hidden");
+             document.getElementById("multiDatePeriodsContainer").innerHTML = "";
+             document.getElementById('onBehalfSection').classList.add('hidden');
+             document.getElementById('onBehalfTeacher').required = false;
+             document.getElementById('onBehalfTeacher').value = "";
+          }
+          // Delay slightly to let inputs initialize if needed
+          setTimeout(captureModalState, 50);
+        } else {
+          // Closing
+          modal.classList.add('opacity-0');
+          modal.classList.add('pointer-events-none');
+          overlay.classList.add('opacity-0');
+          overlay.classList.add('pointer-events-none');
+          body.classList.remove('overflow-hidden');
+        }
+      }
+
+      function handleAbsDateChangeMulti(selectedDates) {
+          const singleBlock = document.getElementById("singleDatePeriodsBlock");
+          const multiContainer = document.getElementById("multiDatePeriodsContainer");
+          const maxDays = parseInt(document.getElementById("settingsMaxMultiDays")?.value || "5", 10);
+
+          if (selectedDates.length > maxDays) {
+              showToast("Maximum of " + maxDays + " days can be selected at once.", "warning");
+              window.absDatePicker.setDate(selectedDates.slice(0, maxDays));
+              return;
+          }
+
+          if (selectedDates.length <= 1) {
+              singleBlock.classList.remove("hidden");
+              multiContainer.classList.add("hidden");
+              multiContainer.innerHTML = "";
+              if (selectedDates.length === 1) {
+                  const dateStr = window.absDatePicker.formatDate(selectedDates[0], "Y-m-d");
+                  updatePeriodsForSingleDate(dateStr, document.getElementById("absDuration").value);
+              } else {
+                  document.getElementById("dayColorBadge").classList.add("hidden");
+              }
+              return;
+          }
+
+          // Multiple dates selected
+          singleBlock.classList.add("hidden");
+          multiContainer.classList.remove("hidden");
+          multiContainer.innerHTML = "";
+
+          const duration = document.getElementById("absDuration").value;
+
+          selectedDates.sort((a,b) => a - b).forEach(date => {
+              const dateStr = window.absDatePicker.formatDate(date, "Y-m-d");
+              const blockId = "multi_periods_" + dateStr;
+
+              // Create a block for each date
+              const block = document.createElement("div");
+              block.className = "border rounded-lg p-3 bg-gray-50";
+              block.innerHTML = `
+                  <div class="font-bold text-sm mb-2 flex justify-between">
+                     <span>${date.toLocaleDateString("en-US", {weekday: "short", month: "short", day: "numeric"})}</span>
+                     <span id="badge_${dateStr}" class="text-xs px-2 py-1 rounded border"></span>
+                  </div>
+                  <div class="grid grid-cols-5 gap-2" id="${blockId}">
+                    <label class="flex items-center gap-2 p-1 border rounded cursor-pointer hover:bg-white bg-white text-sm"><input type="checkbox" value="1" class="multi-period-cb h-3 w-3"> 1</label>
+                    <label class="flex items-center gap-2 p-1 border rounded cursor-pointer hover:bg-white bg-white text-sm"><input type="checkbox" value="2" class="multi-period-cb h-3 w-3"> 2</label>
+                    <label class="flex items-center gap-2 p-1 border rounded cursor-pointer hover:bg-white bg-white text-sm"><input type="checkbox" value="3" class="multi-period-cb h-3 w-3"> 3</label>
+                    <label class="flex items-center gap-2 p-1 border rounded cursor-pointer hover:bg-white bg-white text-sm"><input type="checkbox" value="4" class="multi-period-cb h-3 w-3"> 4</label>
+                    <label class="flex items-center gap-2 p-1 border rounded cursor-pointer hover:bg-white bg-white text-sm"><input type="checkbox" value="5" class="multi-period-cb h-3 w-3"> 5</label>
+                    <label class="flex items-center gap-2 p-1 border rounded cursor-pointer hover:bg-white bg-white text-sm"><input type="checkbox" value="6" class="multi-period-cb h-3 w-3"> 6</label>
+                    <label class="flex items-center gap-2 p-1 border rounded cursor-pointer hover:bg-white bg-white text-sm"><input type="checkbox" value="7" class="multi-period-cb h-3 w-3"> 7</label>
+                    <label class="flex items-center gap-2 p-1 border rounded cursor-pointer hover:bg-white bg-white text-sm"><input type="checkbox" value="8" class="multi-period-cb h-3 w-3"> 8</label>
+                    <label class="flex items-center gap-2 p-1 border rounded cursor-pointer hover:bg-white bg-white text-sm"><input type="checkbox" value="0" class="multi-period-cb h-3 w-3"> 0</label>
+                    <label class="flex items-center gap-2 p-1 border rounded cursor-pointer hover:bg-white bg-white text-sm"><input type="checkbox" value="10" class="multi-period-cb h-3 w-3"> Adv</label>
+                  </div>
+              `;
+              multiContainer.appendChild(block);
+              updatePeriodsForMultiDateBlock(dateStr, duration, blockId, "badge_" + dateStr);
+          });
+      }
+
+      function handleOnBehalfTeacherChange() {
+          if (window.absDatePicker && window.absDatePicker.selectedDates.length > 0) {
+              // It's multi-date or single date
+              if (window.absDatePicker.config.mode === 'multiple' && window.absDatePicker.selectedDates.length > 1) {
+                  handleAbsDateChangeMulti(window.absDatePicker.selectedDates);
+              } else {
+                  const dateStr = document.getElementById('absDate').value;
+                  const duration = document.getElementById('absDuration').value;
+                  updatePeriodsForSingleDate(dateStr, duration);
+              }
+          } else {
+              const dateStr = document.getElementById('absDate').value;
+              const duration = document.getElementById('absDuration').value;
+              updatePeriodsForSingleDate(dateStr, duration);
+          }
+      }
+      function updatePeriodsForSingleDate(dateStr, duration) {
+          if (!dateStr) {
+              document.getElementById("dayColorBadge").classList.add("hidden");
+              return;
+          }
+
+          let color = userDateColors[dateStr] || 'Red';
+          const badge = document.getElementById('dayColorBadge');
+          badge.classList.remove('hidden');
+          badge.innerText = color + ' Day';
+          badge.className = "ml-2 text-xs font-bold px-2 py-1 rounded border " +
+                          (color === "Green" ? "bg-green-100 text-green-800 border-green-300" :
+                           color === "Blue" ? "bg-blue-100 text-blue-800 border-blue-300" :
+                           color === "Gold" ? "bg-yellow-100 text-yellow-800 border-yellow-300" : "bg-gray-100 text-gray-800 border-gray-300");
+
+          let activePeriods = [];
+
+          if (color === "Green") {
+              if (duration === "Full Day") activePeriods = [1, 2, 3, 4, 5, 6, 7, 8];
+              else if (duration === "Half Day (AM)") activePeriods = [1, 2, 3, 4];
+              else if (duration === "Half Day (PM)") activePeriods = [5, 6, 7, 8];
+          } else if (color === "Blue") {
+              if (duration === "Full Day") activePeriods = [1, 2, 3, 4];
+              else if (duration === "Half Day (AM)") activePeriods = [1, 2];
+              else if (duration === "Half Day (PM)") activePeriods = [3, 4];
+          } else if (color === "Gold") {
+              if (duration === "Full Day") activePeriods = [5, 6, 7, 8];
+              else if (duration === "Half Day (AM)") activePeriods = [5, 6];
+              else if (duration === "Half Day (PM)") activePeriods = [7, 8];
+          }
+
+          let finalPeriods = [];
+          let scheduleToUse = getActiveTeacherSchedule();
+          if (scheduleToUse && scheduleToUse.length > 0) {
+              activePeriods.forEach(ap => {
+                  // scheduleToUse may contain strings ('9' for 0, '10' for Advisory, or ints)
+                  // So we should convert everything to string to check properly, but activePeriods
+                  // contains ints from the color logic (e.g. [1,2,3,4]).
+                  if (scheduleToUse.includes(ap) || scheduleToUse.includes(String(ap))) {
+                      finalPeriods.push(String(ap));
+                  }
+              });
+          }
+
+          document.querySelectorAll("#singleDatePeriodsBlock .period-cb").forEach(cb => {
+              cb.checked = finalPeriods.includes(cb.value);
+          });
+      }
+
+      function updatePeriodsForMultiDateBlock(dateStr, duration, blockId, badgeId) {
+          if (!dateStr) return;
+          let color = userDateColors[dateStr] || 'Red';
+          const badge = document.getElementById(badgeId);
+          if(badge) {
+              badge.innerText = color + " Day";
+              badge.className = "text-xs px-2 py-1 rounded border " +
+                              (color === "Green" ? "bg-green-100 text-green-800 border-green-300" :
+                               color === "Blue" ? "bg-blue-100 text-blue-800 border-blue-300" :
+                               color === "Gold" ? "bg-yellow-100 text-yellow-800 border-yellow-300" : "bg-gray-100 text-gray-800 border-gray-300");
+          }
+
+          let activePeriods = [];
+
+          if (color === "Green") {
+              if (duration === "Full Day") activePeriods = [1, 2, 3, 4, 5, 6, 7, 8];
+              else if (duration === "Half Day (AM)") activePeriods = [1, 2, 3, 4];
+              else if (duration === "Half Day (PM)") activePeriods = [5, 6, 7, 8];
+          } else if (color === "Blue") {
+              if (duration === "Full Day") activePeriods = [1, 2, 3, 4];
+              else if (duration === "Half Day (AM)") activePeriods = [1, 2];
+              else if (duration === "Half Day (PM)") activePeriods = [3, 4];
+          } else if (color === "Gold") {
+              if (duration === "Full Day") activePeriods = [5, 6, 7, 8];
+              else if (duration === "Half Day (AM)") activePeriods = [5, 6];
+              else if (duration === "Half Day (PM)") activePeriods = [7, 8];
+          }
+
+          let finalPeriods = [];
+          let scheduleToUse = getActiveTeacherSchedule();
+          if (scheduleToUse && scheduleToUse.length > 0) {
+              activePeriods.forEach(ap => {
+                  // scheduleToUse may contain strings ('9' for 0, '10' for Advisory, or ints)
+                  // So we should convert everything to string to check properly, but activePeriods
+                  // contains ints from the color logic (e.g. [1,2,3,4]).
+                  if (scheduleToUse.includes(ap) || scheduleToUse.includes(String(ap))) {
+                      finalPeriods.push(String(ap));
+                  }
+              });
+          }
+
+          const blockContainer = document.getElementById(blockId);
+          if(blockContainer) {
+              blockContainer.querySelectorAll(".multi-period-cb").forEach(cb => {
+                  cb.checked = finalPeriods.includes(cb.value);
+              });
+          }
+      }
+
+
+      function checkSpecialReason() {
+        const select = document.getElementById('absReason');
+        const hrSection = document.getElementById('hrSection');
+        const principalSection = document.getElementById('principalSection');
+
+        let hrRequired = false;
+        let principalRequired = false;
+        if (select.options.length > 0 && select.selectedIndex > -1) {
+            let hrAttr = select.options[select.selectedIndex].getAttribute('data-hr-required');
+            let prAttr = select.options[select.selectedIndex].getAttribute('data-principal-required');
+            hrRequired = (String(hrAttr).trim().toLowerCase() === 'true');
+            principalRequired = (String(prAttr).trim().toLowerCase() === 'true');
+        }
+
+        if (hrRequired) {
+          hrSection.classList.remove('hidden');
+        } else {
+          hrSection.classList.add('hidden');
+        }
+
+        if (principalRequired) {
+          principalSection.classList.remove('hidden');
+        } else {
+          principalSection.classList.add('hidden');
+        }
+      }
+
+      function setUrgency(val) {
+        document.getElementById('urgencyValue').value = val;
+        const s = document.getElementById('btnStd');
+        const u = document.getElementById('btnUrg');
+        if (val === 'Standard') {
+          s.className = "flex-1 py-2 rounded-lg border-2 border-[#00843D] bg-[#00843D] text-white font-bold transition-colors";
+          u.className = "flex-1 py-2 rounded-lg border-2 border-gray-200 text-gray-500 font-bold transition-colors";
+        } else {
+          u.className = "flex-1 py-2 rounded-lg border-2 border-red-600 bg-red-600 text-white font-bold transition-colors";
+          s.className = "flex-1 py-2 rounded-lg border-2 border-gray-200 text-gray-500 font-bold transition-colors";
+        }
+      }
+
+
+      function renderTodaysAbsencesGrid(records) {
+        const thead = document.getElementById('todaysAbsencesGridTableHeader');
+        const tbody = document.getElementById('todaysAbsencesGridTableBody');
+
+        if (!records || records.length === 0) {
+            thead.innerHTML = '<tr class="bg-gray-50 border-b border-gray-300 text-sm text-gray-700 uppercase"><th class="p-3 border border-gray-300 sticky left-0 z-20 bg-gray-50">Teacher Name</th></tr>';
+            tbody.innerHTML = '<tr><td class="p-8 text-center text-gray-400 italic border border-gray-300">No absences found for today.</td></tr>';
+            return;
+        }
+
+        // 1. Group records by teacher
+        const teacherMap = {};
+        const activePeriods = new Set();
+
+        records.forEach(req => {
+            if (!teacherMap[req.teacherName]) {
+                teacherMap[req.teacherName] = {
+                    name: req.teacherName,
+                    periods: {}
+                };
+            }
+
+            teacherMap[req.teacherName].periods[req.period] = {
+                assignedSub: req.assignedSub || null,
+                room: req.room || "N/A",
+                req: req
+            };
+            activePeriods.add(req.period.toString());
+        });
+
+        const hasPeriod1 = activePeriods.has('1');
+        const advisorySortValue = hasPeriod1 ? 1.5 : 5.5;
+
+        const sortedActivePeriods = Array.from(activePeriods).sort((a, b) => {
+            const valA = String(a) === '10' ? advisorySortValue : parseInt(a);
+            const valB = String(b) === '10' ? advisorySortValue : parseInt(b);
+            return valA - valB;
+        });
+
+        // 2. Build Header
+        let headerHtml = `<th class="p-3 border border-gray-300 min-w-[200px] sticky left-0 z-20 bg-gray-50 shadow-[1px_0_0_0_#d1d5db]">Teacher Name</th>`;
+        sortedActivePeriods.forEach(p => {
+            if (String(p) === '10') {
+                headerHtml += `<th class="p-3 border border-gray-300 text-center w-64">Advisory</th>`;
+            } else {
+                headerHtml += `<th class="p-3 border border-gray-300 text-center w-64">${formatPeriodLabel(p)}</th>`;
+            }
+        });
+        thead.innerHTML = headerHtml;
+
+        // 3. Build Body
+        let html = '';
+        const teachers = Object.values(teacherMap).sort((a, b) => a.name.localeCompare(b.name));
+
+        teachers.forEach(t => {
+            html += `<tr class="hover:bg-gray-50 transition-colors group">`;
+            html += `<td class="p-3 text-sm text-gray-800 font-bold border border-gray-300 sticky left-0 z-10 bg-white group-hover:bg-gray-50 shadow-[1px_0_0_0_#d1d5db]">${escapeHtml(t.name)}</td>`;
+
+            sortedActivePeriods.forEach(p => {
+                const pData = t.periods[p];
+                if (pData) {
+                    const req = pData.req;
+                    const assignId = 'btn_assign_todays_' + req.id + '_' + req.period;
+                    const quickCoverLink = req.subPlanUrl || '#';
+
+                    if (pData.assignedSub && pData.assignedSub.trim() !== '' && pData.assignedSub !== 'No Sub Needed') {
+                        html += `<td class="p-3 text-xs text-center border border-gray-300 bg-green-50 align-top">
+                                    <div class="font-bold text-[#00843D]">${escapeHtml(pData.assignedSub)}</div>
+                                    <div class="text-gray-600 mt-1">${escapeHtml(pData.room)}</div>
+                                 </td>`;
+                    } else if (pData.assignedSub === 'No Sub Needed') {
+                        html += `<td class="p-3 text-xs text-center border border-gray-300 bg-gray-100 align-top">
+                                    <div class="font-bold text-gray-600">No Sub Needed</div>
+                                    <div class="text-gray-500 mt-1">${escapeHtml(pData.room)}</div>
+                                 </td>`;
+                    } else {
+                        html += `<td class="p-3 text-xs text-center border border-gray-300 bg-yellow-50 align-top"
+                                     onclick="document.getElementById('${assignId}').click()" class="cursor-pointer">
+                                    <div class="font-bold text-yellow-800 cursor-pointer">Unassigned</div>
+                                    <div class="text-gray-600 mt-1 cursor-pointer">${escapeHtml(pData.room)}</div>
+                                    <div class="mt-2 text-center" onclick="event.stopPropagation()">
+                                        <button id="${escapeHtml(assignId)}" onclick="handleSignMeUp('${escapeJs(req.id)}', '${escapeJs(req.period)}', '${escapeJs(assignId)}', '${escapeJs(req.teacherName)}', '${escapeJs(req.course)}')"  class="bg-[#00843D] hover:bg-green-700 text-white font-bold py-1 px-3 rounded text-xs transition-colors shadow-sm">
+                                            Sign Me Up
+                                        </button>
+                                    </div>
+                                 </td>`;
+                    }
+                } else {
+                    html += `<td class="p-3 text-xs text-center border border-gray-300 bg-gray-200">
+                                <div class="w-full h-[2px] bg-[#9ca3af] my-[10px]"></div>
+                             </td>`;
+                }
+            });
+            html += `</tr>`;
+        });
+
+        tbody.innerHTML = html;
+      }
+
+      let todaysAbsencesData = [];
+
+      function renderTodaysAbsences(requests) {
+            const container = document.getElementById('todaysAbsences');
+            const gridContainer = document.getElementById('todaysAbsencesGridContainer');
+
+            if (!requests || !Array.isArray(requests) || requests.length === 0) {
+              container.innerHTML = 'There are no absences available for today.';
+              container.classList.add('text-gray-400');
+              gridContainer.classList.add('hidden');
+              return;
+            }
+
+            // Show both containers
+            gridContainer.classList.remove('hidden');
+
+            renderTodaysAbsencesGrid(requests);
+
+            // Re-render the original list as well
+            let html = '<div class="divide-y divide-gray-200 text-left">';
+            todaysAbsencesData = requests;
+
+            requests.forEach((req, index) => {
+              let assignId = `todays-assign-${req.id}-${req.period}`;
+              let roomPillClass = req.room === "No Class Assigned" ? "bg-gray-100 text-gray-600 border-gray-200" : "bg-blue-100 text-blue-800 border-blue-200";
+              let coursePillClass = req.course === "No Class Assigned" ? "bg-gray-100 text-gray-600 border-gray-200" : "bg-purple-100 text-purple-800 border-purple-200";
+
+              html += `
+                <div class="p-4 hover:bg-orange-50 transition-colors flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white gap-4">
+                  <div>
+                    <p class="font-bold text-[#002147]">${escapeHtml(req.date)}</p>
+                    <p class="text-sm text-gray-600 font-semibold">${escapeHtml(req.teacherName)}</p>
+
+                    <div class="mt-2 flex flex-col sm:flex-row flex-wrap gap-2 items-start sm:items-center">
+                       <span class="inline-block bg-orange-100 text-orange-800 text-xs font-bold px-3 py-1 rounded-full border border-orange-200">${formatPeriodLabel(req.period)}</span>
+                       <span class="inline-block ${roomPillClass} text-xs font-bold px-3 py-1 rounded-full border">Room: ${escapeHtml(req.room)}</span>
+                       <span class="inline-block ${coursePillClass} text-xs font-bold px-3 py-1 rounded-full border truncate max-w-xs">Course: ${escapeHtml(req.course)}</span>
+                    </div>
+                  </div>
+                  <div class="flex items-center gap-2 w-full sm:w-auto" onclick="event.stopPropagation()">
+                    ${(!req.assignedSub || req.assignedSub.trim() === '') ? `
+                        <button id="${escapeHtml(assignId)}" onclick="handleSignMeUp('${escapeJs(req.id)}', '${escapeJs(req.period)}', '${escapeJs(assignId)}', '${escapeJs(req.teacherName)}', '${escapeJs(req.course)}')"  class="bg-[#00843D] hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg text-sm transition-colors shadow-sm">
+                          Sign Me Up
+                        </button>
+                    ` : (req.assignedSub === 'No Sub Needed' ? `
+                        <div class="bg-gray-100 border-2 border-gray-200 text-gray-500 font-bold py-2 px-4 rounded-lg text-sm flex items-center justify-center gap-2 w-full sm:w-auto cursor-default">
+                          <span>No Sub Needed</span>
+                        </div>
+                    ` : `
+                        <div class="bg-green-50 border-2 border-green-200 text-green-800 font-bold py-2 px-4 rounded-lg text-sm flex items-center justify-center gap-2 w-full sm:w-auto cursor-default">
+                          <span>✓ Filled by ${escapeHtml(req.assignedSub)}</span>
+                        </div>
+                    `)}
+                  </div>
+                </div>
+              `;
+            });
+            html += '</div>';
+
+            container.innerHTML = html;
+            container.classList.remove('text-gray-400');
+      }
+
+      function loadTodaysAbsences() {
+        google.script.run
+          .withSuccessHandler(res => { if (res.todaysAbsences) renderTodaysAbsences(res.todaysAbsences); })
+          .withFailureHandler(err => {
+            document.getElementById('todaysAbsences').innerHTML = `<div class="text-red-600 font-bold">Failed to load absences: ${escapeHtml(err.message)}</div>`;
+          })
+          .refreshData(['todaysAbsences'], window.activeUserEmail);
+      }
+
+      function handleSignMeUp(absenceId, period, btnId, teacherName, courseName) {
+        let confirmMsg = "Are you sure you want to cover this period?";
+        if (teacherName && courseName) {
+            confirmMsg = `Are you sure you want to cover ${formatPeriodLabel(period)}, ${escapeHtml(courseName)}, for ${escapeHtml(teacherName)}?`;
+        }
+
+        showConfirm(confirmMsg, () => {
+        const btn = document.getElementById(btnId);
+        const originalText = btn.innerText;
+        btn.disabled = true;
+        btn.innerText = "Assigning...";
+
+        // Get user name loaded in initApp
+        const subName = document.getElementById('userName').innerText;
+
+        if (!subName || subName === "Loading...") {
+          showToast("Error: User name not fully loaded yet. Please try again in a moment.", "error");
+          btn.disabled = false;
+          btn.innerText = originalText;
+          return;
+        }
+
+        google.script.run
+          .withSuccessHandler(result => {
+            if (result && result.success) {
+              showToast("Successfully signed up for period " + period + "!", "success");
+              // Refresh all relevant sections
+              EventBus.publish('refresh_todaysAbsences');
+              EventBus.publish('refresh_mySubDuties');
+
+              if (!document.getElementById('adminSection').classList.contains('hidden')) {
+                 EventBus.publish('refresh_quickCover');
+                 EventBus.publish('refresh_adminData');
+              }
+            } else {
+              showToast(result ? result.error : "Unknown error", 'error');
+              btn.disabled = false;
+              btn.innerText = originalText;
+
+              if (result && result.error && (result.error.includes('filled by someone else') || result.error.includes('server is currently busy'))) {
+                  loadTodaysAbsences();
+              }
+            }
+          })
+          .withFailureHandler(err => {
+            if (err.message && err.message.includes('AVAILABILITY_ERROR')) {
+              let parsedErr;
+              try { parsedErr = JSON.parse(err.message.replace(/^Error: /, '')); } catch(e) { parsedErr = {message: 'Sub not listed as available, proceed?'}; }
+              showConfirm(parsedErr.message || 'Sub not listed as available, proceed?', () => {
+                 btn.innerText = 'Forcing...';
+                 google.script.run
+                    .withSuccessHandler(result => {
+                       if (result && result.success) {
+                          showToast("Successfully signed up for " + formatPeriodLabel(period) + "!", "success");
+                          EventBus.publish('refresh_todaysAbsences');
+                          EventBus.publish('refresh_mySubDuties');
+                          if (!document.getElementById('adminSection').classList.contains('hidden')) {
+                             EventBus.publish('refresh_quickCover');
+                             EventBus.publish('refresh_adminData');
+                          }
+                       } else {
+                          showToast(result ? result.error : "Unknown error", 'error');
+                          btn.disabled = false;
+                          btn.innerText = originalText;
+                       }
+                    })
+                    .withFailureHandler(forceErr => {
+                       showToast("Connection error: " + forceErr.message, 'error');
+                       btn.disabled = false;
+                       btn.innerText = originalText;
+                    })
+                    .assignSubToPeriod(absenceId, period, subName, true, window.activeUserEmail);
+              }, () => {
+                 btn.disabled = false;
+                 btn.innerText = originalText;
+              });
+            } else {
+              showToast("Connection error: " + err.message, 'error');
+              btn.disabled = false;
+              btn.innerText = originalText;
+            }
+          })
+          .assignSubToPeriod(absenceId, period, subName, false, window.activeUserEmail);
+        });
+      }
+
+      function assignSubFromAtAGlance(absenceId, period, inputId, btnId) {
+        const input = document.getElementById(inputId);
+        const btn = document.getElementById(btnId);
+        if (!input || !btn) return;
+
+        let subName = input.value.trim();
+
+        if (subName) {
+           subName = subName.replace(/\s+-\s+.*$/, '');
+        }
+
+        // Optional validation like in assignSubFromAdmin
+        // Normalize "No Sub Needed"
+        if (subName && subName.toLowerCase() === "no sub needed") {
+            subName = "No Sub Needed";
+        }
+
+        if (subName && subName !== "No Sub Needed" && !staffList.some(s => s.name === subName)) {
+            const isConfirmed = confirm('The name "' + subName + '" is not in the staff roster. Do you still want to assign them?');
+            if (!isConfirmed) return;
+        }
+
+        const originalText = btn.innerText;
+        btn.disabled = true;
+        btn.innerText = "Saving...";
+
+        google.script.run
+          .withSuccessHandler(result => {
+            if (result && result.success) {
+              if (subName) {
+                 showToast('Sub assigned successfully!', 'success');
+              } else {
+                 showToast('Sub Removed Successfully', 'success');
+              }
+              updateLocalAdminData(absenceId, period, subName);
+            } else {
+              showToast(result ? result.error : "Unknown error", 'error');
+              btn.disabled = false;
+              btn.innerText = originalText;
+            }
+          })
+          .withFailureHandler(err => {
+            if (err.message && err.message.includes('AVAILABILITY_ERROR')) {
+              let parsedErr;
+              try { parsedErr = JSON.parse(err.message.replace(/^Error: /, '')); } catch(e) { parsedErr = {message: 'Sub not listed as available, proceed?'}; }
+              showConfirm(parsedErr.message || 'Sub not listed as available, proceed?', () => {
+                 btn.innerText = 'Forcing...';
+                 google.script.run
+                    .withSuccessHandler(result => {
+                       if (result && result.success) {
+                          if (subName) {
+                             showToast('Sub assigned successfully!', 'success');
+                          } else {
+                             showToast('Sub Removed Successfully', 'success');
+                          }
+                          updateLocalAdminData(absenceId, period, subName);
+                       }
+                    })
+                    .withFailureHandler(forceErr => {
+                       showToast("Error: " + forceErr.message, 'error');
+                       btn.disabled = false;
+                       btn.innerText = originalText;
+                    })
+                    .assignSubToPeriod(absenceId, period, subName, true, window.activeUserEmail);
+              }, () => {
+                 btn.disabled = false;
+                 btn.innerText = originalText;
+              });
+            } else {
+              showToast("Error: " + err.message, 'error');
+              btn.disabled = false;
+              btn.innerText = originalText;
+            }
+          })
+          .assignSubToPeriod(absenceId, period, subName, false, window.activeUserEmail);
+      }
+
+      function updateDynamicStaffList(dateStr, period) {
+          const datalist = document.getElementById('dynamicStaffDataList');
+          if (!datalist) return;
+
+          // Find all subs currently busy at this exact date and period
+          const busySubs = new Set();
+          adminDataRaw.forEach(req => {
+              if (req.formDateString === dateStr && String(req.period) === String(period)) {
+                  if (req.assignedSub) {
+                      busySubs.add(req.assignedSub.trim().toLowerCase());
+                  }
+              }
+          });
+
+          const p = parseInt(period);
+          let dayColor = globalDateColors[dateStr] || "Green";
+
+          // Build HTML for subs who are NOT busy
+          let optionsHtml = '';
+          staffList.forEach(staff => {
+              if (busySubs.has(staff.name.trim().toLowerCase())) return;
+
+              // Filter Substitutes by availability for this date
+              if (staff.role === 'substitute') {
+                  const avail = staff.availability ? staff.availability[dateStr] : null;
+                  if (avail !== "Available" && avail !== "AM Only" && avail !== "PM Only") {
+                      return; // Skip this substitute, they are not available
+                  }
+
+                  if (avail === 'AM Only') {
+                      if (dayColor === 'Green' && p > 4) return;
+                      if (dayColor === 'Blue' && p > 2) return;
+                      if (dayColor === 'Gold' && p > 6) return;
+                  }
+                  if (avail === 'PM Only') {
+                      if (dayColor === 'Green' && p <= 4) return;
+                      if (dayColor === 'Blue' && p <= 2) return;
+                      if (dayColor === 'Gold' && p <= 6) return;
+                  }
+              }
+
+              let suggestionText = staff.name;
+              if (staff.role === 'substitute') {
+                  suggestionText += " - s";
+              }
+              if (staff.duty) {
+                  suggestionText += " - " + staff.duty;
+              }
+              optionsHtml += `<option value="${escapeHtml(suggestionText)}"></option>`;
+          });
+
+          datalist.innerHTML = optionsHtml;
+      }
+
+      function renderQuickCover(unfilled) {
+            const container = document.getElementById('quickCoverContainer');
+            
+            if (!unfilled || !Array.isArray(unfilled) || unfilled.length === 0) {
+              container.innerHTML = '<div class="p-8 text-center text-gray-500 font-medium flex flex-col items-center gap-2"><span class="text-3xl">🎉</span> All classes are covered for the next 2 days!</div>';
+              return;
+            }
+
+            let html = '<div class="divide-y divide-gray-200">';
+
+            currentUnfilledData = unfilled;
+            unfilled.forEach((req, index) => {
+              let assignId = `assign-${req.id}-${req.period}`;
+
+              let roomPillClass = req.room === "No Class Assigned" ? "bg-gray-100 text-gray-600 border-gray-200" : "bg-blue-100 text-blue-800 border-blue-200";
+              let coursePillClass = req.course === "No Class Assigned" ? "bg-gray-100 text-gray-600 border-gray-200" : "bg-purple-100 text-purple-800 border-purple-200";
+
+              html += `
+                <div onclick="openDetailsModal(${index})" class="p-4 hover:bg-orange-50 transition-colors flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white gap-4 cursor-pointer">
+                  <div>
+                    <p class="font-bold text-[#002147]">${escapeHtml(req.date)}</p>
+                    <p class="text-sm text-gray-600 font-semibold">${escapeHtml(req.teacherName)}</p>
+
+                    <div class="mt-2 flex flex-col sm:flex-row flex-wrap gap-2 items-start sm:items-center">
+                       <span class="inline-block bg-orange-100 text-orange-800 text-xs font-bold px-3 py-1 rounded-full border border-orange-200">${formatPeriodLabel(req.period)}</span>
+                       <span class="inline-block ${roomPillClass} text-xs font-bold px-3 py-1 rounded-full border">Room: ${escapeHtml(req.room)}</span>
+                       <span class="inline-block ${coursePillClass} text-xs font-bold px-3 py-1 rounded-full border truncate max-w-xs">Course: ${escapeHtml(req.course)}</span>
+                    </div>
+                  </div>
+                  <div class="flex items-center gap-2 w-full sm:w-auto" onclick="event.stopPropagation()">
+                    <input type="text" id="${escapeHtml(assignId)}" list="dynamicStaffDataList" onfocus="updateDynamicStaffList('${escapeJs(req.formDateString)}', '${escapeJs(req.period)}')" placeholder="Enter sub name..." class="flex-1 sm:w-48 p-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#00843D] bg-white">
+                    <button onclick="handleAssign('${escapeJs(req.id)}', '${escapeJs(req.period)}', '${escapeJs(assignId)}')" class="bg-[#00843D] hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg text-sm transition-colors shadow-sm">
+                      Assign
+                    </button>
+                  </div>
+                </div>
+              `;
+            });
+            html += '</div>';
+            
+            container.innerHTML = html;
+          }
+
+      function getNextSchoolDays(numDays) {
+        const days = [];
+        let current = new Date();
+        current.setHours(12, 0, 0, 0); // Noon to avoid timezone issues
+
+        while (days.length < numDays) {
+            const dayOfWeek = current.getDay();
+            if (dayOfWeek !== 0 && dayOfWeek !== 6) { // Skip Sunday (0) and Saturday (6)
+                const yyyy = current.getFullYear();
+                const mm = String(current.getMonth() + 1).padStart(2, '0');
+                const dd = String(current.getDate()).padStart(2, '0');
+                days.push({
+                    dateStr: `${yyyy}-${mm}-${dd}`,
+                    dateObj: new Date(current.getTime())
+                });
+            }
+            current.setDate(current.getDate() + 1);
+        }
+        return days;
+      }
+
+      function renderSubAvailabilityDashboard() {
+        const container = document.getElementById('subAvailabilityContainer');
+        if (!staffList || staffList.length === 0) {
+            container.innerHTML = '<div class="text-center text-gray-400 italic">No substitute data found.</div>';
+            return;
+        }
+
+        const numDays = parseInt(window.appSettings["Sub Availability Window (Days)"] || "5", 10);
+        const headerEl = document.getElementById("headerSubAvailability").querySelector("h3 span:last-child");
+        if (headerEl) headerEl.innerText = "Sub Availability (Next " + numDays + " Days)";
+
+        const nextDays = getNextSchoolDays(numDays);
+
+        let html = '<div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">';
+
+        nextDays.forEach(dayInfo => {
+            const dateStr = dayInfo.dateStr;
+            const dateObj = dayInfo.dateObj;
+
+            // Format date for display (e.g., "Mon, Oct 16")
+            const displayDate = dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+
+            // Get day color
+            const color = globalDateColors[dateStr] || "Unknown";
+            let colorPill = '';
+            if (color.toLowerCase() === 'green') {
+                colorPill = '<span class="ml-2 inline-block bg-green-100 text-green-800 text-[10px] font-bold px-2 py-0.5 rounded border border-green-200 uppercase tracking-wider">Green</span>';
+            } else if (color.toLowerCase() === 'blue') {
+                colorPill = '<span class="ml-2 inline-block bg-blue-100 text-blue-800 text-[10px] font-bold px-2 py-0.5 rounded border border-blue-200 uppercase tracking-wider">Blue</span>';
+            } else if (color.toLowerCase() === 'gold') {
+                colorPill = '<span class="ml-2 inline-block bg-yellow-100 text-yellow-800 text-[10px] font-bold px-2 py-0.5 rounded border border-yellow-200 uppercase tracking-wider">Gold</span>';
+            } else {
+                colorPill = `<span class="ml-2 inline-block bg-gray-100 text-gray-800 text-[10px] font-bold px-2 py-0.5 rounded border border-gray-200 uppercase tracking-wider">${escapeHtml(color)}</span>`;
+            }
+
+            // Find subs available on this day
+            const availableAllDay = [];
+            const availableAM = [];
+            const availablePM = [];
+
+            staffList.forEach(staff => {
+                if (staff.role && staff.role.toLowerCase().includes('substitute')) {
+                    const status = staff.availability && staff.availability[dateStr];
+                    if (status === 'Available') {
+                        availableAllDay.push(staff.name);
+                    } else if (status === 'AM Only') {
+                        availableAM.push(staff.name);
+                    } else if (status === 'PM Only') {
+                        availablePM.push(staff.name);
+                    }
+                }
+            });
+
+            // Build card for the day
+            html += `
+                <div class="bg-gray-50 border border-gray-200 rounded-lg p-3 flex flex-col h-full">
+                    <div class="flex items-center justify-between border-b border-gray-200 pb-2 mb-2">
+                        <h4 class="font-bold text-[#002147] text-sm">${escapeHtml(displayDate)}</h4>
+                        ${colorPill}
+                    </div>
+
+                    <div class="flex-grow space-y-3 overflow-y-auto max-h-[300px]">
+                        <div>
+                            <h5 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">All Day (${availableAllDay.length})</h5>
+                            ${availableAllDay.length > 0 ?
+                                '<ul class="text-sm text-green-700 font-medium list-disc list-inside">' + availableAllDay.map(name => `<li>${escapeHtml(name)}</li>`).join('') + '</ul>' :
+                                '<div class="text-xs text-gray-400 italic">None</div>'}
+                        </div>
+                        <div>
+                            <h5 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">AM Only (${availableAM.length})</h5>
+                            ${availableAM.length > 0 ?
+                                '<ul class="text-sm text-blue-700 font-medium list-disc list-inside">' + availableAM.map(name => `<li>${escapeHtml(name)}</li>`).join('') + '</ul>' :
+                                '<div class="text-xs text-gray-400 italic">None</div>'}
+                        </div>
+                        <div>
+                            <h5 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">PM Only (${availablePM.length})</h5>
+                            ${availablePM.length > 0 ?
+                                '<ul class="text-sm text-orange-700 font-medium list-disc list-inside">' + availablePM.map(name => `<li>${escapeHtml(name)}</li>`).join('') + '</ul>' :
+                                '<div class="text-xs text-gray-400 italic">None</div>'}
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+
+        html += '</div>';
+        container.innerHTML = html;
+        container.classList.remove('p-6');
+        container.classList.add('p-4');
+      }
+
+      function openDetailsModal(index) {
+        const req = currentUnfilledData[index];
+        if (!req) return;
+
+        const assignId = `modal-assign-${req.id}-${req.period}`;
+
+        let html = `
+          <div class="bg-gray-50 p-4 rounded-xl border mb-4">
+             <div class="grid grid-cols-2 gap-4 text-sm">
+                <div><span class="font-bold text-gray-700">Teacher:</span> ${escapeHtml(req.teacherName)}</div>
+                <div><span class="font-bold text-gray-700">Email:</span> <a href="mailto:${escapeHtml(req.teacherEmail)}" class="text-blue-600 hover:underline">${escapeHtml(req.teacherEmail)}</a></div>
+                <div><span class="font-bold text-gray-700">Date:</span> ${escapeHtml(req.date)}</div>
+                <div><span class="font-bold text-gray-700">Period:</span> ${formatPeriodValue(req.period)}</div>
+                <div><span class="font-bold text-gray-700">Room:</span> ${escapeHtml(req.room)}</div>
+                <div><span class="font-bold text-gray-700">Course:</span> ${escapeHtml(req.course)}</div>
+             </div>
+          </div>
+
+          <div class="space-y-3">
+             <div>
+               <p class="font-bold text-sm text-gray-700">Absence Reason</p>
+               <p class="text-gray-600 bg-white p-3 border rounded-lg">${escapeHtml(req.reason) || 'N/A'}</p>
+             </div>
+             <div>
+               <p class="font-bold text-sm text-gray-700">Duration</p>
+               <p class="text-gray-600 bg-white p-3 border rounded-lg">${escapeHtml(req.duration) || 'N/A'}</p>
+             </div>
+             <div>
+               <p class="font-bold text-sm text-gray-700">Special Instructions</p>
+               <p class="text-gray-600 bg-white p-3 border rounded-lg">${escapeHtml(req.instructions) || 'None provided'}</p>
+             </div>
+             ${req.subPlanUrl ? `
+             <div>
+               <p class="font-bold text-sm text-gray-700">Sub Plan</p>
+               <p class="text-gray-600 bg-white p-3 border rounded-lg">
+                 <a href="${escapeHtml(req.subPlanUrl)}" target="_blank" class="text-blue-600 hover:underline">View Attachment</a>
+               </p>
+             </div>
+             ` : ''}
+          </div>
+
+          <div class="mt-6 border-t pt-4">
+             <p class="font-bold text-sm text-gray-700 mb-2">Assign Substitute</p>
+             <div class="flex items-center gap-2">
+                <input type="text" id="${escapeHtml(assignId)}" list="dynamicStaffDataList" onfocus="updateDynamicStaffList('${escapeJs(req.formDateString || req.date)}', '${escapeJs(req.period)}')" placeholder="Enter sub name..." class="flex-1 p-3 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#00843D] bg-white">
+                <button onclick="handleAssign('${escapeJs(req.id)}', '${escapeJs(req.period)}', '${escapeJs(assignId)}', true)" class="bg-[#00843D] hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg transition-colors shadow-sm">
+                  Assign
+                </button>
+                <button onclick="document.getElementById('${escapeJs(assignId)}').value='No Sub Needed'; handleAssign('${escapeJs(req.id)}', '${escapeJs(req.period)}', '${escapeJs(assignId)}', true)" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 px-6 rounded-lg transition-colors shadow-sm ml-2">
+                  No Sub Needed
+                </button>
+             </div>
+          </div>
+        `;
+
+        document.getElementById('detailsContent').innerHTML = html;
+
+        const body = document.querySelector('body');
+        const modal = document.querySelector('#detailsModal');
+        const overlay = document.querySelector('#genericModalOverlay');
+
+        modal.classList.remove('opacity-0');
+        modal.classList.remove('pointer-events-none');
+        overlay.classList.remove('opacity-0');
+        overlay.classList.remove('pointer-events-none');
+        body.classList.add('overflow-hidden');
+      }
+
+      function closeDetailsModal() {
+        const body = document.querySelector('body');
+        const modal = document.querySelector('#detailsModal');
+        const overlay = document.querySelector('#genericModalOverlay');
+
+        modal.classList.add('opacity-0');
+        modal.classList.add('pointer-events-none');
+        overlay.classList.add('opacity-0');
+        overlay.classList.add('pointer-events-none');
+        body.classList.remove('overflow-hidden');
+      }
+
+      function handleAssign(absenceId, period, selectElementId, isFromModal = false) {
+        const selectEl = document.getElementById(selectElementId);
+        let subName = selectEl.value;
+
+        // Strip out duty suffix if present: "Name - Duty" -> "Name"
+        if (subName) {
+           subName = subName.replace(/\s+-\s+.*$/, '');
+        }
+
+        // Normalize "No Sub Needed"
+        if (subName && subName.toLowerCase() === "no sub needed") {
+            subName = "No Sub Needed";
+        }
+
+        if (subName && subName !== "No Sub Needed" && !staffList.some(s => s.name === subName)) {
+          showToast("Please enter a valid staff name from the list, or leave it blank to clear.", 'error');
+          return;
+        }
+
+        const btn = selectEl.nextElementSibling;
+        const originalText = btn.innerText;
+        btn.disabled = true;
+        btn.innerText = "Saving...";
+
+        google.script.run
+          .withSuccessHandler(result => {
+            if (result && result.success) {
+              if (subName) {
+                 showToast('Sub assigned successfully!', 'success');
+              } else {
+                 showToast('Sub Removed Successfully', 'success');
+              }
+
+              if (isFromModal) {
+                 closeDetailsModal();
+              }
+              EventBus.publish('refresh_quickCover');
+              updateLocalAdminData(absenceId, period, subName);
+            } else {
+              showToast(result ? result.error : "Unknown error", 'error');
+              btn.disabled = false;
+              btn.innerText = originalText;
+
+              if (result && result.error && (result.error.includes('filled by someone else') || result.error.includes('server is currently busy'))) {
+                  loadTodaysAbsences();
+              }
+            }
+          })
+          .withFailureHandler(err => {
+            if (err.message && err.message.includes('AVAILABILITY_ERROR')) {
+              let parsedErr;
+              try { parsedErr = JSON.parse(err.message.replace(/^Error: /, '')); } catch(e) { parsedErr = {message: 'Sub not listed as available, proceed?'}; }
+              showConfirm(parsedErr.message || 'Sub not listed as available, proceed?', () => {
+                 btn.innerText = 'Forcing...';
+                 google.script.run
+                    .withSuccessHandler(result => {
+                       if (result && result.success) {
+                          if (subName) {
+                             showToast('Sub assigned successfully!', 'success');
+                          } else {
+                             showToast('Sub Removed Successfully', 'success');
+                          }
+                          if (isFromModal) {
+                             closeAllModals();
+                          }
+                          EventBus.publish('refresh_quickCover');
+                          updateLocalAdminData(absenceId, period, subName);
+                       }
+                    })
+                    .withFailureHandler(forceErr => {
+                       showToast("Connection error: " + forceErr.message, 'error');
+                       btn.disabled = false;
+                       btn.innerText = originalText;
+                    })
+                    .assignSubToPeriod(absenceId, period, subName, true, window.activeUserEmail);
+              }, () => {
+                 btn.disabled = false;
+                 btn.innerText = originalText;
+              });
+            } else {
+              showToast("Connection error: " + err.message, 'error');
+              btn.disabled = false;
+              btn.innerText = originalText;
+            }
+          })
+          .assignSubToPeriod(absenceId, period, subName, false, window.activeUserEmail);
+      }
+
+      function renderMySubDuties(duties) {
+            mySubDutiesData = duties;
+            const container = document.getElementById('mySubDuties');
+
+            if (!duties || !Array.isArray(duties) || duties.length === 0) {
+              container.innerHTML = 'You have no assigned sub-duties over the next week.';
+              return;
+            }
+
+            let html = '<div class="divide-y divide-gray-200 text-left">';
+
+            duties.forEach((duty, index) => {
+              let roomPillClass = duty.room === "No Class Assigned" ? "bg-gray-100 text-gray-600 border-gray-200" : "bg-blue-100 text-blue-800 border-blue-200";
+              let coursePillClass = duty.course === "No Class Assigned" ? "bg-gray-100 text-gray-600 border-gray-200" : "bg-purple-100 text-purple-800 border-purple-200";
+
+              html += `
+                <div onclick="openSubDutyDetailsModal(${index})" class="p-4 hover:bg-orange-50 transition-colors flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white gap-4 cursor-pointer">
+                  <div>
+                    <p class="font-bold text-[#002147]">${escapeHtml(duty.date)}</p>
+                    <p class="text-sm text-gray-600 font-semibold">${escapeHtml(duty.teacherName)}</p>
+
+                    <div class="mt-2 flex flex-col gap-1 items-start">
+                       <span class="inline-block bg-orange-100 text-orange-800 text-xs font-bold px-3 py-1 rounded-full border border-orange-200">${formatPeriodLabel(duty.period)}</span>
+                       <span class="inline-block ${roomPillClass} text-xs font-bold px-3 py-1 rounded-full border">Room: ${escapeHtml(duty.room)}</span>
+                       <span class="inline-block ${coursePillClass} text-xs font-bold px-3 py-1 rounded-full border truncate max-w-xs">Course: ${escapeHtml(duty.course)}</span>
+                    </div>
+                  </div>
+                  <div class="flex items-center gap-2 w-full sm:w-auto" onclick="event.stopPropagation()">
+                    <button onclick="cancelMySubDutyClient('${escapeJs(duty.id)}', '${escapeJs(duty.period)}')" class="bg-white hover:bg-red-50 text-red-600 text-sm font-bold py-2 px-4 rounded-lg border border-red-200 transition-colors shadow-sm">
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              `;
+            });
+            html += '</div>';
+
+            container.innerHTML = html;
+            container.classList.remove('text-gray-400');
+          }
+
+      function loadMySubDuties() {
+        google.script.run
+          .withSuccessHandler(res => { if (res.mySubDuties) renderMySubDuties(res.mySubDuties); })
+          .withFailureHandler(err => {
+            document.getElementById('mySubDuties').innerHTML = `<div class="p-8 text-center text-red-600 font-bold">Failed to load sub-duties: ${escapeHtml(err.message)}</div>`;
+          })
+          .refreshData(['mySubDuties'], window.activeUserEmail);
+      }
+
+      function openSubDutyDetailsModal(index) {
+        const req = mySubDutiesData[index];
+        if (!req) return;
+
+        let html = `
+          <div class="bg-gray-50 p-4 rounded-xl border mb-4">
+             <div class="grid grid-cols-2 gap-4 text-sm">
+                <div><span class="font-bold text-gray-700">Teacher:</span> ${escapeHtml(req.teacherName)}</div>
+                <div><span class="font-bold text-gray-700">Email:</span> <a href="mailto:${escapeHtml(req.teacherEmail)}" class="text-blue-600 hover:underline">${escapeHtml(req.teacherEmail)}</a></div>
+                <div><span class="font-bold text-gray-700">Date:</span> ${escapeHtml(req.date)}</div>
+                <div><span class="font-bold text-gray-700">Period:</span> ${formatPeriodValue(req.period)}</div>
+                <div><span class="font-bold text-gray-700">Room:</span> ${escapeHtml(req.room)}</div>
+                <div><span class="font-bold text-gray-700">Course:</span> ${escapeHtml(req.course)}</div>
+             </div>
+          </div>
+
+          <div class="space-y-3">
+             <div>
+               <p class="font-bold text-sm text-gray-700">Special Instructions</p>
+               <p class="text-gray-600 bg-white p-3 border rounded-lg">${escapeHtml(req.instructions) || 'None provided'}</p>
+             </div>
+             ${req.subPlanUrl ? `
+             <div>
+               <p class="font-bold text-sm text-gray-700">Sub Plan</p>
+               <p class="text-gray-600 bg-white p-3 border rounded-lg">
+                 <a href="${escapeHtml(req.subPlanUrl)}" target="_blank" class="text-blue-600 hover:underline">View Attachment</a>
+               </p>
+             </div>
+             ` : ''}
+          </div>
+        `;
+
+        document.getElementById('detailsContent').innerHTML = html;
+
+        const body = document.querySelector('body');
+        const modal = document.querySelector('#detailsModal');
+        const overlay = document.querySelector('#genericModalOverlay');
+
+        modal.classList.remove('opacity-0');
+        modal.classList.remove('pointer-events-none');
+        overlay.classList.remove('opacity-0');
+        overlay.classList.remove('pointer-events-none');
+        body.classList.add('overflow-hidden');
+      }
+
+      function cancelMySubDutyClient(id, period) {
+        showConfirm("Are you sure you want to cancel your assigned sub coverage for this period? The sub coordinator will be notified.", () => {
+        const container = document.getElementById('mySubDuties');
+        container.innerHTML = '<div class="w-6 h-6 rounded-full border-[3px] border-gray-100 border-t-[#00843D] animate-spin mx-auto my-4"></div>';
+
+        google.script.run
+          .withSuccessHandler(result => {
+             if (result && result.success) {
+               showToast("Sub-duty cancelled successfully. The sub coordinator has been notified.", 'success');
+               EventBus.publish('refresh_mySubDuties');
+               if (!document.getElementById('adminSection').classList.contains('hidden')) {
+                 EventBus.publish('refresh_quickCover');
+                 EventBus.publish('refresh_adminData');
+               }
+             } else {
+               showToast("Failed to cancel sub-duty: " + (result ? result.error : "Unknown"), "error");
+               loadMySubDuties();
+             }
+          })
+          .withFailureHandler(err => {
+             showToast("Error: " + err.message, 'error');
+             loadMySubDuties();
+          })
+          .cancelMySubDuty(id, period, window.activeUserEmail);
+        });
+      }
+
+      function renderMyAbsences(absences) {
+            myAbsencesData = absences;
+            const container = document.getElementById('myAbsences');
+            if (!absences || !Array.isArray(absences) || absences.length === 0) {
+              container.innerHTML = 'No active requests found. You are doing great!';
+              return;
+            }
+
+            let html = '<div class="space-y-3 text-left">';
+            absences.forEach((abs, index) => {
+              let bgClass = abs.urgency === 'Urgent' ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200';
+              let textClass = abs.urgency === 'Urgent' ? 'text-red-700' : 'text-[#002147]';
+              
+              html += `
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 border rounded-xl shadow-sm ${bgClass} gap-4">
+                  <div>
+                    <div class="flex items-center gap-2">
+                       <p class="font-bold ${textClass} text-lg">${escapeHtml(abs.date)}</p>
+                       <span class="text-[10px] font-bold uppercase tracking-wider opacity-60 bg-white px-2 py-0.5 rounded border border-gray-300">${escapeHtml(abs.urgency)}</span>
+                    </div>
+                    <p class="text-sm text-gray-600 font-semibold">${escapeHtml(abs.reason)}</p>
+                    <p class="text-xs text-gray-500 mt-1">Periods: ${escapeHtml(abs.periodsWithSubs || formatPeriodsList(abs.periods))}</p>
+                  </div>
+                  <div class="flex gap-2 w-full sm:w-auto" onclick="event.stopPropagation()">
+                    <button onclick="editAbsence(${index})" class="flex-1 sm:flex-none bg-white hover:bg-gray-100 text-gray-700 text-sm font-bold py-2 px-4 rounded-lg border border-gray-300 transition-colors shadow-sm">
+                      Edit
+                    </button>
+                    <button onclick="cancelAbsence('${escapeJs(abs.id)}')" class="flex-1 sm:flex-none bg-white hover:bg-red-50 text-red-600 text-sm font-bold py-2 px-4 rounded-lg border border-red-200 transition-colors shadow-sm">
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              `;
+            });
+            html += '</div>';
+            
+            container.innerHTML = html;
+            container.classList.remove('text-gray-400');
+          }
+
+      let currentAvailabilityMonth = new Date();
+      currentAvailabilityMonth.setDate(1); // Set to 1st of month to avoid overflow
+      let subAvailabilityData = {};
+
+      let currentOnBehalfSubAvailabilityMonth = new Date();
+      currentOnBehalfSubAvailabilityMonth.setDate(1);
+      let onBehalfSubAvailabilityData = {};
+      let onBehalfTargetSubName = "";
+
+      function handleOnBehalfSubChange() {
+          const subName = document.getElementById('onBehalfSub').value;
+          const loadingDiv = document.getElementById('onBehalfSubLoading');
+          const calendarSection = document.getElementById('onBehalfSubCalendarSection');
+
+          if (!subName) {
+              calendarSection.classList.add('hidden');
+              loadingDiv.classList.add('hidden');
+              return;
+          }
+
+          // Basic validation to see if they picked a valid sub
+          const isValidSub = staffList.some(s => s.name === subName && s.role && s.role.toLowerCase().includes('substitute'));
+          if (!isValidSub) {
+              calendarSection.classList.add('hidden');
+              loadingDiv.classList.add('hidden');
+              return;
+          }
+
+          onBehalfTargetSubName = subName;
+          calendarSection.classList.add('hidden');
+          loadingDiv.classList.remove('hidden');
+
+          google.script.run
+              .withSuccessHandler(data => {
+                  loadingDiv.classList.add('hidden');
+                  calendarSection.classList.remove('hidden');
+                  initAvailabilityCalendarForSubOnBehalf(data);
+              })
+              .withFailureHandler(err => {
+                  loadingDiv.classList.add('hidden');
+                  showToast("Failed to load sub availability: " + err.message, "error");
+              })
+              .getSubstituteAvailabilityForAdmin(subName, window.activeUserEmail);
+      }
+
+      function initAvailabilityCalendarForSubOnBehalf(initialData) {
+          onBehalfSubAvailabilityData = initialData || {};
+          renderAvailabilityCalendarForSubOnBehalf();
+      }
+
+      function changeAvailabilityMonthForSubOnBehalf(delta) {
+          currentOnBehalfSubAvailabilityMonth.setMonth(currentOnBehalfSubAvailabilityMonth.getMonth() + delta);
+          renderAvailabilityCalendarForSubOnBehalf();
+      }
+
+      function toggleAvailabilityForSubOnBehalf(dateStr) {
+          if (!onBehalfTargetSubName) return;
+
+          const statuses = ['Available', 'AM Only', 'PM Only', 'Not Available'];
+          const originalStatus = onBehalfSubAvailabilityData[dateStr];
+          const currentStatus = originalStatus || 'Not Available';
+
+          let nextIndex = (statuses.indexOf(currentStatus) + 1) % statuses.length;
+          const nextStatus = statuses[nextIndex];
+
+          if (nextStatus === 'Not Available') {
+              delete onBehalfSubAvailabilityData[dateStr];
+          } else {
+              onBehalfSubAvailabilityData[dateStr] = nextStatus;
+          }
+
+          // Optimistically render
+          renderAvailabilityCalendarForSubOnBehalf();
+
+          // Persist to backend
+          google.script.run
+            .withFailureHandler(err => {
+                showToast("Failed to save availability: " + err.message, "error");
+                // Revert locally
+                if (originalStatus === undefined) {
+                    delete onBehalfSubAvailabilityData[dateStr];
+                } else {
+                    onBehalfSubAvailabilityData[dateStr] = originalStatus;
+                }
+                renderAvailabilityCalendarForSubOnBehalf();
+            })
+            .saveSubstituteAvailabilityAdmin(onBehalfTargetSubName, dateStr, nextStatus, window.activeUserEmail);
+      }
+
+      function renderAvailabilityCalendarForSubOnBehalf() {
+          const grid = document.getElementById('onBehalfSubAvailabilityCalendarGrid');
+          const label = document.getElementById('onBehalfSubAvailabilityMonthLabel');
+          if (!grid || !label) return;
+
+          const year = currentOnBehalfSubAvailabilityMonth.getFullYear();
+          const month = currentOnBehalfSubAvailabilityMonth.getMonth();
+
+          const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+          label.innerText = `${monthNames[month]} ${year}`;
+
+          const firstDay = new Date(year, month, 1);
+          const lastDay = new Date(year, month + 1, 0);
+
+          const startingDayOfWeek = firstDay.getDay(); // 0-6 (Sun-Sat)
+          const totalDays = lastDay.getDate();
+
+          let html = '';
+
+          // Empty cells before start of month
+          for (let i = 0; i < startingDayOfWeek; i++) {
+              html += `<div class="p-4 border rounded-lg bg-gray-50 border-gray-100 opacity-50"></div>`;
+          }
+
+          // Days of the month
+          for (let day = 1; day <= totalDays; day++) {
+              const currentDate = new Date(year, month, day);
+              const dayOfWeek = currentDate.getDay();
+              // Pad zero for correct YYYY-MM-DD
+              const mm = String(month + 1).padStart(2, '0');
+              const dd = String(day).padStart(2, '0');
+              const stdDateStr = `${year}-${mm}-${dd}`;
+
+              const status = onBehalfSubAvailabilityData[stdDateStr] || 'Not Available';
+              const isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
+
+              if (isWeekend) {
+                  html += `<div class="p-4 border rounded-lg bg-gray-100 border-gray-200 text-gray-400 relative">
+                              <span class="absolute top-1 left-2 text-sm font-bold">${escapeHtml(day)}</span>
+                           </div>`;
+              } else {
+                  let statusColor = "bg-white border-gray-200 hover:bg-gray-50";
+                  let statusIcon = "";
+
+                  if (status === 'Available') {
+                      statusColor = "bg-green-100 border-green-500 text-green-800";
+                      statusIcon = "Full";
+                  } else if (status === 'AM Only') {
+                      statusColor = "bg-blue-100 border-blue-400 text-blue-800";
+                      statusIcon = "AM";
+                  } else if (status === 'PM Only') {
+                      statusColor = "bg-orange-100 border-orange-400 text-orange-800";
+                      statusIcon = "PM";
+                  }
+
+                  html += `<div onclick="toggleAvailabilityForSubOnBehalf('${escapeJs(stdDateStr)}')" class="p-4 sm:p-6 border rounded-lg cursor-pointer transition-colors relative flex items-center justify-center ${escapeHtml(statusColor)}">
+                              <span class="absolute top-1 left-2 text-sm font-bold">${day}</span>
+                              <span class="text-xs font-bold mt-3">${escapeHtml(statusIcon)}</span>
+                           </div>`;
+              }
+          }
+
+          grid.innerHTML = html;
+      }
+
+      function initAvailabilityCalendar(initialData) {
+          subAvailabilityData = initialData;
+          renderAvailabilityCalendar();
+      }
+
+      function changeAvailabilityMonth(delta) {
+          currentAvailabilityMonth.setMonth(currentAvailabilityMonth.getMonth() + delta);
+          renderAvailabilityCalendar();
+      }
+
+      function toggleAvailability(dateStr) {
+          const statuses = ['Available', 'AM Only', 'PM Only', 'Not Available'];
+          const originalStatus = subAvailabilityData[dateStr];
+          const currentStatus = originalStatus || 'Not Available';
+
+          let nextIndex = (statuses.indexOf(currentStatus) + 1) % statuses.length;
+          const nextStatus = statuses[nextIndex];
+
+          if (nextStatus === 'Not Available') {
+              delete subAvailabilityData[dateStr];
+          } else {
+              subAvailabilityData[dateStr] = nextStatus;
+          }
+
+          // Optimistically render
+          renderAvailabilityCalendar();
+
+          // Persist to backend
+          google.script.run
+            .withFailureHandler(err => {
+                showToast("Failed to save availability: " + err.message, "error");
+                // Revert locally
+                if (originalStatus === undefined) {
+                    delete subAvailabilityData[dateStr];
+                } else {
+                    subAvailabilityData[dateStr] = originalStatus;
+                }
+                renderAvailabilityCalendar();
+            })
+            .saveSubstituteAvailability(dateStr, nextStatus, window.activeUserEmail);
+      }
+
+      function renderAvailabilityCalendar() {
+          const grid = document.getElementById('availabilityCalendarGrid');
+          const label = document.getElementById('availabilityMonthLabel');
+          if (!grid || !label) return;
+
+          const year = currentAvailabilityMonth.getFullYear();
+          const month = currentAvailabilityMonth.getMonth();
+
+          const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+          label.innerText = `${monthNames[month]} ${year}`;
+
+          const firstDay = new Date(year, month, 1);
+          const lastDay = new Date(year, month + 1, 0);
+
+          const startingDayOfWeek = firstDay.getDay(); // 0-6 (Sun-Sat)
+          const totalDays = lastDay.getDate();
+
+          let html = '';
+
+          // Empty cells before start of month
+          for (let i = 0; i < startingDayOfWeek; i++) {
+              html += `<div class="p-4 border rounded-lg bg-gray-50 border-gray-100 opacity-50"></div>`;
+          }
+
+          // Days of the month
+          for (let day = 1; day <= totalDays; day++) {
+              const currentDate = new Date(year, month, day);
+              const dayOfWeek = currentDate.getDay();
+              // Pad zero for correct YYYY-MM-DD
+              const mm = String(month + 1).padStart(2, '0');
+              const dd = String(day).padStart(2, '0');
+              const stdDateStr = `${year}-${mm}-${dd}`;
+
+              const status = subAvailabilityData[stdDateStr] || 'Not Available';
+              const isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
+
+              if (isWeekend) {
+                  html += `<div class="p-4 border rounded-lg bg-gray-100 border-gray-200 text-gray-400 relative">
+                              <span class="absolute top-1 left-2 text-sm font-bold">${escapeHtml(day)}</span>
+                           </div>`;
+              } else {
+                  let statusColor = "bg-white border-gray-200 hover:bg-gray-50";
+                  let statusIcon = "";
+
+                  if (status === 'Available') {
+                      statusColor = "bg-green-100 border-green-500 text-green-800";
+                      statusIcon = "Full";
+                  } else if (status === 'AM Only') {
+                      statusColor = "bg-blue-100 border-blue-400 text-blue-800";
+                      statusIcon = "AM";
+                  } else if (status === 'PM Only') {
+                      statusColor = "bg-orange-100 border-orange-400 text-orange-800";
+                      statusIcon = "PM";
+                  }
+
+                  html += `<div onclick="toggleAvailability('${escapeJs(stdDateStr)}')" class="p-4 sm:p-6 border rounded-lg cursor-pointer transition-colors relative flex items-center justify-center ${escapeHtml(statusColor)}">
+                              <span class="absolute top-1 left-2 text-sm font-bold">${day}</span>
+                              <span class="text-xs font-bold mt-3">${escapeHtml(statusIcon)}</span>
+                           </div>`;
+              }
+          }
+
+          grid.innerHTML = html;
+      }
+
+      // Helper function for local date formatting to match backend if needed
+      function Utilities_formatDateLocal(date) {
+         const yyyy = date.getFullYear();
+         const mm = String(date.getMonth() + 1).padStart(2, '0');
+         const dd = String(date.getDate()).padStart(2, '0');
+         return `${yyyy}-${mm}-${dd}`;
+      }
+
+      function loadMyAbsences() {
+        google.script.run
+          .withSuccessHandler(res => { if (res.myAbsences) renderMyAbsences(res.myAbsences); })
+          .withFailureHandler(err => {
+            document.getElementById('myAbsences').innerHTML = `<div class="text-red-600 font-bold">Failed to load absences: ${escapeHtml(err.message)}</div>`;
+          })
+          .refreshData(['myAbsences'], window.activeUserEmail);
+      }
+
+      function renderMyPastAbsences(absences) {
+            myPastAbsencesData = absences;
+            const container = document.getElementById('myPastAbsences');
+            if (!absences || !Array.isArray(absences) || absences.length === 0) {
+              container.innerHTML = 'No past requests found.';
+              return;
+            }
+
+            let html = '<div class="space-y-3 text-left">';
+            absences.forEach((abs, index) => {
+              let bgClass = 'bg-gray-50 border-gray-200';
+              let textClass = 'text-gray-500';
+
+              let feedbackHtml = '';
+              try {
+                  const fbArray = JSON.parse(abs.subFeedback || "[]");
+                  if (fbArray && fbArray.length > 0) {
+                      feedbackHtml += '<div class="mt-3 border-t pt-2 w-full">';
+                      fbArray.forEach(fb => {
+                          const ratingStars = '★'.repeat(fb.rating) + '☆'.repeat(5 - fb.rating);
+                          feedbackHtml += `
+                            <div class="mb-2">
+                               <p class="text-xs font-bold text-gray-700">${formatPeriodLabel(fb.period)} - ${escapeHtml(fb.subName)}</p>
+                               <p class="text-xs text-yellow-500">${ratingStars}</p>
+                               <p class="text-xs text-gray-500 italic mt-0.5">${escapeHtml(fb.note) || "No notes provided"}</p>
+                            </div>
+                          `;
+                      });
+                      feedbackHtml += '</div>';
+                  }
+              } catch(e) {
+                  // ignore
+              }
+
+              html += `
+                <div class="flex flex-col p-4 border rounded-xl shadow-sm ${bgClass} gap-2 opacity-75">
+                  <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 w-full">
+                    <div>
+                      <div class="flex items-center gap-2">
+                         <p class="font-bold ${textClass} text-lg">${escapeHtml(abs.date)}</p>
+                         <span class="text-[10px] font-bold uppercase tracking-wider opacity-60 bg-white px-2 py-0.5 rounded border border-gray-300">${escapeHtml(abs.urgency)}</span>
+                      </div>
+                      <p class="text-sm text-gray-500 font-semibold">${escapeHtml(abs.reason)}</p>
+                      <p class="text-xs text-gray-400 mt-1">Periods: ${escapeHtml(abs.periodsWithSubs || formatPeriodsList(abs.periods))}</p>
+                    </div>
+                  </div>
+                  ${feedbackHtml}
+                </div>
+              `;
+            });
+            html += '</div>';
+
+            container.innerHTML = html;
+            container.classList.remove('text-gray-400');
+      }
+
+      function loadMyPastAbsences() {
+        document.getElementById('myPastAbsences').innerHTML = "Refreshing past absences...";
+        google.script.run
+          .withSuccessHandler(res => { if (res.myPastAbsences) renderMyPastAbsences(res.myPastAbsences); })
+          .withFailureHandler(err => {
+            console.error(err);
+            document.getElementById('myPastAbsences').innerHTML = `<div class="text-red-600 font-bold">Failed to load past absences: ${escapeHtml(err.message)}</div>`;
+          })
+          .refreshData(['myPastAbsences'], window.activeUserEmail);
+      }
+
+      function loadMyPastSubDuties() {
+        document.getElementById('myPastSubDutiesContent').innerHTML = "Refreshing past sub-duties...";
+        google.script.run
+          .withSuccessHandler(res => { if (res.myPastSubDuties) renderMyPastSubDuties(res.myPastSubDuties); })
+          .withFailureHandler(err => {
+            console.error(err);
+            document.getElementById('myPastSubDutiesContent').innerHTML = `<div class="text-red-600 font-bold">Failed to load past sub-duties: ${escapeHtml(err.message)}</div>`;
+          })
+          .refreshData(['myPastSubDuties'], window.activeUserEmail);
+      }
+
+      let userMyPastSubDuties = [];
+
+      function renderMyPastSubDuties(jobs) {
+          userMyPastSubDuties = jobs;
+          const container = document.getElementById('myPastSubDutiesContent');
+          if (!jobs || !Array.isArray(jobs) || jobs.length === 0) {
+              container.innerHTML = 'No past sub-duties found.';
+              return;
+          }
+
+          let html = '<div class="space-y-3 text-left">';
+          jobs.forEach((job, index) => {
+              const bgClass = 'bg-gray-50 border-gray-200';
+              const textClass = 'text-gray-500';
+              const hasFeedback = (job.rating > 0 || job.note);
+              const feedbackBtnText = hasFeedback ? "Edit Feedback" : "Leave Feedback";
+
+              html += `
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 border rounded-xl shadow-sm ${bgClass} gap-4 opacity-75">
+                  <div>
+                    <div class="flex items-center gap-2">
+                       <p class="font-bold ${textClass} text-lg">${escapeHtml(job.date)} - ${formatPeriodLabel(job.period)}</p>
+                    </div>
+                    <p class="text-sm text-gray-500 font-semibold">${escapeHtml(job.teacherName)}</p>
+                    <p class="text-xs text-gray-400 mt-1">Room: ${escapeHtml(job.room)} | Course: ${escapeHtml(job.course)}</p>
+                  </div>
+                  <div class="flex gap-2 w-full sm:w-auto">
+                    <button onclick="openSubFeedbackModal('${escapeJs(job.id)}', '${escapeJs(job.period)}')" class="w-full sm:w-auto bg-white hover:bg-gray-100 text-gray-700 text-sm font-bold py-2 px-4 rounded-lg border border-gray-300 transition-colors shadow-sm whitespace-nowrap">
+                       ${feedbackBtnText}
+                    </button>
+                  </div>
+                </div>
+              `;
+          });
+          html += '</div>';
+
+          container.innerHTML = html;
+          container.classList.remove('text-gray-400');
+      }
+
+      function openSubFeedbackModal(absenceId, period) {
+          // Reset UI
+          document.getElementById('feedbackAbsenceId').value = absenceId;
+          document.getElementById('feedbackPeriod').value = period;
+          document.getElementById('feedbackNote').value = "";
+          setFeedbackRating(0);
+
+          // Pre-fill if we have existing feedback
+          const existingJob = userMyPastSubDuties.find(j => j.id === absenceId && j.period === period);
+          if (existingJob) {
+              if (existingJob.rating) setFeedbackRating(existingJob.rating);
+              if (existingJob.note) document.getElementById('feedbackNote').value = existingJob.note;
+          }
+
+          document.getElementById('subFeedbackModal').classList.remove('opacity-0', 'pointer-events-none');
+      }
+
+      function closeSubFeedbackModal() {
+          document.getElementById('subFeedbackModal').classList.add('opacity-0', 'pointer-events-none');
+      }
+
+      function setFeedbackRating(val) {
+          document.getElementById('feedbackRating').value = val;
+          const stars = document.getElementById('feedbackStarsContainer').children;
+          for (let i = 0; i < stars.length; i++) {
+              if (i < val) {
+                  stars[i].classList.remove('text-gray-300');
+                  stars[i].classList.add('text-yellow-400');
+              } else {
+                  stars[i].classList.remove('text-yellow-400');
+                  stars[i].classList.add('text-gray-300');
+              }
+          }
+      }
+
+      function submitSubFeedback() {
+          const btn = document.getElementById('submitFeedbackBtn');
+          btn.disabled = true;
+          btn.innerText = 'Submitting...';
+
+          const absenceId = document.getElementById('feedbackAbsenceId').value;
+          const period = document.getElementById('feedbackPeriod').value;
+          const rating = document.getElementById('feedbackRating').value;
+          const note = document.getElementById('feedbackNote').value;
+
+          google.script.run
+            .withSuccessHandler(res => {
+                btn.disabled = false;
+                btn.innerText = 'Submit Feedback';
+                if (res && res.success) {
+                    showToast("Feedback saved successfully!", 'success');
+                    closeSubFeedbackModal();
+
+                    // Optimistically update the UI data model
+                    const job = userMyPastSubDuties.find(j => j.id === absenceId && j.period === period);
+                    if (job) {
+                        job.rating = parseInt(rating);
+                        job.note = note;
+                        renderMyPastSubDuties(userMyPastSubDuties);
+                    }
+                    EventBus.publish('refresh_myPastSubDuties');
+                } else {
+                    alert("Error: " + res.error);
+                }
+            })
+            .withFailureHandler(err => {
+                btn.disabled = false;
+                btn.innerText = 'Submit Feedback';
+                alert("Error submitting feedback: " + err.message);
+            })
+            .saveSubFeedback(absenceId, period, rating, note, window.activeUserEmail);
+      }
+
+      function editAbsence(index) {
+        const abs = myAbsencesData[index];
+        if (!abs) return;
+
+        document.getElementById('requestModalTitle').innerText = "Edit Request";
+        document.getElementById('editAbsenceId').value = abs.id;
+        document.getElementById('submitBtn').innerText = "Save Changes";
+
+        // Date format handling
+        let targetDate = "";
+        if (abs.formDateString) {
+           targetDate = abs.formDateString;
+        } else {
+           let d = new Date(abs.rawDateString);
+           let year = d.getFullYear();
+           let month = String(d.getMonth() + 1).padStart(2, '0');
+           let day = String(d.getDate()).padStart(2, '0');
+           targetDate = `${year}-${month}-${day}`;
+        }
+        document.getElementById('absDate').value = targetDate;
+        if(window.absDatePicker) {
+            window.absDatePicker.setDate(targetDate);
+        }
+
+        document.getElementById('absDuration').value = abs.duration || "Full Day";
+
+        let pArr = (abs.periods || "").split(",").map(p => {
+           const trimmed = p.trim();
+           return (trimmed.toLowerCase() === 'advisory' || trimmed.toLowerCase() === 'a') ? '10' : trimmed;
+        });
+        document.querySelectorAll('.period-cb').forEach(cb => {
+           cb.checked = pArr.includes(cb.value);
+        });
+
+        document.getElementById('absReason').value = abs.reason;
+        checkSpecialReason();
+
+        setUrgency(abs.urgency === 'Urgent' ? 'Urgent' : 'Standard');
+
+        // Remove HR prefix if present
+        let inst = abs.instructions || "";
+        let hrConfirmed = false;
+        if (inst.startsWith("[HR Docs Provided] ")) {
+           hrConfirmed = true;
+           inst = inst.replace("[HR Docs Provided] ", "");
+        }
+        document.getElementById('specialInst').value = inst;
+
+        document.getElementById('subPlanUrlInput').value = abs.subPlanUrl || "";
+
+        if (hrConfirmed && !document.getElementById('hrSection').classList.contains('hidden')) {
+           document.getElementById('hrConfirm').checked = true;
+        } else {
+           document.getElementById('hrConfirm').checked = false;
+        }
+
+        document.getElementById('agreement').checked = true; // Pre-check for convenience on edit
+
+        document.getElementById('adminDeleteBtn').classList.add('hidden'); // Regular users don't see delete in the modal, they use the cancel button on the list
+        toggleModal(true);
+        setTimeout(captureModalState, 50);
+      }
+
+      function openAdminEditModal(reqId) {
+         // Find the request from adminDataFiltered based on id
+         const req = adminDataFiltered.find(r => r.id === reqId);
+         if (!req) return;
+
+         document.getElementById('requestModalTitle').innerText = "Edit Request (Admin)";
+         document.getElementById('editAbsenceId').value = req.id;
+         document.getElementById('submitBtn').innerText = "Save Changes";
+         document.getElementById('adminDeleteBtn').classList.remove('hidden');
+
+         // Handle date
+         let targetDate = "";
+         if (req.formDateString) {
+             targetDate = req.formDateString;
+         } else {
+             targetDate = req.date;
+         }
+         document.getElementById('absDate').value = targetDate;
+         if(window.absDatePicker) {
+            window.absDatePicker.setDate(targetDate);
+         }
+
+         document.getElementById('absDuration').value = req.duration || "Full Day";
+
+         let pArr = (req.periodsString || "").split(",").map(p => {
+            const trimmed = p.trim();
+            return (trimmed.toLowerCase() === 'advisory' || trimmed.toLowerCase() === 'a') ? '10' : trimmed;
+         });
+         document.querySelectorAll('.period-cb').forEach(cb => {
+            cb.checked = pArr.includes(cb.value);
+         });
+
+         document.getElementById('absReason').value = req.reason;
+         checkSpecialReason();
+
+         setUrgency(req.urgency.includes('Urgent') ? 'Urgent' : 'Standard');
+
+         // Parse instructions for HR confirmation flag
+         let inst = req.instructions || "";
+         let hrConfirmed = false;
+         if (inst.startsWith("[HR Docs Provided] ")) {
+            hrConfirmed = true;
+            inst = inst.replace("[HR Docs Provided] ", "");
+         }
+         document.getElementById('specialInst').value = inst;
+
+         document.getElementById('subPlanUrlInput').value = req.subPlanUrl || "";
+
+         if (hrConfirmed && !document.getElementById('hrSection').classList.contains('hidden')) {
+            document.getElementById('hrConfirm').checked = true;
+         } else {
+            document.getElementById('hrConfirm').checked = false;
+         }
+
+         document.getElementById('agreement').checked = true;
+
+         toggleModal(true);
+         setTimeout(captureModalState, 50);
+      }
+
+      function deleteAbsenceFromModal() {
+         const id = document.getElementById('editAbsenceId').value;
+         if (!id) return;
+
+         showConfirm("Are you sure you want to completely delete this absence request? The teacher will be notified.", () => {
+         const btn = document.getElementById('adminDeleteBtn');
+         const originalText = btn.innerText;
+         btn.disabled = true;
+         btn.innerText = "Deleting...";
+
+         google.script.run
+           .withSuccessHandler(result => {
+              if (result && result.success) {
+                showToast("Request cancelled successfully.", 'success');
+                toggleModal(); // close modal
+                if (!document.getElementById('adminSection').classList.contains('hidden')) {
+                  EventBus.publish('refresh_quickCover');
+                  EventBus.publish('refresh_adminData');
+                }
+              } else {
+                showToast("Failed to cancel: " + (result ? result.error : "Unknown"), "error");
+                btn.disabled = false;
+              btn.innerText = originalText;
+
+              if (result && result.error && (result.error.includes('filled by someone else') || result.error.includes('server is currently busy'))) {
+                  loadTodaysAbsences();
+              }
+            }
+          })
+          .withFailureHandler(err => {
+              showToast("Error: " + err.message, 'error');
+              btn.disabled = false;
+              btn.innerText = originalText;
+           })
+           .cancelAbsence(id, window.activeUserEmail);
+         });
+      }
+
+      function cancelAbsence(id) {
+        showConfirm("Are you sure you want to cancel this request? Any assigned substitutes will be automatically notified.", () => {
+        const container = document.getElementById('myAbsences');
+        container.innerHTML = '<div class="w-6 h-6 rounded-full border-[3px] border-gray-100 border-t-[#00843D] animate-spin mx-auto my-4"></div>';
+
+        google.script.run
+          .withSuccessHandler(result => {
+             if (result && result.success) {
+               showToast("Request cancelled successfully.", 'success');
+               EventBus.publish('refresh_myAbsences');
+               if (!document.getElementById('adminSection').classList.contains('hidden')) {
+                 EventBus.publish('refresh_quickCover');
+                 EventBus.publish('refresh_adminData');
+               }
+             } else {
+               showToast("Failed to cancel: " + (result ? result.error : "Unknown"), "error");
+               loadMyAbsences();
+             }
+          })
+          .withFailureHandler(err => {
+             showToast("Error: " + err.message, 'error');
+             loadMyAbsences();
+          })
+          .cancelAbsence(id, window.activeUserEmail);
+        });
+      }
+
+      document.getElementById('absenceForm').onsubmit = function(e) {
+        e.preventDefault();
+
+        const editId = document.getElementById('editAbsenceId').value;
+        const isMulti = window.absDatePicker && window.absDatePicker.selectedDates.length > 1;
+
+        let requests = [];
+
+        const reasonSelect = document.getElementById('absReason');
+        const reason = reasonSelect.value;
+        const hrChecked = document.getElementById('hrConfirm').checked;
+        const agreed = document.getElementById('agreement').checked;
+        const duration = document.getElementById('absDuration').value;
+        const urgency = document.getElementById('urgencyValue').value;
+        const specialInstructions = document.getElementById('specialInst').value;
+        const subPlanUrl = document.getElementById('subPlanUrlInput').value;
+
+        const isHidden = document.getElementById('onBehalfSection').classList.contains('hidden');
+        const onBehalfTeacherName = isHidden ? null : document.getElementById('onBehalfTeacher').value;
+
+        if (!isHidden && !onBehalfTeacherName) {
+           showToast("Please enter the teacher's name.", 'error');
+           return;
+        }
+
+        let hrRequired = false;
+        if (reasonSelect.options.length > 0 && reasonSelect.selectedIndex > -1) {
+            hrRequired = reasonSelect.options[reasonSelect.selectedIndex].getAttribute('data-hr-required') === 'true';
+        }
+
+        if (hrRequired && !hrChecked) {
+          showToast("Please confirm HR documentation has been provided.", 'error');
+          return;
+        }
+        if (!agreed) {
+          showToast("You must agree to the terms to submit.", 'info');
+          return;
+        }
+
+        if (isMulti && !editId) {
+            for (const date of window.absDatePicker.selectedDates) {
+                const dateStr = window.absDatePicker.formatDate(date, "Y-m-d");
+                const blockId = "multi_periods_" + dateStr;
+                const blockContainer = document.getElementById(blockId);
+
+                let selectedPeriods = "";
+                if (blockContainer) {
+                    selectedPeriods = Array.from(blockContainer.querySelectorAll('.multi-period-cb:checked'))
+                                         .map(cb => cb.value).join(', ');
+                }
+
+                if (!selectedPeriods) {
+                    selectedPeriods = "None";
+                }
+
+                requests.push({
+                    date: dateStr,
+                    duration: duration,
+                    periods: selectedPeriods,
+                    reason: reason,
+                    urgency: urgency,
+                    specialInstructions: specialInstructions,
+                    subPlanUrl: subPlanUrl,
+                    hrConfirmed: hrChecked,
+                    onBehalfTeacher: onBehalfTeacherName
+                });
+            }
+        } else {
+            let selectedPeriods = Array.from(document.querySelectorAll('#singleDatePeriodsBlock .period-cb:checked'))
+                                         .map(cb => cb.value).join(', ');
+
+            if (!selectedPeriods) {
+                selectedPeriods = "None";
+            }
+
+            const newDateVal = document.getElementById('absDate').value;
+
+            requests.push({
+                date: newDateVal,
+                duration: duration,
+                periods: selectedPeriods,
+                reason: reason,
+                urgency: urgency,
+                specialInstructions: specialInstructions,
+                subPlanUrl: subPlanUrl,
+                hrConfirmed: hrChecked,
+                onBehalfTeacher: onBehalfTeacherName
+            });
+        }
+
+        // Duplicate Request Check
+        if (!editId) {
+            for (const req of requests) {
+                const duplicateIndex = myAbsencesData.findIndex(abs => {
+                    let existingDate = "";
+                    if (abs.formDateString) {
+                      existingDate = abs.formDateString;
+                    } else {
+                      let d = new Date(abs.rawDateString);
+                      let year = d.getFullYear();
+                      let month = String(d.getMonth() + 1).padStart(2, '0');
+                      let day = String(d.getDate()).padStart(2, '0');
+                      existingDate = `${year}-${month}-${day}`;
+                    }
+                    return existingDate === req.date;
+                });
+
+                if (duplicateIndex !== -1) {
+                    showDuplicateWarning(duplicateIndex);
+                    return;
+                }
+            }
+        }
+
+        const btn = document.getElementById('submitBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<div class="flex items-center justify-center gap-2"><div class="w-6 h-6 rounded-full border-[3px] border-gray-100 border-t-[#00843D] animate-spin"></div> Sending...</div>';
+
+        if (editId) {
+          google.script.run
+            .withSuccessHandler((result) => {
+              if (result && result.success) {
+                showToast("Request Updated Successfully!", 'success');
+                btn.disabled = false;
+                btn.innerHTML = 'Save Changes';
+                originalModalData = {};
+                toggleModal();
+                loadMyAbsences();
+                if (!document.getElementById('adminSection').classList.contains('hidden')) {
+                  EventBus.publish('refresh_quickCover');
+                  EventBus.publish('refresh_adminData');
+                }
+              } else {
+                showToast(result ? result.error : "Database Error", 'error');
+                btn.disabled = false;
+                btn.innerHTML = 'Save Changes';
+              }
+            })
+            .withFailureHandler(err => {
+              showToast("Connection Error: " + err.message, 'error');
+              btn.disabled = false;
+              btn.innerHTML = 'Save Changes';
+            })
+            .updateAbsence(editId, requests[0], window.activeUserEmail);
+        } else if (requests.length > 1) {
+          google.script.run
+            .withSuccessHandler((result) => {
+              if (result && result.success) {
+                showToast("Requests Submitted Successfully!", 'success');
+                document.getElementById('absenceForm').reset();
+                setUrgency('Standard');
+                document.getElementById('hrSection').classList.add('hidden');
+                btn.disabled = false;
+                btn.innerHTML = 'Submit Request';
+                originalModalData = {};
+                toggleModal();
+                EventBus.publish('refresh_myAbsences');
+
+                if (!document.getElementById('adminSection').classList.contains('hidden')) {
+                  EventBus.publish('refresh_quickCover');
+                  EventBus.publish('refresh_adminData');
+                }
+              } else {
+                showToast(result ? result.error : "Database Error", 'error');
+                btn.disabled = false;
+                btn.innerHTML = 'Submit Request';
+              }
+            })
+            .withFailureHandler(err => {
+              showToast("Connection Error: " + err.message, 'error');
+              btn.disabled = false;
+              btn.innerHTML = 'Submit Request';
+            })
+            .submitMultipleAbsenceRequests(requests, window.activeUserEmail);
+        } else {
+          google.script.run
+            .withSuccessHandler((result) => {
+              if (result && result.success) {
+                showToast("Request Submitted Successfully!", 'success');
+                document.getElementById('absenceForm').reset();
+                setUrgency('Standard');
+                document.getElementById('hrSection').classList.add('hidden');
+                btn.disabled = false;
+                btn.innerHTML = 'Submit Request';
+                originalModalData = {};
+                toggleModal();
+                EventBus.publish('refresh_myAbsences');
+
+                if (!document.getElementById('adminSection').classList.contains('hidden')) {
+                  EventBus.publish('refresh_quickCover');
+                  EventBus.publish('refresh_adminData');
+                }
+              } else {
+                showToast(result ? result.error : "Database Error", 'error');
+                btn.disabled = false;
+                btn.innerHTML = 'Submit Request';
+              }
+            })
+            .withFailureHandler(err => {
+              showToast("Connection Error: " + err.message, 'error');
+              btn.disabled = false;
+              btn.innerHTML = 'Submit Request';
+            })
+            .submitAbsence(requests[0], window.activeUserEmail);
+        }
+      };
+
+      // Event listener removed as Flatpickr onChange handles it now.
+</script>

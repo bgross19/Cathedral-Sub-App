@@ -1,0 +1,508 @@
+<!-- ====================================================================== -->
+<!-- VIEWS_DASHBOARDS.HTML — Admin, HR, At-a-Glance, and Settings Views     -->
+<!-- ====================================================================== -->
+    <!-- Admin Dashboard View -->
+    <main id="adminDashboardView" class="max-w-6xl mx-auto p-4 mt-4 hidden">
+      <div class="flex justify-between items-center mb-6">
+        <h2 class="text-2xl font-bold text-[#002147] flex items-center gap-2">
+          <span>📊</span> Sub Coverage Dashboard
+        </h2>
+
+        <div class="flex gap-2">
+           <button id="adminTogglePeriod" onclick="setAdminView('period')" class="flex-1 py-1.5 px-4 rounded-lg border-2 border-[#00843D] bg-[#00843D] text-white font-bold transition-colors">Period View</button>
+           <button id="adminToggleRequest" onclick="setAdminView('request')" class="flex-1 py-1.5 px-4 rounded-lg border-2 border-gray-200 text-gray-500 font-bold transition-colors">Request View</button>
+        </div>
+
+        <button onclick="toggleAdminDashboard()" class="text-[#002147] hover:bg-gray-200 font-semibold py-2 px-4 rounded-lg transition-colors border border-[#002147]">
+           &larr; Return to Homepage
+        </button>
+      </div>
+
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
+        <div class="flex flex-col sm:flex-row gap-4 items-center justify-between">
+            <div class="flex items-center gap-2 w-full sm:w-auto">
+               <label class="text-sm font-bold text-gray-700">From:</label>
+               <input type="date" id="filterStartDate" class="border rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-[#00843D]" onchange="applyAdminFilters()">
+            </div>
+            <div class="flex items-center gap-2 w-full sm:w-auto">
+               <label class="text-sm font-bold text-gray-700">To:</label>
+               <input type="date" id="filterEndDate" class="border rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-[#00843D]" onchange="applyAdminFilters()">
+            </div>
+            <div class="flex items-center gap-2 w-full sm:w-auto flex-1">
+               <input type="text" id="filterSearchText" placeholder="Search across all fields..." class="w-full border rounded px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-[#00843D]" oninput="applyAdminFilters()">
+            </div>
+            <div class="flex items-center gap-2 w-full sm:w-auto ml-auto">
+               <button onclick="resetAdminFilters()" class="text-sm text-gray-500 hover:text-gray-800 underline">Reset Filters</button>
+               <button onclick="exportToCSV('Admin_Dashboard_Export.csv', 'adminDashboardTable')" class="bg-white hover:bg-gray-100 text-[#002147] text-sm font-bold py-1.5 px-4 rounded border border-[#002147] transition-colors shadow-sm flex items-center gap-2">
+                   <span>📥</span> Export CSV
+               </button>
+            </div>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-x-auto">
+        <table id="adminDashboardTable" class="w-full text-left border-collapse sm:min-w-max">
+          <thead id="adminDashboardTableHeader" class="hidden sm:table-header-group">
+            <tr class="bg-gray-50 border-b border-gray-200 text-sm text-gray-700 uppercase hidden sm:table-row">
+              <th class="p-3 cursor-pointer hover:bg-gray-100" onclick="sortAdminTable('teacherName')">Name ↕️</th>
+              <th class="p-3 cursor-pointer hover:bg-gray-100" onclick="sortAdminTable('date')">Date ↕️</th>
+              <th class="p-3 cursor-pointer hover:bg-gray-100" onclick="sortAdminTable('period')">Period ↕️</th>
+              <th class="p-3 cursor-pointer hover:bg-gray-100" onclick="sortAdminTable('course')">Course ↕️</th>
+              <th class="p-3 cursor-pointer hover:bg-gray-100" onclick="sortAdminTable('room')">Room ↕️</th>
+              <th class="p-3 cursor-pointer hover:bg-gray-100" onclick="sortAdminTable('assignedSub')">Assigned Sub ↕️</th>
+              <th class="p-3 cursor-pointer hover:bg-gray-100" onclick="sortAdminTable('instructions')">Instructions ↕️</th>
+            </tr>
+          </thead>
+          <tbody id="adminDashboardTableBody" class="divide-y divide-gray-100">
+             <tr><td colspan="7" class="p-8 text-center text-gray-400 italic">Loading dashboard...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </main>
+
+
+    <!-- HR Dashboard View -->
+    <main id="hrDashboardView" class="max-w-6xl mx-auto p-4 mt-4 hidden">
+      <div class="flex justify-between items-center mb-6">
+        <h2 class="text-2xl font-bold text-[#002147] flex items-center gap-2">
+          <span>👥</span> HR Dashboard
+        </h2>
+        <button onclick="toggleHRDashboard()" class="text-[#002147] hover:bg-gray-200 font-semibold py-2 px-4 rounded-lg transition-colors border border-[#002147]">
+           &larr; Return to Homepage
+        </button>
+      </div>
+
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
+        <div class="flex flex-col sm:flex-row gap-4 items-center justify-between">
+            <div class="flex gap-2">
+               <button id="hrToggleAbsences" onclick="setHRView('absences')" class="flex-1 py-2 px-4 rounded-lg border-2 border-[#00843D] bg-[#00843D] text-white font-bold transition-colors">Absences</button>
+               <button id="hrToggleSubs" onclick="setHRView('subs')" class="flex-1 py-2 px-4 rounded-lg border-2 border-gray-200 text-gray-500 font-bold transition-colors">Sub Coverages</button>
+            </div>
+
+            <div class="flex flex-col gap-3 w-full sm:w-auto ml-auto mt-4 sm:mt-0">
+               <div id="hrPayPeriodContainer" class="flex items-center gap-2 hidden">
+                  <label class="text-sm font-bold text-gray-700 whitespace-nowrap">Pay Period:</label>
+                  <select id="hrPayPeriodSelect" class="border rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-[#00843D] w-full" onchange="applyPayPeriodSelection()">
+                      <!-- Populated dynamically -->
+                  </select>
+               </div>
+               <div class="flex flex-col sm:flex-row gap-4 items-center">
+                  <div class="flex items-center gap-2">
+                     <label class="text-sm font-bold text-gray-700">From:</label>
+                     <input type="date" id="hrFilterStartDate" class="border rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-[#00843D]" onchange="handleHRDateChange()">
+                  </div>
+                  <div class="flex items-center gap-2">
+                     <label class="text-sm font-bold text-gray-700">To:</label>
+                     <input type="date" id="hrFilterEndDate" class="border rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-[#00843D]" onchange="handleHRDateChange()">
+                  </div>
+                  <div class="flex items-center gap-2">
+                     <label id="hrFilterUnpaidContainer" class="hidden items-center gap-2 mr-2 cursor-pointer text-sm font-bold text-gray-700">
+                       <input type="checkbox" id="hrFilterUnpaidToggle" class="h-4 w-4 text-[#00843D] focus:ring-[#00843D] border-gray-300 rounded" onchange="applyHRFilters()">
+                       Hide Unpaid
+                     </label>
+                     <button onclick="exportToCSV('HR_Dashboard_Export.csv', 'hrDashboardTable')" class="bg-white hover:bg-gray-100 text-[#002147] text-sm font-bold py-1.5 px-4 rounded border border-[#002147] transition-colors shadow-sm flex items-center gap-2">
+                         <span>📥</span> Export CSV
+                     </button>
+                     <button onclick="copyHRData()" class="bg-white hover:bg-gray-100 text-[#002147] text-sm font-bold py-1.5 px-4 rounded border border-[#002147] transition-colors shadow-sm flex items-center gap-2">
+                         <span>📋</span> Copy this data
+                     </button>
+                     <button id="btnApprovePayPeriod" onclick="handleApprovePayPeriod()" class="bg-[#00843D] hover:bg-green-700 text-white text-sm font-bold py-1.5 px-4 rounded border border-[#00843D] transition-colors shadow-sm flex items-center gap-2 hidden disabled:opacity-50 disabled:cursor-not-allowed">
+                         <span>✅</span> Approve Pay Period
+                     </button>
+                  </div>
+               </div>
+            </div>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-x-auto">
+        <table id="hrDashboardTable" class="w-full text-left border-collapse sm:min-w-max">
+          <thead id="hrDashboardTableHeader" class="hidden sm:table-header-group">
+            <tr class="bg-gray-50 border-b border-gray-200 text-sm text-gray-700 uppercase hidden sm:table-row">
+              <th class="p-3">Teacher Name</th>
+              <th id="hrCountHeader" class="p-3">Count</th>
+            </tr>
+          </thead>
+          <tbody id="hrDashboardTableBody" class="divide-y divide-gray-100">
+             <tr><td colspan="2" class="p-8 text-center text-gray-400 italic">Loading HR dashboard...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </main>
+    <!-- At a Glance Dashboard View -->
+    <main id="atAGlanceDashboardView" class="max-w-6xl mx-auto p-4 mt-4 hidden">
+      <div class="flex justify-between items-center mb-6">
+        <h2 class="text-2xl font-bold text-[#002147] flex items-center gap-2">
+          <span>📅</span> Today at a Glance
+        </h2>
+        <button onclick="toggleAtAGlanceDashboard()" class="text-[#002147] hover:bg-gray-200 font-semibold py-2 px-4 rounded-lg transition-colors border border-[#002147]">
+           &larr; Return to Homepage
+        </button>
+      </div>
+
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
+        <div class="flex flex-col sm:flex-row gap-4 items-center justify-between">
+            <div class="flex items-center gap-2 w-full sm:w-auto">
+               <label class="text-sm font-bold text-gray-700">Date:</label>
+               <div class="flex items-center">
+                   <button onclick="shiftAtAGlanceDate(-1)" class="px-2 py-1 bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded-l text-gray-700 transition-colors focus:outline-none" title="Previous Day">
+                       &larr;
+                   </button>
+                   <input type="date" id="atAGlanceDate" class="border-y border-gray-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-[#00843D]" onchange="applyAtAGlanceFilter()">
+                   <button onclick="shiftAtAGlanceDate(1)" class="px-2 py-1 bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded-r text-gray-700 transition-colors focus:outline-none" title="Next Day">
+                       &rarr;
+                   </button>
+               </div>
+            </div>
+
+            <button id="suggestSubbingBtn" onclick="openSuggestSubModal()" class="hidden bg-[#00843D] hover:bg-[#00662F] text-white font-semibold py-1.5 px-4 rounded-lg transition-colors flex items-center gap-2 ml-4">
+                <span>✨</span> Suggest Subbing
+            </button>
+
+            <div class="flex items-center gap-2 w-full sm:w-auto ml-auto">
+               <button onclick="exportToCSV('At_A_Glance_Export.csv', 'atAGlanceTable')" class="bg-white hover:bg-gray-100 text-[#002147] text-sm font-bold py-1.5 px-4 rounded border border-[#002147] transition-colors shadow-sm flex items-center gap-2">
+                   <span>📥</span> Export CSV
+               </button>
+               <button onclick="copyAtAGlance()" class="bg-white hover:bg-gray-100 text-[#002147] text-sm font-bold py-1.5 px-4 rounded border border-[#002147] transition-colors shadow-sm flex items-center gap-2">
+                   <span>📋</span> Copy This Info
+               </button>
+            </div>
+        </div>
+      </div>
+
+      <div id="atAGlanceCopyContainer" class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-x-auto p-4">
+        <!-- The table and footer will be rendered inside this container so it can be easily copied -->
+        <table id="atAGlanceTable" class="text-left border-collapse min-w-max border border-gray-300">
+          <thead id="atAGlanceTableHeader">
+             <tr class="bg-gray-50 border-b border-gray-300 text-sm text-gray-700 uppercase">
+                <!-- Columns dynamically injected -->
+             </tr>
+          </thead>
+          <tbody id="atAGlanceTableBody" class="divide-y divide-gray-200">
+             <tr><td class="p-8 text-center text-gray-400 italic">Loading Today at a Glance...</td></tr>
+          </tbody>
+        </table>
+        <div id="atAGlanceFooter" class="mt-4 text-sm hidden">
+           <br>
+           Please refer to the <a id="atAGlanceFooterUrl" href="#" class="text-[#00843D] underline">Cathedral Sub App</a> for more information.
+        </div>
+      </div>
+
+      <!-- Assignable Table Container (Only visible to Admin/Sub Coordinator) -->
+      <div id="atAGlanceAssignableContainer" class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-x-auto p-4 mt-6 hidden">
+        <h3 class="text-lg font-bold text-[#002147] mb-4">Assign Substitutes</h3>
+        <table id="atAGlanceAssignableTable" class="text-left border-collapse min-w-max border border-gray-300">
+          <thead id="atAGlanceAssignableTableHeader">
+             <tr class="bg-gray-50 border-b border-gray-300 text-sm text-gray-700 uppercase">
+                <!-- Columns dynamically injected -->
+             </tr>
+          </thead>
+          <tbody id="atAGlanceAssignableTableBody" class="divide-y divide-gray-200">
+             <tr><td class="p-8 text-center text-gray-400 italic">Loading assignable table...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </main>
+
+    <!-- Settings Dashboard View -->
+    <main id="settingsDashboardView" class="max-w-6xl mx-auto p-4 mt-4 hidden">
+      <div class="flex justify-between items-center mb-6">
+        <h2 class="text-2xl font-bold text-[#002147] flex items-center gap-2">
+          <span>⚙️</span> Settings & Role Management
+        </h2>
+        <button onclick="toggleSettingsDashboard()" class="text-[#002147] hover:bg-gray-200 font-semibold py-2 px-4 rounded-lg transition-colors border border-[#002147]">
+           &larr; Return to Homepage
+        </button>
+      </div>
+
+
+      <!-- Settings Tabs -->
+      <div class="flex border-b border-gray-200 mb-6">
+        <button onclick="switchSettingsTab('generalSettingsTab')" id="btn-generalSettingsTab" class="py-2 px-4 text-[#002147] font-semibold border-b-2 border-[#002147] focus:outline-none">
+          General Settings
+        </button>
+        <button onclick="switchSettingsTab('staffRosterTab')" id="btn-staffRosterTab" class="py-2 px-4 text-gray-500 hover:text-[#002147] font-medium focus:outline-none">
+          Staff Roster
+        </button>
+        <button onclick="switchSettingsTab('auditLogsTab')" id="btn-auditLogsTab" class="py-2 px-4 text-gray-500 hover:text-[#002147] font-medium focus:outline-none">
+          Audit Logs
+        </button>
+        <button onclick="switchSettingsTab('hrSettingsTab')" id="btn-hrSettingsTab" class="py-2 px-4 text-gray-500 hover:text-[#002147] font-medium focus:outline-none">
+          HR Settings
+        </button>
+        <button onclick="switchSettingsTab('dataManagementTab')" id="btn-dataManagementTab" class="py-2 px-4 text-gray-500 hover:text-[#002147] font-medium focus:outline-none">
+          Data Management
+        </button>
+      </div>
+
+      <!-- General Settings -->
+      <div id="generalSettingsTab" class="settings-tab-content bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8 block">
+
+        <h3 class="text-xl font-bold text-[#002147] mb-4 border-b pb-2">General Settings</h3>
+        <div id="generalSettingsContainer">
+           <!-- Dynamic content injected here -->
+           <p class="text-gray-400 italic">Loading settings...</p>
+        </div>
+      </div>
+
+
+      <!-- Role Management -->
+
+
+    <!-- Staff Roster Tab -->
+      <div id="staffRosterTab" class="settings-tab-content bg-white rounded-xl shadow-sm border border-gray-200 p-6 hidden">
+        <div class="flex justify-between items-center mb-4 border-b pb-2">
+           <h3 class="text-xl font-bold text-[#002147]">Staff Roster</h3>
+           <div class="flex gap-2">
+               <button id="clearDutiesBtn" onclick="clearAllDutiesClient()" class="bg-red-600 hover:bg-red-700 text-white font-bold py-1.5 px-4 rounded-lg transition-colors text-sm flex items-center gap-2">
+                   <span>🧹</span> Clear Duties
+               </button>
+               <button onclick="copyStaffRosterData()" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-1.5 px-4 rounded-lg transition-colors text-sm flex items-center gap-2">
+                   <span>📋</span> Copy Data
+               </button>
+               <button onclick="openAddStaffModal()" class="bg-[#00843D] hover:bg-green-700 text-white font-bold py-1.5 px-4 rounded-lg transition-colors text-sm flex items-center gap-2">
+                   <span>➕</span> Add Staff
+               </button>
+           </div>
+        </div>
+
+        <div class="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+           <h4 class="text-md font-bold text-[#002147] mb-2">CSV Upload (Bulk Update/Create)</h4>
+           <div class="flex flex-col gap-3">
+               <div>
+                 <label class="block text-sm text-gray-600 mb-1">Select a .csv file...</label>
+                 <input type="file" id="staffCsvFileInput" accept=".csv" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-[#002147] file:text-white hover:file:bg-blue-900"/>
+               </div>
+               <div class="text-center text-gray-500 font-semibold text-sm">OR</div>
+               <div>
+                 <label class="block text-sm text-gray-600 mb-1">...Paste CSV / Tab-Delimited data directly</label>
+                 <textarea id="staffCsvTextarea" rows="4" placeholder="LASTFIRST&#9;EMAIL_ADDR&#9;Role&#9;Duty&#10;Ford, Lisa&#9;lford@gocathedral.com&#9;Teacher&#9;1&#10;Smith John&#9;jsmith@gocathedral.com&#9;Teacher&#9;2" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none text-sm font-mono"></textarea>
+               </div>
+               <div class="flex justify-end">
+                  <button onclick="processStaffCsvUpload()" class="bg-[#002147] hover:bg-blue-900 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-md text-sm">
+                    Process Data
+                  </button>
+               </div>
+           </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse min-w-max">
+            <thead>
+              <tr class="bg-gray-50 border-b border-gray-200 text-sm text-gray-700 uppercase hidden sm:table-row">
+                <th class="p-3">Name</th>
+                <th class="p-3">Email</th>
+                <th class="p-3">Role</th>
+                <th class="p-3">Duty</th>
+                <th class="p-3 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="staffRosterTableBody" class="divide-y divide-gray-100">
+               <tr><td colspan="5" class="p-8 text-center text-gray-400 italic">Loading staff roster...</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Role Permissions -->
+        <div class="mt-8 border-t border-gray-200 pt-6">
+           <div class="flex justify-between items-center mb-4">
+               <h3 class="text-xl font-bold text-[#002147]">Role Permissions</h3>
+               <button onclick="saveRolePermissions()" class="bg-[#002147] hover:bg-blue-900 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-sm text-sm">
+                   Save Permissions
+               </button>
+           </div>
+           <div class="overflow-x-auto bg-white rounded-xl shadow-sm border border-gray-200">
+               <table class="w-full text-left border-collapse min-w-max">
+                   <thead>
+                       <tr class="bg-gray-50 border-b border-gray-200 text-sm text-gray-700 uppercase">
+                           <th class="p-3 w-48 sticky left-0 bg-gray-50 z-10 border-r border-gray-200">Role</th>
+                           <th class="p-3 text-center">Admin Dashboard</th>
+                           <th class="p-3 text-center">HR Dashboard</th>
+                           <th class="p-3 text-center">Today at a Glance</th>
+                           <th class="p-3 text-center">My Upcoming Sub Duties</th>
+                           <th class="p-3 text-center">Today's Absences</th>
+                           <th class="p-3 text-center">My Past Absences</th>
+                           <th class="p-3 text-center">Settings</th>
+                           <th class="p-3 text-center">Add Request on Behalf</th>
+                       </tr>
+                   </thead>
+                   <tbody id="rolePermissionsTableBody" class="divide-y divide-gray-100">
+                       <tr><td colspan="9" class="p-8 text-center text-gray-400 italic">Loading permissions...</td></tr>
+                   </tbody>
+               </table>
+           </div>
+        </div>
+      </div>
+
+      <!-- Data Management Tab -->
+      <div id="dataManagementTab" class="settings-tab-content bg-white rounded-xl shadow-sm border border-gray-200 p-6 hidden">
+        <h3 class="text-xl font-bold text-[#002147] mb-4 border-b pb-2">Data Management</h3>
+
+        <div class="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+           <h4 class="text-md font-bold text-[#002147] mb-2">Export Complete History</h4>
+           <p class="text-sm text-gray-600 mb-3">Download the entire raw history of all absence requests (including those not visible on the main dashboard).</p>
+           <button onclick="exportAllAbsenceRequestsClient()" id="btn-exportAllData" class="bg-[#002147] hover:bg-blue-900 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-sm text-sm flex items-center gap-2">
+               <span>📥</span> Export All Absence Requests (CSV)
+           </button>
+        </div>
+
+        <div class="p-4 bg-red-50 rounded-lg border border-red-200">
+           <h4 class="text-md font-bold text-red-700 mb-2">Archive Old Requests</h4>
+           <p class="text-sm text-red-600 mb-3">Moving older records to the "Archived Data" sheet will permanently remove them from the active Absence Requests view and speed up the application. This action cannot be easily undone.</p>
+
+           <div class="flex flex-col sm:flex-row gap-4 items-end">
+               <div>
+                   <label class="block text-sm font-bold text-red-800 mb-1">Archive records strictly BEFORE this date:</label>
+                   <input type="date" id="archiveCutoffDate" class="p-2 border border-red-300 rounded-lg focus:ring-2 focus:ring-red-500 outline-none w-full sm:w-auto">
+               </div>
+               <button onclick="archiveOldDataClient()" id="btn-archiveData" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-sm text-sm flex items-center gap-2">
+                   <span>⚠️</span> Archive Old Data
+               </button>
+           </div>
+        </div>
+      </div>
+
+      <!-- HR Settings Tab -->
+      <div id="hrSettingsTab" class="settings-tab-content bg-white rounded-xl shadow-sm border border-gray-200 p-6 hidden">
+
+        <h3 class="text-xl font-bold text-[#002147] mb-4 border-b pb-2">Day Pay Rate</h3>
+        <div class="mb-8 grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+             <label class="block text-sm font-bold mb-1">Green Day Rate ($)</label>
+             <input type="number" step="0.01" id="settingsGreenDayRate" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none" placeholder="10">
+          </div>
+          <div>
+             <label class="block text-sm font-bold mb-1">Blue/Gold Day Rate ($)</label>
+             <input type="number" step="0.01" id="settingsBlueGoldDayRate" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none" placeholder="20">
+          </div>
+        </div>
+
+        <h3 class="text-lg font-bold text-[#002147] mb-4 border-b pb-2">Special Pay Rates</h3>
+        <p class="text-sm text-gray-600 mb-4">Add date-specific pay overrides (e.g. day before fall break). This will override both Green and Blue/Gold rates for that date.</p>
+        <div id="specialPayRatesList" class="mb-4 space-y-2">
+            <!-- Special rates populated here -->
+        </div>
+        <div class="flex items-end gap-2 mb-8">
+            <div class="flex-1">
+                <label class="block text-sm font-bold mb-1">Date</label>
+                <input type="date" id="newSpecialPayRateDate" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none">
+            </div>
+            <div class="flex-1">
+                <label class="block text-sm font-bold mb-1">Rate ($)</label>
+                <input type="number" step="0.01" id="newSpecialPayRateValue" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none" placeholder="25">
+            </div>
+            <div>
+                <button onclick="addSpecialPayRate()" class="bg-[#00843D] hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition-colors shadow-sm text-sm h-[42px]">
+                    Add Special Rate
+                </button>
+            </div>
+        </div>
+
+        <div class="mb-8">
+            <button onclick="saveDayPayRates()" id="saveDayPayRatesBtn" class="bg-[#002147] hover:bg-blue-900 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-sm text-sm">
+                Save Pay Rates
+            </button>
+        </div>
+
+        <div class="flex justify-between items-center mb-4 border-b pb-2">
+           <h3 class="text-xl font-bold text-[#002147]">HR Settings (Pay Periods)</h3>
+           <button onclick="deleteAllPayPeriodsClient()" class="bg-red-100 hover:bg-red-200 text-red-700 font-bold py-1.5 px-4 rounded-lg transition-colors text-sm flex items-center gap-2 border border-red-200">
+               <span>🗑️</span> Delete All Pay Periods
+           </button>
+        </div>
+
+        <div class="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+           <h4 class="text-md font-bold text-[#002147] mb-2">Principal's Digest</h4>
+           <p class="text-sm text-gray-600 mb-4">Preview the automated weekly digest sent to principals.</p>
+           <div class="flex flex-col md:flex-row gap-4 items-end">
+               <div class="w-full md:w-auto">
+                 <label class="block text-sm font-bold mb-1">Target Date (e.g. Next Friday)</label>
+                 <input type="date" id="principalsDigestDate" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none text-sm">
+               </div>
+               <button onclick="previewPrincipalsDigest()" class="bg-[#002147] hover:bg-blue-900 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-md text-sm w-full md:w-auto">
+                  Preview Digest
+               </button>
+           </div>
+        </div>
+
+        <div class="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+           <h4 class="text-md font-bold text-[#002147] mb-2">CSV Upload (Bulk Update/Create Pay Periods)</h4>
+           <div class="flex flex-col gap-3">
+               <div>
+                 <label class="block text-sm text-gray-600 mb-1">Select a .csv file...</label>
+                 <input type="file" id="payPeriodsCsvFileInput" accept=".csv" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-[#002147] file:text-white hover:file:bg-blue-900"/>
+               </div>
+               <div class="text-center text-gray-500 font-semibold text-sm">OR</div>
+               <div>
+                 <label class="block text-sm text-gray-600 mb-1">...Paste CSV / Tab-Delimited data directly</label>
+                 <textarea id="payPeriodsCsvTextarea" rows="4" placeholder="Paycheck	Period Start	Period End
+1	8/1/2023	8/15/2023
+2	8/16/2023	8/31/2023" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none text-sm font-mono"></textarea>
+               </div>
+               <div class="flex justify-end">
+                  <button onclick="processPayPeriodsCsvUpload()" class="bg-[#002147] hover:bg-blue-900 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-md text-sm">
+                    Process Pay Periods
+                  </button>
+               </div>
+           </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse min-w-max">
+            <thead>
+              <tr class="bg-gray-50 border-b border-gray-200 text-sm text-gray-700 uppercase hidden sm:table-row">
+                <th class="p-3">Period</th>
+                <th class="p-3">Start Date</th>
+                <th class="p-3">End Date</th>
+              </tr>
+            </thead>
+            <tbody id="payPeriodsTableBody" class="divide-y divide-gray-100">
+               <tr><td colspan="3" class="p-8 text-center text-gray-400 italic">Loading pay periods...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Audit Logs Tab -->
+      <div id="auditLogsTab" class="settings-tab-content bg-white rounded-xl shadow-sm border border-gray-200 p-6 hidden">
+        <div class="flex justify-between items-center mb-4 border-b pb-2">
+           <h3 class="text-xl font-bold text-[#002147]">Audit Logs</h3>
+        </div>
+
+        <div class="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200 flex flex-col md:flex-row gap-4 items-end">
+           <div class="w-full md:w-auto">
+             <label class="block text-sm font-bold mb-1">Start Date</label>
+             <input type="date" id="auditStartDate" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none text-sm">
+           </div>
+           <div class="w-full md:w-auto">
+             <label class="block text-sm font-bold mb-1">End Date</label>
+             <input type="date" id="auditEndDate" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none text-sm">
+           </div>
+           <button onclick="generateAuditReport()" id="btnGenerateAudit" class="bg-[#002147] hover:bg-blue-900 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-md text-sm w-full md:w-auto">
+              Generate Report
+           </button>
+           <button onclick="exportToCSV('Audit_Logs.csv', 'auditLogsTable')" class="bg-white hover:bg-gray-100 text-[#002147] text-sm font-bold py-2 px-4 rounded border border-[#002147] transition-colors shadow-sm ml-auto flex items-center gap-2">
+              <span>📥</span> Export CSV
+           </button>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table id="auditLogsTable" class="w-full text-left border-collapse min-w-max">
+            <thead>
+              <tr class="bg-gray-50 border-b border-gray-200 text-sm text-gray-700 uppercase">
+                <th class="p-3">Timestamp</th>
+                <th class="p-3">Actor</th>
+                <th class="p-3">Action Type</th>
+                <th class="p-3">Target ID</th>
+                <th class="p-3">Details</th>
+              </tr>
+            </thead>
+            <tbody id="auditLogsTableBody" class="divide-y divide-gray-100">
+               <tr><td colspan="5" class="p-8 text-center text-gray-400 italic">Select a date range and click Generate Report.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </main>
+

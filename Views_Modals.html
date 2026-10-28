@@ -1,0 +1,388 @@
+<!-- ====================================================================== -->
+<!-- VIEWS_MODALS.HTML — Application Modals, Overlays, and Toast Container  -->
+<!-- ====================================================================== -->
+    <!-- Add/Edit Staff Modal -->
+    <div id="staffModal" class="modal transition-opacity duration-[250ms] ease-in-out opacity-0 pointer-events-none fixed w-full h-full top-0 left-0 flex items-center justify-center z-[110]" onclick="if(event.target === this) attemptCloseAllModals()">
+      <div class="modal-container bg-white w-11/12 md:max-w-md mx-auto rounded-2xl shadow-2xl z-[110] overflow-y-auto max-h-[90vh]">
+        <div class="py-4 text-left px-6">
+          <div class="flex justify-between items-center pb-3 border-b border-gray-200">
+            <p id="staffModalTitle" class="text-2xl font-bold text-[#002147]">Add Staff Member</p>
+            <div class="modal-close cursor-pointer z-50 text-gray-500 hover:text-red-500 transition-colors" onclick="attemptCloseAllModals()">
+              <svg class="fill-current" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 18 18">
+                <path d="M14.53 4.53l-1.06-1.06L9 7.94 4.53 3.47 3.47 4.53 7.94 9l-4.47 4.47 1.06 1.06L9 10.06l4.47 4.47 1.06-1.06L10.06 9z"></path>
+              </svg>
+            </div>
+          </div>
+          <div class="mt-4">
+            <input type="hidden" id="staffOriginalEmail" value="">
+            <div class="mb-4">
+              <label class="block text-sm font-bold mb-1">Name (LASTFIRST)</label>
+              <input type="text" id="staffNameInput" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none" placeholder="e.g. Smith John" required>
+            </div>
+            <div class="mb-4">
+              <label class="block text-sm font-bold mb-1">Email Address</label>
+              <input type="email" id="staffEmailInput" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none" placeholder="e.g. jsmith@gocathedral.com" required>
+            </div>
+            <div class="mb-4">
+              <label class="block text-sm font-bold mb-1">Role</label>
+              <select id="staffRoleInput" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none">
+                <option value="Teacher">Teacher</option>
+                <option value="Substitute">Substitute</option>
+                <option value="Admin" disabled>Admin</option>
+                <option value="HR" disabled>HR</option>
+                <option value="Principal" disabled>Principal</option>
+                <option value="Sub Coordinator" disabled>Sub Coordinator</option>
+              </select>
+            </div>
+            <div class="mb-4">
+              <label class="block text-sm font-bold mb-1">Duty Periods (Optional)</label>
+              <input type="hidden" id="staffDutyInput" value="">
+              <div class="grid grid-cols-4 gap-2 mt-2" id="staffDutyCheckboxes">
+                <!-- Checkboxes will be dynamically generated or hardcoded here -->
+                <label class="flex items-center space-x-2"><input type="checkbox" value="1" class="form-checkbox h-4 w-4 text-[#00843D] staff-duty-cb" onchange="updateHiddenDutyInput()"> <span class="text-sm">Period 1</span></label>
+                <label class="flex items-center space-x-2"><input type="checkbox" value="2" class="form-checkbox h-4 w-4 text-[#00843D] staff-duty-cb" onchange="updateHiddenDutyInput()"> <span class="text-sm">Period 2</span></label>
+                <label class="flex items-center space-x-2"><input type="checkbox" value="3" class="form-checkbox h-4 w-4 text-[#00843D] staff-duty-cb" onchange="updateHiddenDutyInput()"> <span class="text-sm">Period 3</span></label>
+                <label class="flex items-center space-x-2"><input type="checkbox" value="4" class="form-checkbox h-4 w-4 text-[#00843D] staff-duty-cb" onchange="updateHiddenDutyInput()"> <span class="text-sm">Period 4</span></label>
+                <label class="flex items-center space-x-2"><input type="checkbox" value="5" class="form-checkbox h-4 w-4 text-[#00843D] staff-duty-cb" onchange="updateHiddenDutyInput()"> <span class="text-sm">Period 5</span></label>
+                <label class="flex items-center space-x-2"><input type="checkbox" value="6" class="form-checkbox h-4 w-4 text-[#00843D] staff-duty-cb" onchange="updateHiddenDutyInput()"> <span class="text-sm">Period 6</span></label>
+                <label class="flex items-center space-x-2"><input type="checkbox" value="7" class="form-checkbox h-4 w-4 text-[#00843D] staff-duty-cb" onchange="updateHiddenDutyInput()"> <span class="text-sm">Period 7</span></label>
+                <label class="flex items-center space-x-2"><input type="checkbox" value="8" class="form-checkbox h-4 w-4 text-[#00843D] staff-duty-cb" onchange="updateHiddenDutyInput()"> <span class="text-sm">Period 8</span></label>
+              </div>
+            </div>
+          </div>
+          <div class="flex justify-end pt-2 mt-4 space-x-2 border-t border-gray-200 pt-4">
+            <button class="modal-close px-4 bg-gray-200 p-2 rounded-lg text-black hover:bg-gray-300 transition-colors" onclick="attemptCloseAllModals()">Cancel</button>
+            <button id="saveStaffBtn" class="px-4 bg-[#00843D] p-2 rounded-lg text-white hover:bg-green-700 transition-colors" onclick="saveStaffMember()">Save Staff</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Generic Modal overlay -->
+    <div id="genericModalOverlay" class="modal transition-opacity duration-[250ms] ease-in-out opacity-0 pointer-events-none fixed w-full h-full top-0 left-0 flex items-center justify-center z-[100]">
+      <div class="modal-overlay absolute w-full h-full bg-gray-900 opacity-50" onclick="attemptCloseAllModals()"></div>
+    </div>
+
+    <div id="detailsModal" class="modal transition-opacity duration-[250ms] ease-in-out opacity-0 pointer-events-none fixed w-full h-full top-0 left-0 flex items-center justify-center z-[110]" onclick="if(event.target === this) attemptCloseAllModals()">
+      <div class="modal-container bg-white w-11/12 md:max-w-xl mx-auto rounded-2xl shadow-2xl z-[110] overflow-y-auto max-h-[90vh]">
+        <div class="p-6">
+          <div class="flex justify-between items-center pb-3 border-b">
+            <p class="text-2xl font-bold text-[#002147]">Coverage Details</p>
+            <div onclick="attemptCloseAllModals()" class="cursor-pointer z-50 p-2 hover:bg-gray-100 rounded-full">
+              <svg class="fill-current text-black" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 18 18"><path d="M14.53 4.53l-1.06-1.06L9 7.94 4.53 3.47 3.47 4.53 7.94 9l-4.47 4.47 1.06 1.06L9 10.06l4.47 4.47 1.06-1.06L10.06 9z"></path></svg>
+            </div>
+          </div>
+          <div id="detailsContent" class="mt-4 space-y-4">
+             <!-- Populated dynamically -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Suggest Sub Modal -->
+    <div id="suggestSubModal" class="modal transition-opacity duration-[250ms] ease-in-out opacity-0 pointer-events-none fixed w-full h-full top-0 left-0 flex items-center justify-center z-[110]" onclick="if(event.target === this) cancelSuggestions()">
+      <div class="modal-overlay absolute w-full h-full bg-gray-900 opacity-50" onclick="cancelSuggestions()"></div>
+      <div class="modal-container bg-white w-11/12 md:max-w-4xl mx-auto rounded-2xl shadow-2xl z-[110] overflow-y-auto max-h-[90vh]">
+        <div class="p-6">
+          <div class="flex justify-between items-center pb-3 border-b border-gray-200">
+            <p class="text-2xl font-bold text-[#002147]">Suggest Subbing</p>
+            <div class="modal-close cursor-pointer z-50 text-gray-500 hover:text-red-500 transition-colors" onclick="cancelSuggestions()">
+              <svg class="fill-current" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 18 18"><path d="M14.53 4.53l-1.06-1.06L9 7.94 4.53 3.47 3.47 4.53 7.94 9l-4.47 4.47 1.06 1.06L9 10.06l4.47 4.47 1.06-1.06L10.06 9z"/></svg>
+            </div>
+          </div>
+
+          <div id="suggestSubLoading" class="hidden text-center py-8">
+              <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-[#002147] mb-2"></div>
+              <p class="text-gray-500">Calculating suggestions...</p>
+          </div>
+
+          <div id="suggestSubContent" class="hidden mt-4">
+              <div class="overflow-x-auto border border-gray-200 rounded-lg mb-6">
+                  <table class="w-full text-left border-collapse min-w-max">
+                      <thead id="suggestSubTableHeader" class="bg-gray-50 border-b border-gray-200">
+                          <!-- Dynamically populated -->
+                      </thead>
+                      <tbody id="suggestSubTableBody" class="divide-y divide-gray-200">
+                      </tbody>
+                  </table>
+              </div>
+
+              <div class="flex justify-end gap-3 mt-6">
+                  <button onclick="cancelSuggestions()" class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-semibold transition-colors">Cancel</button>
+                  <button id="approveSuggestionsBtn" onclick="approveSuggestions()" class="px-4 py-2 bg-[#00843D] text-white rounded-lg hover:bg-[#00662F] font-semibold transition-colors shadow-sm">Approve All</button>
+              </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sub Availability On Behalf Modal -->
+    <div id="subAvailabilityOnBehalfModal" class="modal transition-opacity duration-[250ms] ease-in-out opacity-0 pointer-events-none fixed w-full h-full top-0 left-0 flex items-center justify-center z-[110]" onclick="if(event.target === this) attemptCloseAllModals()">
+      <div class="modal-container bg-white w-11/12 md:max-w-xl mx-auto rounded-2xl shadow-2xl z-[110] overflow-y-auto max-h-[90vh]">
+        <div class="p-6">
+          <div class="flex justify-between items-center pb-3 border-b border-gray-200">
+            <p class="text-2xl font-bold text-[#002147]">Add Availability for Sub</p>
+            <div class="modal-close cursor-pointer z-50 text-gray-500 hover:text-red-500 transition-colors" onclick="attemptCloseAllModals()">
+              <svg class="fill-current" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 18 18"><path d="M14.53 4.53l-1.06-1.06L9 7.94 4.53 3.47 3.47 4.53 7.94 9l-4.47 4.47 1.06 1.06L9 10.06l4.47 4.47 1.06-1.06L10.06 9z"></path></svg>
+            </div>
+          </div>
+          <div class="mt-4">
+             <div class="mb-4">
+                <label class="block text-sm font-bold text-[#002147] mb-2">Select Substitute:</label>
+                <input type="text" id="onBehalfSub" list="allSubsDataList" placeholder="Select substitute..." oninput="handleOnBehalfSubChange()" onchange="handleOnBehalfSubChange()" class="w-full p-3 border rounded-xl focus:ring-2 focus:ring-[#00843D] outline-none">
+                <datalist id="allSubsDataList"></datalist>
+             </div>
+
+             <div id="onBehalfSubCalendarSection" class="hidden">
+                 <div class="mb-4 text-gray-600">Click a day to toggle availability (Full Day -> AM -> PM -> Not Available).</div>
+                 <div class="flex items-center gap-4 mb-4">
+                   <button onclick="changeAvailabilityMonthForSubOnBehalf(-1)" class="text-blue-600 hover:text-blue-800 font-bold">&lt; Prev</button>
+                   <h4 id="onBehalfSubAvailabilityMonthLabel" class="text-lg font-bold text-[#002147] text-center flex-1">Loading...</h4>
+                   <button onclick="changeAvailabilityMonthForSubOnBehalf(1)" class="text-blue-600 hover:text-blue-800 font-bold">Next &gt;</button>
+                 </div>
+                 <div class="grid grid-cols-7 gap-1 text-center font-bold text-sm text-gray-700 mb-2">
+                    <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+                 </div>
+                 <div id="onBehalfSubAvailabilityCalendarGrid" class="grid grid-cols-7 gap-1">
+                    <!-- Calendar injected here -->
+                 </div>
+             </div>
+             <div id="onBehalfSubLoading" class="hidden text-center mt-4">
+               <span class="text-gray-500 italic">Loading availability...</span>
+             </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="modal" class="modal transition-opacity duration-[250ms] ease-in-out opacity-0 pointer-events-none fixed w-full h-full top-0 left-0 flex items-center justify-center z-[110]" onclick="if(event.target === this) attemptCloseAllModals()">
+      <div class="modal-container bg-white w-11/12 md:max-w-xl mx-auto rounded-2xl shadow-2xl z-[110] overflow-y-auto max-h-[90vh]">
+        <div class="p-6">
+          <div class="flex justify-between items-center pb-3 border-b">
+            <div class="flex items-center gap-4">
+               <p id="requestModalTitle" class="text-2xl font-bold text-[#002147]">Request Sub</p>
+               <button type="button" id="adminDeleteBtn" onclick="deleteAbsenceFromModal()" class="hidden bg-red-100 hover:bg-red-200 text-red-700 text-xs font-bold py-1 px-3 rounded-lg border border-red-200 transition-colors shadow-sm">Delete Request</button>
+            </div>
+            <div onclick="attemptCloseAllModals()" class="cursor-pointer z-50 p-2 hover:bg-gray-100 rounded-full">
+              <svg class="fill-current text-black" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 18 18"><path d="M14.53 4.53l-1.06-1.06L9 7.94 4.53 3.47 3.47 4.53 7.94 9l-4.47 4.47 1.06 1.06L9 10.06l4.47 4.47 1.06-1.06L10.06 9z"></path></svg>
+            </div>
+          </div>
+
+          <form id="absenceForm" class="space-y-4 mt-4">
+            <input type="hidden" id="editAbsenceId" value="">
+            
+            <div id="onBehalfSection" class="hidden">
+              <label class="block text-sm font-bold mb-1">Teacher</label>
+              <input type="text" id="onBehalfTeacher" list="allStaffDataList" placeholder="Select teacher..." oninput="handleOnBehalfTeacherChange()" onchange="handleOnBehalfTeacherChange()" class="w-full p-3 border rounded-xl focus:ring-2 focus:ring-[#00843D] outline-none">
+              <datalist id="allStaffDataList"></datalist>
+              <datalist id="dynamicStaffDataList"></datalist>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-bold mb-1 flex items-center">
+                  Date of Absence
+                  <span id="dayColorBadge" class="hidden ml-2 text-xs font-bold px-2 py-1 rounded border"></span>
+                </label>
+                <input type="text" id="absDate" required class="w-full p-3 border rounded-xl focus:ring-2 focus:ring-[#00843D] outline-none" placeholder="Select Date(s)...">
+              </div>
+              <div>
+                <label class="block text-sm font-bold mb-1">Duration</label>
+                <select id="absDuration" class="w-full p-3 border rounded-xl outline-none bg-white" onchange="if(window.absDatePicker && window.absDatePicker.selectedDates.length > 0) handleAbsDateChangeMulti(window.absDatePicker.selectedDates);">
+                  <option value="Full Day">Full Day</option>
+                  <option value="Half Day">Half Day</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-sm font-bold mb-2">Period(s) Needed</label>
+              <div id="multiDatePeriodsContainer" class="hidden flex flex-col gap-4 mb-4"></div>
+              <div id="singleDatePeriodsBlock" class="grid grid-cols-5 gap-2">
+                <label class="flex items-center gap-2 p-2 border rounded-lg cursor-pointer hover:bg-gray-50"><input type="checkbox" value="1" class="period-cb h-4 w-4"> 1</label>
+                <label class="flex items-center gap-2 p-2 border rounded-lg cursor-pointer hover:bg-gray-50"><input type="checkbox" value="2" class="period-cb h-4 w-4"> 2</label>
+                <label class="flex items-center gap-2 p-2 border rounded-lg cursor-pointer hover:bg-gray-50"><input type="checkbox" value="3" class="period-cb h-4 w-4"> 3</label>
+                <label class="flex items-center gap-2 p-2 border rounded-lg cursor-pointer hover:bg-gray-50"><input type="checkbox" value="4" class="period-cb h-4 w-4"> 4</label>
+                <label class="flex items-center gap-2 p-2 border rounded-lg cursor-pointer hover:bg-gray-50"><input type="checkbox" value="5" class="period-cb h-4 w-4"> 5</label>
+                <label class="flex items-center gap-2 p-2 border rounded-lg cursor-pointer hover:bg-gray-50"><input type="checkbox" value="6" class="period-cb h-4 w-4"> 6</label>
+                <label class="flex items-center gap-2 p-2 border rounded-lg cursor-pointer hover:bg-gray-50"><input type="checkbox" value="7" class="period-cb h-4 w-4"> 7</label>
+                                <label class="flex items-center gap-2 p-2 border rounded-lg cursor-pointer hover:bg-gray-50"><input type="checkbox" value="8" class="period-cb h-4 w-4"> 8</label>
+                <label class="flex items-center gap-2 p-2 border rounded-lg cursor-pointer hover:bg-gray-50"><input type="checkbox" value="0" class="period-cb h-4 w-4"> 0</label>
+                <label class="flex items-center gap-2 p-2 border rounded-lg cursor-pointer hover:bg-gray-50"><input type="checkbox" value="10" class="period-cb h-4 w-4"> Advisory</label>
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-sm font-bold mb-1">Reason for Absence</label>
+              <select id="absReason" onchange="checkSpecialReason()" class="w-full p-3 border rounded-xl outline-none bg-white">
+                <!-- Dynamically populated -->
+              </select>
+            </div>
+
+            <div id="hrSection" class="hidden bg-orange-50 p-4 rounded-xl border border-orange-200">
+              <label class="flex items-start gap-3 cursor-pointer">
+                <input type="checkbox" id="hrConfirm" class="mt-1 h-5 w-5 rounded text-orange-600">
+                <span class="text-sm text-orange-800 leading-tight">I confirm I have contacted HR and provided documentation for this special absence.</span>
+              </label>
+            </div>
+
+            <div id="principalSection" class="hidden bg-blue-50 p-4 rounded-xl border border-blue-200">
+              <span class="text-sm text-blue-800 leading-tight">Athletic Absences must be approved first by the principal and are meant for coaches accompanying athletes on Cathedral Transportation.</span>
+            </div>
+
+            <div>
+              <label class="block text-sm font-bold mb-1">Urgency</label>
+              <div class="flex gap-2">
+                <button type="button" onclick="setUrgency('Standard')" id="btnStd" class="flex-1 py-2 rounded-lg border-2 border-[#00843D] bg-[#00843D] text-white font-bold transition-colors">Standard</button>
+                <button type="button" onclick="setUrgency('Urgent')" id="btnUrg" class="flex-1 py-2 rounded-lg border-2 border-gray-200 text-gray-500 font-bold transition-colors">Urgent</button>
+              </div>
+              <input type="hidden" id="urgencyValue" value="Standard">
+            </div>
+
+            <div>
+              <label class="block text-sm font-bold mb-1">Special Instructions (Optional)</label>
+              <textarea id="specialInst" rows="2" class="w-full p-3 border rounded-xl outline-none focus:ring-2 focus:ring-[#00843D]" placeholder="Any extra details..."></textarea>
+            </div>
+
+            <div>
+              <label class="block text-sm font-bold mb-1">Sub Plans Attachment (URL) (Optional)</label>
+              <input type="url" id="subPlanUrlInput" class="w-full p-3 border rounded-xl outline-none focus:ring-2 focus:ring-[#00843D]" placeholder="Paste a Google Doc or PDF link here...">
+            </div>
+
+            <div class="bg-gray-50 p-4 rounded-xl border border-gray-200">
+              <label class="flex items-start gap-3 cursor-pointer">
+                <input type="checkbox" id="agreement" required class="mt-1 h-5 w-5 rounded">
+                <span class="text-xs text-gray-600 leading-tight italic">I confirm I will have posted my lesson plans in Canvas, and submitted request to Paycom if this is for PTO, Professional Development, Bereavement, Jury Duty. Absences for Athletics, Field Trips, and Retreats do not need to be submitted to Paycom.</span>
+              </label>
+            </div>
+
+            <button type="submit" id="submitBtn" class="w-full bg-[#002147] hover:bg-blue-900 text-white font-bold py-4 rounded-xl transition-all shadow-lg mt-2">
+              Submit Request
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Custom Toast Component -->
+    <div id="toast-container" class="fixed top-5 right-5 z-[200] flex flex-col gap-2 pointer-events-none"></div>
+
+    <!-- Sub Feedback Modal -->
+    <div id="subFeedbackModal" class="modal transition-opacity duration-[250ms] ease-in-out opacity-0 pointer-events-none fixed w-full h-full top-0 left-0 flex items-center justify-center z-[300]" onclick="if(event.target === this) closeSubFeedbackModal()">
+      <div class="modal-overlay absolute w-full h-full bg-gray-900 opacity-50" onclick="closeSubFeedbackModal()"></div>
+      <div class="modal-container bg-white w-11/12 md:max-w-md mx-auto rounded-2xl shadow-2xl z-[310] overflow-y-auto">
+        <div class="p-6">
+          <div class="flex justify-between items-center pb-3 border-b mb-4">
+            <p class="text-xl font-bold text-[#002147]">Leave Feedback</p>
+            <div onclick="closeSubFeedbackModal()" class="cursor-pointer z-50 p-2 hover:bg-gray-100 rounded-full">
+              <svg class="fill-current text-black" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 18 18"><path d="M14.53 4.53l-1.06-1.06L9 7.94 4.53 3.47 3.47 4.53 7.94 9l-4.47 4.47 1.06 1.06L9 10.06l4.47 4.47 1.06-1.06L10.06 9z"></path></svg>
+            </div>
+          </div>
+          <form id="subFeedbackForm" onsubmit="event.preventDefault(); submitSubFeedback();">
+             <input type="hidden" id="feedbackAbsenceId" name="feedbackAbsenceId">
+             <input type="hidden" id="feedbackPeriod" name="feedbackPeriod">
+             <input type="hidden" id="feedbackRating" name="feedbackRating" value="0">
+
+             <div class="mb-4 text-center">
+                 <p class="text-gray-700 font-semibold mb-2">How did the class go?</p>
+                 <div id="feedbackStarsContainer" class="flex justify-center gap-2 cursor-pointer text-gray-300 text-4xl select-none">
+                     <span data-val="1" onclick="setFeedbackRating(1)">★</span>
+                     <span data-val="2" onclick="setFeedbackRating(2)">★</span>
+                     <span data-val="3" onclick="setFeedbackRating(3)">★</span>
+                     <span data-val="4" onclick="setFeedbackRating(4)">★</span>
+                     <span data-val="5" onclick="setFeedbackRating(5)">★</span>
+                 </div>
+             </div>
+
+             <div class="mb-4">
+                 <label class="block text-gray-700 text-sm font-bold mb-2" for="feedbackNote">Notes for the Teacher (Optional)</label>
+                 <textarea id="feedbackNote" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline focus:border-blue-500 h-24" placeholder="Any issues, positive notes, or general feedback..."></textarea>
+             </div>
+
+             <div class="flex justify-end gap-3 mt-6">
+                <button type="button" onclick="closeSubFeedbackModal()" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold rounded-lg transition-colors">Cancel</button>
+                <button type="submit" id="submitFeedbackBtn" class="px-4 py-2 bg-[#00843D] hover:bg-green-700 text-white font-bold rounded-lg transition-colors">Submit Feedback</button>
+             </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Duplicate Absence Modal -->
+    <div id="duplicateAbsenceModal" class="modal transition-opacity duration-[250ms] ease-in-out opacity-0 pointer-events-none fixed w-full h-full top-0 left-0 flex items-center justify-center z-[300]" onclick="if(event.target === this) closeDuplicateWarning()">
+      <div class="modal-overlay absolute w-full h-full bg-gray-900 opacity-50" onclick="closeDuplicateWarning()"></div>
+      <div class="modal-container bg-white w-11/12 md:max-w-md mx-auto rounded-2xl shadow-2xl z-[310] overflow-y-auto">
+        <div class="p-6">
+          <div class="flex justify-between items-center pb-3 border-b">
+            <p class="text-xl font-bold text-[#002147]">Duplicate Request Detected</p>
+            <div onclick="closeDuplicateWarning()" class="cursor-pointer z-50 p-2 hover:bg-gray-100 rounded-full">
+              <svg class="fill-current text-black" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 18 18"><path d="M14.53 4.53l-1.06-1.06L9 7.94 4.53 3.47 3.47 4.53 7.94 9l-4.47 4.47 1.06 1.06L9 10.06l4.47 4.47 1.06-1.06L10.06 9z"></path></svg>
+            </div>
+          </div>
+          <div class="mt-4">
+             <p class="text-gray-700 text-sm mb-6">You already have an absence request submitted for this day. Would you like to edit your existing request instead?</p>
+             <div class="flex flex-col sm:flex-row justify-end gap-3">
+                <button onclick="cancelDuplicateWarning()" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold rounded-lg transition-colors">Cancel New Request</button>
+                <button id="duplicateModalEditBtn" class="px-4 py-2 bg-[#002147] hover:bg-blue-900 text-white font-bold rounded-lg transition-colors">Edit Existing Request</button>
+             </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Principals Digest Preview Modal -->
+    <div id="principalsDigestModal" class="modal transition-opacity duration-[250ms] ease-in-out opacity-0 pointer-events-none fixed w-full h-full top-0 left-0 flex items-center justify-center z-[250]" onclick="if(event.target === this) closePrincipalsDigestModal()">
+      <div class="modal-overlay absolute w-full h-full bg-gray-900 opacity-50" onclick="closePrincipalsDigestModal()"></div>
+      <div class="modal-container bg-white w-11/12 md:max-w-2xl mx-auto rounded-2xl shadow-2xl z-[260] overflow-y-auto max-h-[90vh]">
+        <div class="p-6">
+          <div class="flex justify-between items-center mb-4 border-b pb-2">
+            <p class="text-xl font-bold text-[#002147]">Principal's Digest Preview</p>
+            <div onclick="closePrincipalsDigestModal()" class="cursor-pointer z-50 p-2 hover:bg-gray-100 rounded-full">
+              <svg class="fill-current text-black" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 18 18"><path d="M14.53 4.53l-1.06-1.06L9 7.94 4.53 3.47 3.47 4.53 7.94 9l-4.47 4.47 1.06 1.06L9 10.06l4.47 4.47 1.06-1.06L10.06 9z"></path></svg>
+            </div>
+          </div>
+          <div class="mt-4">
+             <div id="principalsDigestContent" class="bg-gray-50 border border-gray-200 p-4 rounded-lg overflow-x-auto text-sm">
+                <!-- HTML injected here -->
+             </div>
+             <div class="flex justify-end gap-3 mt-6">
+                <button onclick="closePrincipalsDigestModal()" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold rounded-lg transition-colors">Close</button>
+                <button onclick="copyPrincipalsDigest()" class="px-4 py-2 bg-[#00843D] hover:bg-green-700 text-white font-bold rounded-lg transition-colors flex items-center gap-2"><span>📋</span> Copy to Clipboard</button>
+             </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Custom Confirm Modal -->
+    <div id="customConfirmModal" class="modal transition-opacity duration-[250ms] ease-in-out opacity-0 pointer-events-none fixed w-full h-full top-0 left-0 flex items-center justify-center z-[250]" onclick="if(event.target === this) closeCustomConfirm()">
+      <div class="modal-overlay absolute w-full h-full bg-gray-900 opacity-50" onclick="closeCustomConfirm()"></div>
+      <div class="modal-container bg-white w-11/12 md:max-w-md mx-auto rounded-2xl shadow-2xl z-[260] overflow-y-auto">
+        <div class="p-6">
+          <div class="flex justify-between items-center pb-3 border-b">
+            <p id="confirmModalTitle" class="text-xl font-bold text-[#002147]">Confirm Action</p>
+            <div onclick="closeCustomConfirm()" class="cursor-pointer z-50 p-2 hover:bg-gray-100 rounded-full">
+              <svg class="fill-current text-black" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 18 18"><path d="M14.53 4.53l-1.06-1.06L9 7.94 4.53 3.47 3.47 4.53 7.94 9l-4.47 4.47 1.06 1.06L9 10.06l4.47 4.47 1.06-1.06L10.06 9z"></path></svg>
+            </div>
+          </div>
+          <div class="mt-4">
+             <p id="confirmModalMessage" class="text-gray-700 text-sm mb-6"></p>
+             <div class="flex justify-end gap-3">
+                <button onclick="closeCustomConfirm()" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold rounded-lg transition-colors">Cancel</button>
+                <button id="confirmModalActionBtn" class="px-4 py-2 bg-[#00843D] hover:bg-green-700 text-white font-bold rounded-lg transition-colors">Confirm</button>
+             </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Version Update Modal -->
+    <div id="versionUpdateModal" class="fixed inset-0 bg-gray-900 bg-opacity-75 hidden flex items-center justify-center z-[500] backdrop-blur-sm">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 transform transition-all p-6 text-center">
+            <h2 class="text-2xl font-bold text-[#002147] mb-4">App Update Available</h2>
+            <p class="text-gray-700 mb-6">A new version of this application has been released. Please refresh your browser to apply the update and continue working.</p>
+            <button onclick="reloadApp()" class="w-full bg-[#002147] hover:bg-blue-800 text-white font-bold py-3 px-4 rounded-lg transition-colors">
+                Refresh Now
+            </button>
+        </div>
+    </div>

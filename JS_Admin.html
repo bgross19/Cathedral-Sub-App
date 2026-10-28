@@ -1,0 +1,1138 @@
+<!-- ====================================================================== -->
+<!-- JS_ADMIN.HTML — Admin Dashboard, Today at a Glance & Sub Suggestions   -->
+<!-- ====================================================================== -->
+<script>
+      function toggleAdminDashboard() {
+        const mainContent = document.getElementById('mainContent');
+        const adminView = document.getElementById('adminDashboardView');
+        const hrView = document.getElementById('hrDashboardView');
+        const atAGlanceView = document.getElementById('atAGlanceDashboardView');
+        const settingsView = document.getElementById('settingsDashboardView');
+
+        if (adminView.classList.contains('hidden')) {
+          mainContent.classList.add('hidden');
+          if (hrView) hrView.classList.add('hidden');
+          if (atAGlanceView) atAGlanceView.classList.add('hidden');
+          if (settingsView) settingsView.classList.add('hidden');
+          adminView.classList.remove('hidden');
+
+          const today = new Date();
+          const offset = today.getTimezoneOffset() * 60000;
+          const localISOTime = (new Date(today - offset)).toISOString().split('T')[0];
+
+          if (!document.getElementById('filterStartDate').value && !document.getElementById('filterEndDate').value) {
+              document.getElementById('filterStartDate').value = localISOTime;
+          }
+
+          if (adminDataRaw.length === 0) {
+            loadAdminDashboardData();
+          } else {
+            applyAdminFilters();
+          }
+        } else {
+          adminView.classList.add('hidden');
+          mainContent.classList.remove('hidden');
+        }
+      }
+
+      function toggleAtAGlanceDashboard() {
+        const mainContent = document.getElementById('mainContent');
+        const adminView = document.getElementById('adminDashboardView');
+        const hrView = document.getElementById('hrDashboardView');
+        const atAGlanceView = document.getElementById('atAGlanceDashboardView');
+        const settingsView = document.getElementById('settingsDashboardView');
+
+        if (atAGlanceView.classList.contains('hidden')) {
+          mainContent.classList.add('hidden');
+          if (adminView) adminView.classList.add('hidden');
+          if (hrView) hrView.classList.add('hidden');
+          if (settingsView) settingsView.classList.add('hidden');
+          atAGlanceView.classList.remove('hidden');
+
+          if (adminDataRaw.length === 0) {
+            loadAdminDashboardData(true); // pass flag to indicate it should render atAGlance when done
+          } else {
+            // Default to today if empty
+            if (!document.getElementById('atAGlanceDate').value) {
+                const today = new Date();
+                const offset = today.getTimezoneOffset() * 60000;
+                const localISOTime = (new Date(today - offset)).toISOString().split('T')[0];
+                document.getElementById('atAGlanceDate').value = localISOTime;
+            }
+            applyAtAGlanceFilter();
+          }
+        } else {
+          atAGlanceView.classList.add('hidden');
+          mainContent.classList.remove('hidden');
+        }
+      }
+
+      function shiftAtAGlanceDate(days) {
+        const dateInput = document.getElementById('atAGlanceDate');
+        if (!dateInput.value) return;
+
+        let currentDate = new Date(dateInput.value + 'T12:00:00'); // Use noon to avoid timezone shift
+
+        // Add or subtract days, skipping weekends
+        let daysToAdd = days;
+        while (daysToAdd !== 0) {
+            currentDate.setDate(currentDate.getDate() + Math.sign(daysToAdd));
+            const dayOfWeek = currentDate.getDay();
+            if (dayOfWeek !== 0 && dayOfWeek !== 6) { // 0 = Sunday, 6 = Saturday
+                daysToAdd -= Math.sign(daysToAdd);
+            }
+        }
+
+        // Format back to YYYY-MM-DD local
+        const year = currentDate.getFullYear();
+        const month = String(currentDate.getMonth() + 1).padStart(2, '0');
+        const day = String(currentDate.getDate()).padStart(2, '0');
+        dateInput.value = `${year}-${month}-${day}`;
+
+        applyAtAGlanceFilter();
+      }
+
+      function applyAtAGlanceFilter() {
+        const selectedDate = document.getElementById('atAGlanceDate').value;
+        if (!selectedDate) return;
+
+        // Filter for records on the exact selected date
+        const todaysRecords = adminDataRaw.filter(req => req.date === selectedDate);
+        renderAtAGlanceTable(todaysRecords);
+
+        if (currentUserPermissions && (currentUserPermissions["Admin Dashboard"] || currentUserRole === 'admin' || currentUserRole === 'sub coordinator')) {
+            document.getElementById('atAGlanceAssignableContainer').classList.remove('hidden');
+            document.getElementById('suggestSubbingBtn').classList.remove('hidden');
+            renderAtAGlanceAssignableTable(todaysRecords);
+        } else {
+            document.getElementById('atAGlanceAssignableContainer').classList.add('hidden');
+            document.getElementById('suggestSubbingBtn').classList.add('hidden');
+        }
+      }
+
+      function renderAtAGlanceTable(records) {
+        const thead = document.getElementById('atAGlanceTableHeader');
+        const tbody = document.getElementById('atAGlanceTableBody');
+
+        if (records.length === 0) {
+            thead.innerHTML = '<tr class="bg-gray-50 border-b border-gray-300 text-sm text-gray-700 uppercase"><th class="p-3 border border-gray-300 sticky left-0 z-20 bg-gray-50">Teacher Name</th></tr>';
+            tbody.innerHTML = '<tr><td class="p-8 text-center text-gray-400 italic border border-gray-300">No absence requests found for this date.</td></tr>';
+            return;
+        }
+
+        // 1. Group records by teacher
+        const teacherMap = {};
+        const activePeriods = new Set();
+
+        records.forEach(req => {
+            if (!teacherMap[req.teacherName]) {
+                teacherMap[req.teacherName] = {
+                    name: req.teacherName,
+                    periods: {}
+                };
+            }
+
+            const rawIdx = adminDataRaw.findIndex(r => r.id === req.id && r.period === req.period);
+
+            teacherMap[req.teacherName].periods[req.period] = {
+                assignedSub: req.assignedSub || null,
+                room: req.room || "N/A",
+                rawIdx: rawIdx
+            };
+            activePeriods.add(parseInt(req.period));
+        });
+
+        const sortedActivePeriods = Array.from(activePeriods).sort((a, b) => a - b);
+
+        // 2. Build Header
+        let headerHtml = `<th class="p-3 border border-gray-300 min-w-[200px] sticky left-0 z-20 bg-gray-50 shadow-[1px_0_0_0_#d1d5db]">Teacher Name</th>`;
+        sortedActivePeriods.forEach(p => {
+            headerHtml += `<th class="p-3 border border-gray-300 text-center w-32">${formatPeriodLabel(p)}</th>`;
+        });
+        thead.innerHTML = headerHtml;
+
+        // 3. Build Body
+        let html = '';
+        const teachers = Object.values(teacherMap).sort((a, b) => a.name.localeCompare(b.name));
+
+        teachers.forEach(t => {
+            html += `<tr class="hover:bg-gray-50 transition-colors group">`;
+            html += `<td class="p-3 text-sm text-gray-800 font-bold border border-gray-300 sticky left-0 z-10 bg-white group-hover:bg-gray-50 shadow-[1px_0_0_0_#d1d5db]">${escapeHtml(t.name)}</td>`;
+
+            sortedActivePeriods.forEach(p => {
+                const pData = t.periods[p];
+                if (pData) {
+                    // They requested a sub for this period
+                    if (pData.assignedSub) {
+                        html += `<td class="p-3 text-xs text-center border border-gray-300 bg-green-50 align-top cursor-pointer hover:opacity-80 transition-opacity" onclick="openDetailsModalForAdmin(${escapeJs(pData.rawIdx)})">
+                                    <div class="font-bold text-green-800">${escapeHtml(pData.assignedSub)}</div>
+                                    <div class="text-gray-500 mt-1">${escapeHtml(pData.room)}</div>
+                                 </td>`;
+                    } else {
+                        const req = adminDataRaw[pData.rawIdx];
+                        const quickCoverLink = window.globalAppUrl ? `${window.globalAppUrl}?action=quickCover&absenceId=${req.id}&period=${req.period}` : '#';
+
+                        html += `<td class="p-3 text-xs text-center border border-gray-300 bg-yellow-100 align-top hover:opacity-80 transition-opacity relative group" onclick="openDetailsModalForAdmin(${escapeJs(pData.rawIdx)})">
+                                    <div class="font-bold text-yellow-800 cursor-pointer">Unassigned</div>
+                                    <div class="text-gray-600 mt-1 cursor-pointer">${escapeHtml(pData.room)}</div>
+                                    <div class="mt-2 text-center" onclick="event.stopPropagation()">
+                                        <a href="${escapeHtml(quickCoverLink)}" target="_blank" class="inline-block bg-[#00843D] text-white text-[10px] font-bold px-2 py-1 rounded no-underline hover:bg-green-700">Sign Me Up</a>
+                                    </div>
+                                 </td>`;
+                    }
+                } else {
+                    // Did not request a sub for this period
+                    html += `<td class="p-3 text-xs text-center border border-gray-300 bg-gray-200">
+                                <div class="w-full h-[2px] bg-[#9ca3af] my-[10px]"></div>
+                             </td>`;
+                }
+            });
+            html += `</tr>`;
+        });
+
+        tbody.innerHTML = html;
+      }
+
+      function renderAtAGlanceAssignableTable(records) {
+        const thead = document.getElementById('atAGlanceAssignableTableHeader');
+        const tbody = document.getElementById('atAGlanceAssignableTableBody');
+
+        if (records.length === 0) {
+            thead.innerHTML = '<tr class="bg-gray-50 border-b border-gray-300 text-sm text-gray-700 uppercase"><th class="p-3 border border-gray-300 sticky left-0 z-20 bg-gray-50">Teacher Name</th></tr>';
+            tbody.innerHTML = '<tr><td class="p-8 text-center text-gray-400 italic border border-gray-300">No absence requests found for this date.</td></tr>';
+            return;
+        }
+
+        // 1. Group records by teacher
+        const teacherMap = {};
+        const activePeriods = new Set();
+
+        records.forEach(req => {
+            if (!teacherMap[req.teacherName]) {
+                teacherMap[req.teacherName] = {
+                    name: req.teacherName,
+                    periods: {}
+                };
+            }
+
+            const rawIdx = adminDataRaw.findIndex(r => r.id === req.id && r.period === req.period);
+
+            teacherMap[req.teacherName].periods[req.period] = {
+                assignedSub: req.assignedSub || null,
+                room: req.room || "N/A",
+                rawIdx: rawIdx,
+                req: req
+            };
+            activePeriods.add(parseInt(req.period));
+        });
+
+        const sortedActivePeriods = Array.from(activePeriods).sort((a, b) => a - b);
+
+        // 2. Build Header
+        let headerHtml = `<th class="p-3 border border-gray-300 min-w-[200px] sticky left-0 z-20 bg-gray-50 shadow-[1px_0_0_0_#d1d5db]">Teacher Name</th>`;
+        sortedActivePeriods.forEach(p => {
+            headerHtml += `<th class="p-3 border border-gray-300 text-center w-64">${formatPeriodLabel(p)}</th>`;
+        });
+        thead.innerHTML = headerHtml;
+
+        // 3. Build Body
+        let html = '';
+        const teachers = Object.values(teacherMap).sort((a, b) => a.name.localeCompare(b.name));
+
+        teachers.forEach(t => {
+            html += `<tr class="hover:bg-gray-50 transition-colors group">`;
+            html += `<td class="p-3 text-sm text-gray-800 font-bold border border-gray-300 sticky left-0 z-10 bg-white group-hover:bg-gray-50 shadow-[1px_0_0_0_#d1d5db]">${escapeHtml(t.name)}</td>`;
+
+            sortedActivePeriods.forEach(p => {
+                const pData = t.periods[p];
+                if (pData) {
+                    const req = pData.req;
+                    const assignId = 'assign_atAGlance_' + req.id + '_' + req.period;
+                    const btnId = 'btn_assign_atAGlance_' + req.id + '_' + req.period;
+
+                    html += `<td class="p-3 text-xs text-center border border-gray-300 bg-white align-top">`;
+                    html += `<div class="flex items-center gap-2">`;
+                    html += `<input type="text" id="${escapeHtml(assignId)}" list="dynamicStaffDataList"
+                               onfocus="updateDynamicStaffList('${escapeJs(req.formDateString || req.date)}', '${escapeJs(req.period)}')"
+                               value="${escapeHtml(req.assignedSub) || ''}"
+                               placeholder="Enter sub name..."
+                               onkeypress="if(event.key === 'Enter') assignSubFromAtAGlance('${escapeJs(req.id)}', '${escapeJs(req.period)}', '${escapeJs(assignId)}', '${escapeJs(btnId)}')"
+                               class="w-full p-2 border rounded text-sm outline-none focus:ring-2 focus:ring-[#00843D] bg-white">
+                             <button id="${escapeHtml(btnId)}" onclick="assignSubFromAtAGlance('${escapeJs(req.id)}', '${escapeJs(req.period)}', '${escapeJs(assignId)}', '${escapeJs(btnId)}')" class="bg-[#002147] hover:bg-[#003366] text-white px-3 py-2 rounded text-sm font-bold transition-colors">Assign</button>`;
+                    html += `</div>`;
+                    if (pData.room && pData.room !== "N/A") {
+                       html += `<div class="text-gray-500 mt-1">${escapeHtml(pData.room)}</div>`;
+                    }
+                    html += `</td>`;
+                } else {
+                    html += `<td class="p-3 text-xs text-center border border-gray-300 bg-gray-200">
+                                <div style="width: 100%; height: 2px; background-color: #9ca3af; margin: 10px 0;"></div>
+                             </td>`;
+                }
+            });
+            html += `</tr>`;
+        });
+
+        tbody.innerHTML = html;
+      }
+
+      function renderAdminDataRawSilent(data) {
+             adminDataRaw = data || [];
+      }
+
+      function loadAdminDataRawSilent() {
+        google.script.run
+          .withSuccessHandler(res => { if (res.adminData) renderAdminDataRawSilent(res.adminData); })
+          .refreshData(['adminData'], window.activeUserEmail);
+      }
+
+      function updateLocalAdminData(absenceId, period, subName) {
+          // Update raw data
+          const idx = adminDataRaw.findIndex(r => String(r.id) === String(absenceId) && String(r.period) === String(period));
+          if (idx !== -1) {
+              adminDataRaw[idx].assignedSub = subName || "";
+          }
+
+          // Also update filtered data if it exists
+          const filterIdx = adminDataFiltered.findIndex(r => String(r.id) === String(absenceId) && String(r.period) === String(period));
+          if (filterIdx !== -1) {
+              adminDataFiltered[filterIdx].assignedSub = subName || "";
+          }
+
+          const atAGlanceView = document.getElementById('atAGlanceDashboardView');
+          const isAtAGlanceVisible = atAGlanceView && !atAGlanceView.classList.contains('hidden');
+
+          if (isAtAGlanceVisible) {
+             applyAtAGlanceFilter();
+          } else {
+             // Full re-render of admin table to reflect new data
+             renderAdminTable();
+          }
+      }
+
+      function renderAdminDashboardData(data, renderAtAGlance = false) {
+            adminDataRaw = data;
+            const today = new Date();
+            const offset = today.getTimezoneOffset() * 60000;
+            const localISOTime = (new Date(today - offset)).toISOString().split('T')[0];
+
+            if (renderAtAGlance) {
+                if (!document.getElementById('atAGlanceDate').value) {
+                    document.getElementById('atAGlanceDate').value = localISOTime;
+                }
+                applyAtAGlanceFilter();
+            } else {
+                // Default to today
+                document.getElementById('filterStartDate').value = localISOTime;
+                applyAdminFilters();
+            }
+          }
+
+      function loadAdminDashboardData(renderAtAGlance = false) {
+        document.getElementById('adminDashboardTableBody').innerHTML = '<tr><td colspan="7" class="p-8 text-center text-gray-400 italic">Loading dashboard data...</td></tr>';
+        if (renderAtAGlance) {
+            document.getElementById('atAGlanceTableBody').innerHTML = '<tr><td class="p-8 text-center text-gray-400 italic">Loading Today at a Glance...</td></tr>';
+        }
+
+        google.script.run
+          .withSuccessHandler(res => { if (res.adminData) renderAdminDashboardData(res.adminData, renderAtAGlance); })
+          .withFailureHandler(err => {
+            document.getElementById('adminDashboardTableBody').innerHTML = `<tr><td colspan="7" class="p-8 text-center text-red-600 font-bold">Failed to load: ${escapeHtml(err.message)}</td></tr>`;
+            if (renderAtAGlance) {
+                document.getElementById('atAGlanceTableBody').innerHTML = `<tr><td class="p-8 text-center text-red-600 font-bold">Failed to load: ${escapeHtml(err.message)}</td></tr>`;
+            }
+          })
+          .refreshData(['adminData'], window.activeUserEmail);
+      }
+
+      function applyAdminFilters() {
+        const startDateStr = document.getElementById('filterStartDate').value;
+        const endDateStr = document.getElementById('filterEndDate').value;
+        const searchText = (document.getElementById('filterSearchText').value || '').toLowerCase();
+
+        adminDataFiltered = adminDataRaw.filter(req => {
+          let match = true;
+          if (startDateStr && req.date < startDateStr) match = false;
+          if (endDateStr && req.date > endDateStr) match = false;
+
+          if (match && searchText) {
+             const searchString = [
+                 req.teacherName,
+                 req.assignedSub,
+                 req.course,
+                 req.date,
+                 req.room,
+                 req.period
+             ].map(val => String(val || '').toLowerCase()).join(' ');
+
+             if (!searchString.includes(searchText)) {
+                 match = false;
+             }
+          }
+
+          return match;
+        });
+
+        renderAdminTable();
+      }
+
+      function resetAdminFilters() {
+        document.getElementById('filterStartDate').value = '';
+        document.getElementById('filterEndDate').value = '';
+        document.getElementById('filterSearchText').value = '';
+        applyAdminFilters();
+      }
+
+      function setAdminView(viewType) {
+        adminCurrentView = viewType;
+        const btnPeriod = document.getElementById('adminTogglePeriod');
+        const btnRequest = document.getElementById('adminToggleRequest');
+
+        if (viewType === 'period') {
+          btnPeriod.className = "flex-1 py-1.5 px-4 rounded-lg border-2 border-[#00843D] bg-[#00843D] text-white font-bold transition-colors";
+          btnRequest.className = "flex-1 py-1.5 px-4 rounded-lg border-2 border-gray-200 text-gray-500 font-bold transition-colors";
+        } else {
+          btnRequest.className = "flex-1 py-1.5 px-4 rounded-lg border-2 border-[#00843D] bg-[#00843D] text-white font-bold transition-colors";
+          btnPeriod.className = "flex-1 py-1.5 px-4 rounded-lg border-2 border-gray-200 text-gray-500 font-bold transition-colors";
+        }
+
+        renderAdminTable();
+      }
+
+      function sortAdminTable(col) {
+        if (adminSortCol === col) {
+          adminSortAsc = !adminSortAsc;
+        } else {
+          adminSortCol = col;
+          adminSortAsc = true;
+        }
+        renderAdminTable();
+      }
+
+      function getUniqueRequests(filteredData) {
+        const unique = {};
+        filteredData.forEach(req => {
+          if (!unique[req.id]) {
+            unique[req.id] = {
+              id: req.id,
+              teacherName: req.teacherName,
+              teacherEmail: req.teacherEmail,
+              date: req.date,
+              formDateString: req.formDateString,
+              reason: req.reason,
+              duration: req.duration,
+              periodsString: req.periodsString,
+              urgency: req.urgency,
+              instructions: req.instructions,
+              // Storing one raw index to use if we needed it, though edit modal uses id
+              rawIdx: adminDataRaw.findIndex(r => r.id === req.id)
+            };
+          }
+        });
+        return Object.values(unique);
+      }
+
+      function renderAdminTable() {
+        const thead = document.getElementById('adminDashboardTableHeader');
+        const tbody = document.getElementById('adminDashboardTableBody');
+        if (adminDataFiltered.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="7" class="p-8 text-center text-gray-400 italic">No absence requests found for these filters.</td></tr>';
+          return;
+        }
+
+        if (adminCurrentView === 'period') {
+          thead.innerHTML = `
+            <tr class="bg-gray-50 border-b border-gray-200 text-sm text-gray-700 uppercase hidden sm:table-row">
+              <th class="p-3 cursor-pointer hover:bg-gray-100" onclick="sortAdminTable('teacherName')">Name ↕️</th>
+              <th class="p-3 cursor-pointer hover:bg-gray-100" onclick="sortAdminTable('date')">Date ↕️</th>
+              <th class="p-3 cursor-pointer hover:bg-gray-100" onclick="sortAdminTable('period')">Period ↕️</th>
+              <th class="p-3 cursor-pointer hover:bg-gray-100" onclick="sortAdminTable('course')">Course ↕️</th>
+              <th class="p-3 cursor-pointer hover:bg-gray-100" onclick="sortAdminTable('room')">Room ↕️</th>
+              <th class="p-3 cursor-pointer hover:bg-gray-100" onclick="sortAdminTable('assignedSub')">Assigned Sub ↕️</th>
+              <th class="p-3 cursor-pointer hover:bg-gray-100" onclick="sortAdminTable('instructions')">Instructions ↕️</th>
+            </tr>
+          `;
+
+          // Sort data
+          adminDataFiltered.sort((a, b) => {
+            let valA = a[adminSortCol] || '';
+            let valB = b[adminSortCol] || '';
+
+            if (adminSortCol === 'period') {
+               valA = String(valA) === '10' ? 1.5 : (parseInt(valA) || 0);
+               valB = String(valB) === '10' ? 1.5 : (parseInt(valB) || 0);
+            } else {
+               valA = String(valA).toLowerCase();
+               valB = String(valB).toLowerCase();
+            }
+
+            if (valA < valB) return adminSortAsc ? -1 : 1;
+            if (valA > valB) return adminSortAsc ? 1 : -1;
+            return 0;
+          });
+
+          let html = '';
+          adminDataFiltered.forEach((req, idx) => {
+            // Find index in raw data for correct modal launching
+            const rawIdx = adminDataRaw.findIndex(r => r.id === req.id && r.period === req.period);
+
+            let courseHtml = req.course ? `<span class="inline-block max-w-[150px] sm:max-w-[180px] md:max-w-[240px] truncate align-middle" title="${escapeHtml(req.course)}">${escapeHtml(req.course)}</span>` : '';
+            if (req.course === "No Class Assigned" || !req.course) {
+               courseHtml = `<span class="group relative inline-block cursor-help text-red-500 font-bold px-2 py-1 bg-red-50 rounded">--<span class="invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-opacity duration-300 w-[140px] bg-[#555] text-white text-center rounded-md p-1.5 absolute z-10 bottom-[125%] left-1/2 -ml-[70px] text-xs font-normal after:content-[""] after:absolute after:top-full after:left-1/2 after:-ml-[5px] after:border-[5px] after:border-solid after:border-[#555_transparent_transparent_transparent]">No course found</span></span>`;
+            }
+
+            let roomHtml = escapeHtml(req.room);
+            if (req.room === "No Class Assigned" || !req.room) {
+               roomHtml = `<span class="group relative inline-block cursor-help text-red-500 font-bold px-2 py-1 bg-red-50 rounded">--<span class="invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-opacity duration-300 w-[140px] bg-[#555] text-white text-center rounded-md p-1.5 absolute z-10 bottom-[125%] left-1/2 -ml-[70px] text-xs font-normal after:content-[""] after:absolute after:top-full after:left-1/2 after:-ml-[5px] after:border-[5px] after:border-solid after:border-[#555_transparent_transparent_transparent]">No room found</span></span>`;
+            }
+
+            let assignIdMobile = `inline-assign-mobile-${req.id}-${req.period}`;
+            let subHtmlMobile = `<input type="text" id="${escapeHtml(assignIdMobile)}" list="dynamicStaffDataList"
+                               onfocus="updateDynamicStaffList('${escapeJs(req.formDateString || req.date)}', '${escapeJs(req.period)}')"
+                               data-original-value="${escapeHtml(req.assignedSub) || ''}"
+                               value="${escapeHtml(req.assignedSub) || ''}"
+                               onblur="handleInlineAdminAssign('${escapeJs(req.id)}', '${escapeJs(req.period)}', '${escapeJs(assignIdMobile)}')"
+                               onkeydown="if(event.key === 'Enter') { this.blur(); }"
+                               placeholder="Unassigned"
+                               class="w-full sm:w-32 md:w-40 p-1 border border-transparent hover:border-gray-300 rounded text-sm outline-none focus:border-[#00843D] focus:ring-1 focus:ring-[#00843D] bg-transparent focus:bg-white transition-all ${req.assignedSub ? 'text-green-700 font-bold' : 'text-gray-400 italic'}">`;
+
+            let assignIdDesktop = `inline-assign-desktop-${req.id}-${req.period}`;
+            let subHtmlDesktop = `<input type="text" id="${escapeHtml(assignIdDesktop)}" list="dynamicStaffDataList"
+                               onfocus="updateDynamicStaffList('${escapeJs(req.formDateString || req.date)}', '${escapeJs(req.period)}')"
+                               data-original-value="${escapeHtml(req.assignedSub) || ''}"
+                               value="${escapeHtml(req.assignedSub) || ''}"
+                               onblur="handleInlineAdminAssign('${escapeJs(req.id)}', '${escapeJs(req.period)}', '${escapeJs(assignIdDesktop)}')"
+                               onkeydown="if(event.key === 'Enter') { this.blur(); }"
+                               placeholder="Unassigned"
+                               class="w-full sm:w-32 md:w-40 p-1 border border-transparent hover:border-gray-300 rounded text-sm outline-none focus:border-[#00843D] focus:ring-1 focus:ring-[#00843D] bg-transparent focus:bg-white transition-all ${req.assignedSub ? 'text-green-700 font-bold' : 'text-gray-400 italic'}">`;
+
+            html += `
+              <tr class="hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0 cursor-pointer" onclick="openDetailsModalForAdmin(${rawIdx})">
+                <!-- Mobile Card View -->
+                <td class="p-3 block sm:hidden">
+                    <div class="flex justify-between items-start mb-2">
+                        <div>
+                            <div class="font-bold text-[#002147]"><a href="mailto:${escapeHtml(req.teacherEmail)}" class="hover:underline text-blue-600" onclick="event.stopPropagation()">${escapeHtml(req.teacherName)}</a></div>
+                            <div class="text-sm text-gray-500">${escapeHtml(req.date)} &bull; <span class="font-bold text-gray-700">${formatPeriodLabel(req.period)}</span></div>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 text-sm text-gray-600 mb-2">
+                        <div><span class="font-semibold">Course:</span> ${courseHtml}</div>
+                        <div><span class="font-semibold">Room:</span> ${roomHtml}</div>
+                    </div>
+                    <div class="mb-2">
+                        <span class="font-semibold text-sm text-gray-600">Sub:</span>
+                        <div class="mt-1" onclick="event.stopPropagation()">${subHtmlMobile}</div>
+                    </div>
+                    <div class="text-sm text-gray-500 italic truncate" title="${escapeHtml(req.instructions) || ''}">
+                        ${escapeHtml(req.instructions) || 'No instructions'}
+                    </div>
+                </td>
+
+                <!-- Desktop Table View -->
+                <td class="p-3 text-sm text-gray-800 font-medium hidden sm:table-cell"><a href="mailto:${escapeHtml(req.teacherEmail)}" class="hover:underline text-blue-600" onclick="event.stopPropagation()">${escapeHtml(req.teacherName)}</a></td>
+                <td class="p-3 text-sm text-gray-600 hidden sm:table-cell">${escapeHtml(req.date)}</td>
+                <td class="p-3 text-sm font-bold text-gray-700 hidden sm:table-cell">${formatPeriodLabel(req.period)}</td>
+                <td class="p-3 text-sm text-gray-600 hidden sm:table-cell">${courseHtml}</td>
+                <td class="p-3 text-sm text-gray-600 hidden sm:table-cell">${roomHtml}</td>
+                <td class="p-3 text-sm hidden sm:table-cell" onclick="event.stopPropagation()">${subHtmlDesktop}</td>
+                <td class="p-3 text-sm text-gray-500 max-w-xs truncate hidden sm:table-cell" title="${escapeHtml(req.instructions) || ''}">${escapeHtml(req.instructions) || '-'}</td>
+              </tr>
+            `;
+          });
+
+          tbody.innerHTML = html;
+        } else {
+          // Request View
+          thead.innerHTML = `
+            <tr class="bg-gray-50 border-b border-gray-200 text-sm text-gray-700 uppercase hidden sm:table-row">
+              <th class="p-3 cursor-pointer hover:bg-gray-100" onclick="sortAdminTable('teacherName')">Name ↕️</th>
+              <th class="p-3 cursor-pointer hover:bg-gray-100" onclick="sortAdminTable('date')">Date ↕️</th>
+              <th class="p-3 cursor-pointer hover:bg-gray-100" onclick="sortAdminTable('reason')">Reason ↕️</th>
+              <th class="p-3">Duration</th>
+              <th class="p-3">Periods</th>
+            </tr>
+          `;
+
+          let uniqueRequests = getUniqueRequests(adminDataFiltered);
+
+          // Sort unique data
+          uniqueRequests.sort((a, b) => {
+            let valA = a[adminSortCol] || '';
+            let valB = b[adminSortCol] || '';
+            valA = String(valA).toLowerCase();
+            valB = String(valB).toLowerCase();
+
+            if (valA < valB) return adminSortAsc ? -1 : 1;
+            if (valA > valB) return adminSortAsc ? 1 : -1;
+            return 0;
+          });
+
+          let html = '';
+          uniqueRequests.forEach((req, idx) => {
+            html += `
+              <tr class="hover:bg-gray-100 transition-colors border-b border-gray-100 last:border-b-0 cursor-pointer" onclick="openAdminEditModal('${escapeJs(req.id)}')">
+                <!-- Mobile Card View -->
+                <td class="p-3 block sm:hidden">
+                    <div class="font-bold text-[#002147] mb-1">${escapeHtml(req.teacherName)}</div>
+                    <div class="text-sm text-gray-500 mb-1">${escapeHtml(req.date)}</div>
+                    <div class="grid grid-cols-2 gap-2 text-sm text-gray-600 mb-1">
+                        <div><span class="font-semibold">Reason:</span> ${escapeHtml(req.reason)}</div>
+                        <div><span class="font-semibold">Duration:</span> ${escapeHtml(req.duration)}</div>
+                    </div>
+                    <div class="text-sm text-gray-600"><span class="font-semibold">Periods:</span> ${escapeHtml(formatPeriodsList(req.periodsString))}</div>
+                </td>
+
+                <!-- Desktop Table View -->
+                <td class="p-3 text-sm text-gray-800 font-medium hidden sm:table-cell">${escapeHtml(req.teacherName)}</td>
+                <td class="p-3 text-sm text-gray-600 hidden sm:table-cell">${escapeHtml(req.date)}</td>
+                <td class="p-3 text-sm text-gray-600 hidden sm:table-cell">${escapeHtml(req.reason)}</td>
+                <td class="p-3 text-sm text-gray-600 hidden sm:table-cell">${escapeHtml(req.duration)}</td>
+                <td class="p-3 text-sm text-gray-600 font-bold hidden sm:table-cell">${escapeHtml(formatPeriodsList(req.periodsString))}</td>
+              </tr>
+            `;
+          });
+
+          if (uniqueRequests.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="p-8 text-center text-gray-400 italic">No absence requests found for these filters.</td></tr>';
+          } else {
+            tbody.innerHTML = html;
+          }
+        }
+      }
+
+      function openDetailsModalForAdmin(index) {
+        const req = adminDataRaw[index];
+        if (!req) return;
+
+        const assignId = `admin-modal-assign-${req.id}-${req.period}`;
+
+        let html = `
+          <div class="bg-gray-50 p-4 rounded-xl border mb-4">
+             <div class="grid grid-cols-2 gap-4 text-sm">
+                <div><span class="font-bold text-gray-700">Teacher:</span> ${escapeHtml(req.teacherName)}</div>
+                <div><span class="font-bold text-gray-700">Email:</span> <a href="mailto:${escapeHtml(req.teacherEmail)}" class="text-blue-600 hover:underline">${escapeHtml(req.teacherEmail)}</a></div>
+                <div><span class="font-bold text-gray-700">Date:</span> ${escapeHtml(req.date)}</div>
+                <div><span class="font-bold text-gray-700">Period:</span> ${formatPeriodValue(req.period)}</div>
+                <div><span class="font-bold text-gray-700">Room:</span> ${escapeHtml(req.room)}</div>
+                <div><span class="font-bold text-gray-700">Course:</span> ${escapeHtml(req.course)}</div>
+             </div>
+          </div>
+
+          <div class="space-y-3">
+             <div>
+               <p class="font-bold text-sm text-gray-700">Absence Reason</p>
+               <p class="text-gray-600 bg-white p-3 border rounded-lg">${escapeHtml(req.reason) || 'N/A'}</p>
+             </div>
+             <div>
+               <p class="font-bold text-sm text-gray-700">Duration</p>
+               <p class="text-gray-600 bg-white p-3 border rounded-lg">${escapeHtml(req.duration) || 'N/A'}</p>
+             </div>
+             <div>
+               <p class="font-bold text-sm text-gray-700">Special Instructions</p>
+               <p class="text-gray-600 bg-white p-3 border rounded-lg">${escapeHtml(req.instructions) || 'None provided'}</p>
+             </div>
+             ${req.subPlanUrl ? `
+             <div>
+               <p class="font-bold text-sm text-gray-700">Sub Plan</p>
+               <p class="text-gray-600 bg-white p-3 border rounded-lg">
+                 <a href="${escapeHtml(req.subPlanUrl)}" target="_blank" class="text-blue-600 hover:underline">View Attachment</a>
+               </p>
+             </div>
+             ` : ''}
+          </div>
+
+          <div class="mt-6 border-t pt-4">
+             <p class="font-bold text-sm text-gray-700 mb-2">Assign/Edit Substitute</p>
+             <div class="flex items-center gap-2">
+                <input type="text" id="${escapeHtml(assignId)}" list="dynamicStaffDataList" onfocus="updateDynamicStaffList('${escapeJs(req.formDateString || req.date)}', '${escapeJs(req.period)}')" value="${escapeHtml(req.assignedSub) || ''}" placeholder="Enter sub name..." class="flex-1 p-3 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#00843D] bg-white">
+                <button onclick="handleAdminAssign('${escapeJs(req.id)}', '${escapeJs(req.period)}', '${escapeJs(assignId)}')" class="bg-[#00843D] hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg transition-colors shadow-sm">
+                  Save
+                </button>
+                <button onclick="document.getElementById('${escapeJs(assignId)}').value='No Sub Needed'; handleAdminAssign('${escapeJs(req.id)}', '${escapeJs(req.period)}', '${escapeJs(assignId)}')" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 px-6 rounded-lg transition-colors shadow-sm ml-2">
+                  No Sub Needed
+                </button>
+             </div>
+             <p class="text-xs text-gray-500 mt-2 italic">To remove a sub, clear the box and click Save.</p>
+          </div>
+        `;
+
+        document.getElementById('detailsContent').innerHTML = html;
+
+        const modal = document.querySelector('#detailsModal');
+        const overlay = document.querySelector('#genericModalOverlay');
+        const body = document.querySelector('body');
+
+        modal.classList.remove('opacity-0');
+        modal.classList.remove('pointer-events-none');
+        overlay.classList.remove('opacity-0');
+        overlay.classList.remove('pointer-events-none');
+        body.classList.add('overflow-hidden');
+      }
+
+      function handleAdminAssign(absenceId, period, selectElementId) {
+        const selectEl = document.getElementById(selectElementId);
+        let subName = selectEl.value; // It can be empty to unassign!
+
+        // Strip out duty suffix if present: "Name - Duty" -> "Name"
+        if (subName) {
+           subName = subName.replace(/\s+-\s+.*$/, '');
+        }
+
+        // Normalize "No Sub Needed"
+        if (subName && subName.toLowerCase() === "no sub needed") {
+            subName = "No Sub Needed";
+        }
+
+        if (subName && subName !== "No Sub Needed" && !staffList.some(s => s.name === subName)) {
+          showToast("Please enter a valid staff name from the list, or leave it blank to clear.", 'error');
+          return;
+        }
+
+        const btn = selectEl.nextElementSibling;
+        const originalText = btn.innerText;
+        btn.disabled = true;
+        btn.innerText = "Saving...";
+
+        google.script.run
+          .withSuccessHandler(result => {
+            if (result && result.success) {
+              closeAllModals();
+
+              if (subName) {
+                 showToast('Sub assigned successfully!', 'success');
+              } else {
+                 showToast('Sub Removed Successfully', 'success');
+              }
+
+              // Also refresh quick cover if it's the same 2-day window
+              EventBus.publish('refresh_quickCover');
+
+              updateLocalAdminData(absenceId, period, subName);
+            } else {
+              showToast(result ? result.error : "Unknown error", 'error');
+              btn.disabled = false;
+              btn.innerText = originalText;
+
+              if (result && result.error && (result.error.includes('filled by someone else') || result.error.includes('server is currently busy'))) {
+                  loadQuickCover();
+                  loadAdminDataRawSilent();
+              }
+            }
+          })
+          .withFailureHandler(err => {
+            if (err.message && err.message.includes('AVAILABILITY_ERROR')) {
+              let parsedErr;
+              try { parsedErr = JSON.parse(err.message.replace(/^Error: /, '')); } catch(e) { parsedErr = {message: 'Sub not listed as available, proceed?'}; }
+              showConfirm(parsedErr.message || 'Sub not listed as available, proceed?', () => {
+                 btn.innerText = 'Forcing...';
+                 google.script.run
+                    .withSuccessHandler(result => {
+                       if (result && result.success) {
+                          closeAllModals();
+                          if (subName) {
+                             showToast('Sub assigned successfully!', 'success');
+                          } else {
+                             showToast('Sub Removed Successfully', 'success');
+                          }
+                          updateLocalAdminData(absenceId, period, subName);
+                       } else {
+                          showToast('Failed to assign sub.', 'error');
+                       }
+                    })
+                    .withFailureHandler(forceErr => {
+                       showToast("Error: " + forceErr.message, 'error');
+                       btn.disabled = false;
+                       btn.innerText = originalText;
+                    })
+                    .assignSubToPeriod(absenceId, period, subName, true, window.activeUserEmail);
+              }, () => {
+                 btn.disabled = false;
+                 btn.innerText = originalText;
+              });
+            } else {
+              showToast("Error: " + err.message, 'error');
+              btn.disabled = false;
+              btn.innerText = originalText;
+            }
+          })
+          .assignSubToPeriod(absenceId, period, subName, false, window.activeUserEmail);
+      }
+
+      function handleInlineAdminAssign(absenceId, period, inputElementId) {
+        const inputEl = document.getElementById(inputElementId);
+        if (!inputEl) return;
+
+        let subName = inputEl.value;
+
+        if (subName) {
+           subName = subName.replace(/\s+-\s+.*$/, '');
+        }
+
+        const originalValue = inputEl.getAttribute('data-original-value') || "";
+        if (subName === originalValue) {
+           return;
+        }
+
+        // Normalize "No Sub Needed"
+        if (subName && subName.toLowerCase() === "no sub needed") {
+            subName = "No Sub Needed";
+        }
+
+        if (subName && subName !== "No Sub Needed" && !staffList.some(s => s.name === subName)) {
+          showToast("Please enter a valid staff name from the list, or leave it blank to clear.", 'error');
+          inputEl.value = originalValue;
+          return;
+        }
+
+        inputEl.disabled = true;
+
+        inputEl.classList.add('bg-[#f3f4f6]');
+
+        google.script.run
+          .withSuccessHandler(result => {
+            if (result && result.success) {
+              if (subName) {
+                 showToast('Sub assigned successfully!', 'success');
+              } else {
+                 showToast('Sub Removed Successfully', 'success');
+              }
+
+              inputEl.setAttribute('data-original-value', subName);
+              inputEl.value = subName;
+              inputEl.disabled = false;
+              inputEl.classList.remove('bg-[#f3f4f6]');
+
+              EventBus.publish('refresh_quickCover');
+              updateLocalAdminData(absenceId, period, subName);
+            } else {
+              showToast(result ? result.error : "Unknown error", 'error');
+              inputEl.value = originalValue;
+              inputEl.disabled = false;
+              inputEl.classList.remove('bg-[#f3f4f6]');
+
+              if (result && result.error && (result.error.includes('filled by someone else') || result.error.includes('server is currently busy'))) {
+                  loadQuickCover();
+                  loadAdminDataRawSilent();
+              }
+            }
+          })
+          .withFailureHandler(err => {
+            if (err.message && err.message.includes('AVAILABILITY_ERROR')) {
+              let parsedErr;
+              try { parsedErr = JSON.parse(err.message.replace(/^Error: /, '')); } catch(e) { parsedErr = {message: 'Sub not listed as available, proceed?'}; }
+              showConfirm(parsedErr.message || 'Sub not listed as available, proceed?', () => {
+                 inputEl.classList.add('bg-[#f3f4f6]', 'opacity-70');
+                 google.script.run
+                    .withSuccessHandler(result => {
+                       if (result && result.success) {
+                          if (subName) {
+                             showToast('Sub assigned successfully!', 'success');
+                          } else {
+                             showToast('Sub Removed Successfully', 'success');
+                          }
+                          inputEl.setAttribute('data-original-value', subName);
+                          inputEl.classList.remove('bg-[#f3f4f6]', 'opacity-70');
+                          inputEl.disabled = false;
+
+                          if (subName) {
+                             inputEl.classList.add('text-green-700', 'font-bold');
+                             inputEl.classList.remove('text-gray-400', 'italic');
+                          } else {
+                             inputEl.classList.remove('text-green-700', 'font-bold');
+                             inputEl.classList.add('text-gray-400', 'italic');
+                          }
+                          updateLocalAdminData(absenceId, period, subName);
+                       }
+                    })
+                    .withFailureHandler(forceErr => {
+                       showToast("Error: " + forceErr.message, 'error');
+                       inputEl.value = originalValue;
+                       inputEl.disabled = false;
+                       inputEl.classList.remove('bg-[#f3f4f6]', 'opacity-70');
+                    })
+                    .assignSubToPeriod(absenceId, period, subName, true, window.activeUserEmail);
+              }, () => {
+                 inputEl.value = originalValue;
+                 inputEl.disabled = false;
+                 inputEl.classList.remove('bg-[#f3f4f6]', 'opacity-70');
+              });
+            } else {
+              showToast("Error: " + err.message, 'error');
+              inputEl.value = originalValue;
+              inputEl.disabled = false;
+              inputEl.classList.remove('bg-[#f3f4f6]');
+            }
+          })
+          .assignSubToPeriod(absenceId, period, subName, false, window.activeUserEmail);
+      }
+
+      function copyAtAGlance() {
+        const container = document.getElementById('atAGlanceCopyContainer');
+        const footer = document.getElementById('atAGlanceFooter');
+
+        // Show the footer temporarily for the copy
+        footer.classList.remove('hidden');
+
+        // Temporarily modify table and container styles for better email client rendering
+        const originalContainerStyle = container.getAttribute('style') || '';
+        container.setAttribute('style', originalContainerStyle + ' overflow-x: auto !important; max-width: 100% !important; display: block !important;');
+
+        const table = document.getElementById('atAGlanceTable');
+        const originalTableStyle = table.getAttribute('style') || '';
+        table.setAttribute('style', originalTableStyle + ' min-width: max-content !important;');
+
+        // Temporarily remove sticky positioning classes
+        const stickyElements = container.querySelectorAll('.sticky');
+        const stickyElementsData = [];
+        stickyElements.forEach(el => {
+            stickyElementsData.push({
+                element: el,
+                classes: el.className
+            });
+            el.classList.remove('sticky', 'left-0', 'z-10', 'z-20', 'shadow-[1px_0_0_0_#d1d5db]');
+        });
+
+        // Create a range and selection to copy HTML content
+        const range = document.createRange();
+        range.selectNode(container);
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+
+        try {
+            document.execCommand('copy');
+
+            const btn = document.querySelector('button[onclick="copyAtAGlance()"]');
+            const originalHTML = btn.innerHTML;
+            btn.innerHTML = '<span>✅</span> Copied!';
+            setTimeout(() => {
+                btn.innerHTML = originalHTML;
+            }, 2000);
+        } catch (err) {
+            console.error('Failed to copy text: ', err);
+            showToast('Failed to copy data to clipboard.', 'error');
+        }
+
+        // Clean up
+        selection.removeAllRanges();
+        footer.classList.add('hidden');
+
+        // Restore styles and classes
+        container.setAttribute('style', originalContainerStyle);
+        table.setAttribute('style', originalTableStyle);
+        stickyElementsData.forEach(data => {
+            data.element.className = data.classes;
+        });
+      }
+      function previewPrincipalsDigest() {
+          const dateStr = document.getElementById('principalsDigestDate').value;
+          const btn = document.querySelector('button[onclick="previewPrincipalsDigest()"]');
+          const originalText = btn.innerHTML;
+          btn.innerHTML = `<span class="inline-block animate-spin mr-2">↻</span> Loading...`;
+          btn.disabled = true;
+
+          google.script.run
+              .withSuccessHandler(function(html) {
+                  document.getElementById('principalsDigestContent').innerHTML = html;
+                  document.getElementById('principalsDigestModal').classList.remove('opacity-0', 'pointer-events-none');
+                  btn.innerHTML = originalText;
+                  btn.disabled = false;
+              })
+              .withFailureHandler(function(err) {
+                  showToast("Failed to generate preview: " + err.message, "error");
+                  btn.innerHTML = originalText;
+                  btn.disabled = false;
+              })
+              .generatePrincipalsDigestPreview(dateStr, window.activeUserEmail);
+      }
+
+      function closePrincipalsDigestModal() {
+          document.getElementById('principalsDigestModal').classList.add('opacity-0', 'pointer-events-none');
+      }
+
+      function copyPrincipalsDigest() {
+          const content = document.getElementById('principalsDigestContent');
+          
+          try {
+              const selection = window.getSelection();
+              const range = document.createRange();
+              range.selectNodeContents(content);
+              selection.removeAllRanges();
+              selection.addRange(range);
+              document.execCommand('copy');
+              selection.removeAllRanges();
+              showToast("Digest copied to clipboard!", "success");
+          } catch (err) {
+              showToast("Failed to copy text. Please select and copy manually.", "error");
+          }
+      }
+
+let currentSuggestions = [];
+
+function openSuggestSubModal() {
+    const selectedDate = document.getElementById('atAGlanceDate').value;
+    if (!selectedDate) {
+        showToast("Please select a date first.", "error");
+        return;
+    }
+
+    document.getElementById('suggestSubModal').classList.remove('opacity-0', 'pointer-events-none');
+    document.getElementById('suggestSubLoading').classList.remove('hidden');
+    document.getElementById('suggestSubContent').classList.add('hidden');
+
+    // Fetch suggestions
+    google.script.run
+        .withSuccessHandler(function(res) {
+            document.getElementById('suggestSubLoading').classList.add('hidden');
+            if (res && res.success) {
+                renderSuggestSubModal(res.suggestions);
+                document.getElementById('suggestSubContent').classList.remove('hidden');
+            } else {
+                showToast((res && res.error) ? res.error : "Failed to load suggestions", "error");
+                cancelSuggestions(true);
+            }
+        })
+        .withFailureHandler(function(err) {
+            document.getElementById('suggestSubLoading').classList.add('hidden');
+            showToast("Error: " + err.message, "error");
+            cancelSuggestions(true);
+        })
+        .getSuggestedSubs(selectedDate, window.activeUserEmail);
+}
+
+function renderSuggestSubModal(suggestions) {
+    currentSuggestions = suggestions;
+    const thead = document.getElementById('suggestSubTableHeader');
+    const tbody = document.getElementById('suggestSubTableBody');
+    let html = '';
+    let headerHtml = '';
+
+    const activeRequests = suggestions.filter(req => req.status === 'Active');
+
+    if (activeRequests.length === 0) {
+        thead.innerHTML = `<tr><th class="p-3 text-sm font-bold text-gray-700">Suggestions</th></tr>`;
+        tbody.innerHTML = '<tr><td class="p-4 text-center text-gray-500 italic">No open absences found for this date.</td></tr>';
+        return;
+    }
+
+    const teacherMap = {};
+    const periodsSet = new Set(['1', '2', '3', '4', '5', '6', '7', '8']); // Standard periods
+
+    activeRequests.forEach(req => {
+        if (!teacherMap[req.teacherName]) {
+            teacherMap[req.teacherName] = {};
+        }
+        teacherMap[req.teacherName][req.period] = req;
+        periodsSet.add(String(req.period));
+    });
+
+    // Sort periods logically (placing Advisory / '10' at 1.5, matching dashboards)
+    const periods = Array.from(periodsSet).sort((a, b) => {
+        const valA = String(a) === '10' ? 1.5 : parseInt(a, 10);
+        const valB = String(b) === '10' ? 1.5 : parseInt(b, 10);
+        if (!isNaN(valA) && !isNaN(valB)) return valA - valB;
+        if (isNaN(valA) && !isNaN(valB)) return 1;
+        if (!isNaN(valA) && isNaN(valB)) return -1;
+        return String(a).localeCompare(String(b));
+    });
+
+    // Build thead
+    headerHtml += `<tr>`;
+    headerHtml += `<th class="p-3 text-sm font-bold text-gray-700 sticky left-0 bg-gray-50 z-10 border-r border-gray-200">Teacher</th>`;
+    periods.forEach(p => {
+        headerHtml += `<th class="p-3 text-sm font-bold text-gray-700 min-w-[200px]">${formatPeriodLabel(p)}</th>`;
+    });
+    headerHtml += `</tr>`;
+    thead.innerHTML = headerHtml;
+
+    // Build tbody
+    Object.keys(teacherMap).sort().forEach(teacherName => {
+        html += `<tr class="hover:bg-gray-50 transition-colors">`;
+        html += `<td class="p-3 text-sm text-gray-800 border-b sticky left-0 bg-white z-10 border-r border-gray-200 whitespace-nowrap">${escapeHtml(teacherName)}</td>`;
+
+        periods.forEach(p => {
+            const req = teacherMap[teacherName][p];
+            html += `<td class="p-3 text-sm border-b">`;
+            if (req) {
+                if (req.assignedSub) {
+                    html += `<span class="text-gray-600 italic">Already assigned: ${escapeHtml(req.assignedSub)}</span>`;
+                } else {
+                    const val = req.suggestedSub || "";
+                    const highlightClass = val ? 'bg-green-100 border-green-300' : 'bg-white border-gray-300';
+                    html += `<input type="text" id="suggestInput_${req.id}_${req.period}"
+                              list="dynamicStaffDataList"
+                              onfocus="updateDynamicStaffList('${escapeJs(req.date)}', '${escapeJs(req.period)}')"
+                              value="${escapeHtml(val)}"
+                              placeholder="Type a sub name..."
+                              class="w-full p-2 border rounded text-sm outline-none focus:ring-2 focus:ring-[#00843D] ${highlightClass}">`;
+                }
+            }
+            html += `</td>`;
+        });
+        html += `</tr>`;
+    });
+
+    tbody.innerHTML = html;
+}
+
+function cancelSuggestions(force = false) {
+    if (!force) {
+        if (!confirm("Are you sure you want to cancel your suggestions?")) {
+            return;
+        }
+    }
+    document.getElementById('suggestSubModal').classList.add('opacity-0', 'pointer-events-none');
+}
+
+function approveSuggestions() {
+    const assignments = [];
+
+    currentSuggestions.forEach(req => {
+        if (req.status === 'Active' && (!req.assignedSub || req.assignedSub === "")) {
+            const inputEl = document.getElementById(`suggestInput_${req.id}_${req.period}`);
+            if (inputEl) {
+                const subName = inputEl.value.trim();
+                if (subName) {
+                    assignments.push({
+                        id: req.id,
+                        period: req.period,
+                        subName: subName
+                    });
+                }
+            }
+        }
+    });
+
+    if (assignments.length === 0) {
+        showToast("No new suggestions to approve.", "info");
+        cancelSuggestions(true);
+        return;
+    }
+
+    const btn = document.getElementById('approveSuggestionsBtn');
+    btn.disabled = true;
+    btn.innerText = "Approving...";
+
+    google.script.run
+        .withSuccessHandler(function(res) {
+            btn.disabled = false;
+            btn.innerText = "Approve All";
+            if (res && res.success) {
+                showToast(`Successfully assigned ${res.count} substitute(s).`, "success");
+                cancelSuggestions(true);
+                // Refresh dashboard
+                loadAdminDashboardData(true);
+            } else {
+                showToast("Failed to assign: " + res.error, "error");
+            }
+        })
+        .withFailureHandler(function(err) {
+            btn.disabled = false;
+            btn.innerText = "Approve All";
+            showToast("Error: " + err.message, "error");
+        })
+        .batchAssignSubs(assignments, window.activeUserEmail);
+}
+
+</script>

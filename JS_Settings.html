@@ -1,0 +1,1371 @@
+<!-- ====================================================================== -->
+<!-- JS_SETTINGS.HTML — Settings, Staff Roster, Pay Periods & Audit Logs    -->
+<!-- ====================================================================== -->
+<script>
+      // === Settings Dashboard Tab Switching ===
+      function switchSettingsTab(tabId) {
+        if (tabId === 'staffRosterTab' && typeof loadStaffRosterSettings === 'function') {
+           loadStaffRosterSettings();
+        }
+        if (tabId === 'hrSettingsTab' && typeof loadPayPeriodsSettings === 'function') {
+           loadPayPeriodsSettings();
+        }
+        // Hide all tabs
+        const tabs = document.querySelectorAll('.settings-tab-content');
+        tabs.forEach(tab => {
+          tab.classList.remove('block');
+          tab.classList.add('hidden');
+        });
+
+        // Reset all tab buttons
+        const tabBtns = ['generalSettingsTab', 'staffRosterTab', 'auditLogsTab', 'hrSettingsTab', 'dataManagementTab'];
+        tabBtns.forEach(btn => {
+          const btnEl = document.getElementById('btn-' + btn);
+          if (btnEl) {
+            btnEl.classList.remove('text-[#002147]', 'font-semibold', 'border-b-2', 'border-[#002147]');
+            btnEl.classList.add('text-gray-500', 'font-medium');
+          }
+        });
+
+        // Show active tab
+        const activeTab = document.getElementById(tabId);
+        if (activeTab) {
+          activeTab.classList.remove('hidden');
+          activeTab.classList.add('block');
+        }
+
+        // Highlight active tab button
+        const activeBtn = document.getElementById('btn-' + tabId);
+        if (activeBtn) {
+          activeBtn.classList.remove('text-gray-500', 'font-medium');
+          activeBtn.classList.add('text-[#002147]', 'font-semibold', 'border-b-2', 'border-[#002147]');
+        }
+      }
+
+      // === Staff Roster Logic ===
+      let currentStaffRoster = [];
+
+      function loadStaffRosterSettings() {
+        const tbody = document.getElementById('staffRosterTableBody');
+        tbody.innerHTML = '<tr><td colspan="4" class="p-8 text-center text-gray-400 italic">Loading staff roster...</td></tr>';
+        google.script.run
+          .withSuccessHandler(roster => {
+            currentStaffRoster = roster;
+            renderStaffRosterTable();
+          })
+          .withFailureHandler(err => {
+            tbody.innerHTML = `<tr><td colspan="4" class="p-8 text-center text-red-600 font-bold">Failed to load roster: ${escapeHtml(err.message)}</td></tr>`;
+          })
+          .getStaffRosterForAdmin(window.activeUserEmail);
+      }
+
+      function renderStaffRosterTable() {
+        const tbody = document.getElementById('staffRosterTableBody');
+        if (currentStaffRoster.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="4" class="p-8 text-center text-gray-400 italic">No staff found.</td></tr>';
+          return;
+        }
+
+        let html = '';
+        currentStaffRoster.forEach((staff, idx) => {
+          let role = staff.role ? staff.role.trim() : "Teacher";
+          const allRoles = ["Teacher", "Substitute", "Admin", "HR", "Principal", "Sub Coordinator"];
+
+          let roleHtml = `
+              <select onchange="updateStaffRoleInline('${escapeJs(staff.email)}', this.value)" class="p-1 border rounded focus:ring-1 focus:ring-[#00843D] outline-none text-sm bg-white">
+          `;
+
+          allRoles.forEach(r => {
+              const isSelected = (role.toLowerCase() === r.toLowerCase()) ? 'selected' : '';
+              roleHtml += `<option value="${escapeHtml(r)}" ${isSelected}>${escapeHtml(r)}</option>`;
+          });
+
+          roleHtml += `</select>`;
+
+          let dutyArr = staff.duty ? String(staff.duty).split(',').map(d => d.trim()) : [];
+          let dutyDisplay = dutyArr.length > 0 ? dutyArr.join(', ') : 'None';
+
+          let dutyOptionsHtml = '';
+          for (let i = 1; i <= 8; i++) {
+              let isChecked = dutyArr.includes(String(i)) ? 'checked' : '';
+              dutyOptionsHtml += `
+                  <label class="flex items-center space-x-2 p-1 hover:bg-gray-100 cursor-pointer text-sm">
+                      <input type="checkbox" value="${i}" ${isChecked} onchange="handleDutyCheckboxChange('${escapeJs(staff.email)}', this)" class="form-checkbox h-4 w-4 text-[#00843D]">
+                      <span>Period ${i}</span>
+                  </label>
+              `;
+          }
+
+          let dutyDropdownId = 'duty-dropdown-' + staff.email.replace(/[^a-zA-Z0-9]/g, '-');
+          let dutyHtml = `
+              <div class="relative inline-block text-left duty-dropdown-container">
+                  <button type="button" onclick="toggleDutyDropdown('${dutyDropdownId}')" class="inline-flex justify-between w-full p-1 border rounded focus:ring-1 focus:ring-[#00843D] outline-none text-sm bg-white text-gray-700 hover:bg-gray-50">
+                      <span id="duty-display-${dutyDropdownId}">${escapeHtml(dutyDisplay)}</span>
+                      <svg class="-mr-1 ml-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                          <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
+                      </svg>
+                  </button>
+                  <div id="${dutyDropdownId}" class="hidden origin-top-right absolute right-0 mt-1 w-32 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-10">
+                      <div class="py-1" role="menu" aria-orientation="vertical">
+                          ${dutyOptionsHtml}
+                      </div>
+                  </div>
+              </div>
+          `;
+
+          html += `
+            <tr class="hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0">
+              <td class="p-3 text-sm text-gray-800 font-medium">${escapeHtml(staff.name)}</td>
+              <td class="p-3 text-sm text-gray-600">${escapeHtml(staff.email)}</td>
+              <td class="p-3 text-sm text-gray-600">${roleHtml}</td>
+              <td class="p-3 text-sm text-gray-600">${dutyHtml}</td>
+              <td class="p-3 text-right space-x-2">
+                <button onclick="openEditStaffModal('${escapeJs(staff.name)}', '${escapeJs(staff.email)}', '${escapeJs(staff.role || '')}', '${escapeJs(staff.duty || '')}')" class="text-blue-600 hover:text-blue-800 font-semibold text-sm">Edit</button>
+                <button onclick="deleteStaffMember('${escapeJs(staff.email)}')" class="text-red-600 hover:text-red-800 font-semibold text-sm">Delete</button>
+              </td>
+            </tr>
+          `;
+        });
+        tbody.innerHTML = html;
+      }
+
+      function updateStaffRoleInline(email, newRole) {
+          google.script.run
+              .withSuccessHandler(result => {
+                  if (result && result.success) {
+                      showToast("Role updated successfully.", "success");
+                      loadStaffRosterSettings();
+                  } else {
+                      showToast("Failed to update role: " + (result ? result.error : "Unknown error"), "error");
+                      loadStaffRosterSettings(); // revert
+                  }
+              })
+              .withFailureHandler(err => {
+                  showToast("Connection Error: " + err.message, 'error');
+                  loadStaffRosterSettings(); // revert
+              })
+              .updateStaffRoleInlineAdmin(email, newRole, window.activeUserEmail);
+      }
+
+      function updateStaffDutyInline(email, newDuty) {
+          google.script.run
+              .withSuccessHandler(result => {
+                  if (result && result.success) {
+                      showToast("Duty updated successfully.", "success");
+                      loadStaffRosterSettings();
+                  } else {
+                      showToast("Failed to update duty: " + (result ? result.error : "Unknown error"), "error");
+                      loadStaffRosterSettings(); // revert
+                  }
+              })
+              .withFailureHandler(err => {
+                  showToast("Connection Error: " + err.message, 'error');
+                  loadStaffRosterSettings(); // revert
+              })
+              .updateStaffDutyInlineAdmin(email, newDuty, window.activeUserEmail);
+      }
+
+      function toggleDutyDropdown(dropdownId) {
+          const dropdown = document.getElementById(dropdownId);
+          if (dropdown.classList.contains('hidden')) {
+              // Close all other dropdowns
+              document.querySelectorAll('.duty-dropdown-container > div:not(.hidden)').forEach(el => {
+                  el.classList.add('hidden');
+              });
+              dropdown.classList.remove('hidden');
+          } else {
+              dropdown.classList.add('hidden');
+          }
+      }
+
+      function handleDutyCheckboxChange(email, checkbox) {
+          // Find the container for this dropdown
+          const dropdownContainer = checkbox.closest('.duty-dropdown-container');
+          const checkboxes = dropdownContainer.querySelectorAll('input[type="checkbox"]');
+
+          let selectedDuties = [];
+          checkboxes.forEach(cb => {
+              if (cb.checked) {
+                  selectedDuties.push(cb.value);
+              }
+          });
+
+          const newDutyStr = selectedDuties.join(', ');
+
+          // Update display
+          const dropdownId = dropdownContainer.querySelector('div[id^="duty-dropdown-"]').id;
+          const displaySpan = document.getElementById('duty-display-' + dropdownId);
+          displaySpan.innerText = newDutyStr || 'None';
+
+          updateStaffDutyInline(email, newDutyStr);
+      }
+
+      // Close duty dropdowns when clicking outside
+      document.addEventListener('click', function(event) {
+          if (!event.target.closest('.duty-dropdown-container')) {
+              document.querySelectorAll('.duty-dropdown-container > div:not(.hidden)').forEach(el => {
+                  el.classList.add('hidden');
+              });
+          }
+      });
+
+      function copyStaffRosterData() {
+        if (!currentStaffRoster || currentStaffRoster.length === 0) {
+           showToast("No data to copy.", 'info');
+           return;
+        }
+
+        function sanitizeTSV(text) {
+           if (typeof text !== 'string') text = String(text || '');
+           if (/^[=+\-@\t\r]/.test(text)) {
+              return "'" + text;
+           }
+           return text;
+        }
+
+        let tsvText = "LASTFIRST\tEMAIL_ADDR\tRole\tDuty\n";
+        currentStaffRoster.forEach(staff => {
+           const name = sanitizeTSV(staff.name);
+           const email = sanitizeTSV(staff.email);
+           const role = sanitizeTSV(staff.role || 'Teacher');
+           const duty = sanitizeTSV(staff.duty || '');
+           tsvText += `${name}\t${email}\t${role}\t${duty}\n`;
+        });
+        navigator.clipboard.writeText(tsvText).then(() => {
+           showToast("Staff roster copied to clipboard as TSV!", 'info');
+        }).catch(err => {
+           showToast("Failed to copy data: " + err, "error");
+        });
+      }
+
+      function saveStaffMember() {
+        const originalEmail = document.getElementById('staffOriginalEmail').value;
+        const name = document.getElementById('staffNameInput').value;
+        const email = document.getElementById('staffEmailInput').value;
+        const role = document.getElementById('staffRoleInput').value;
+
+        let selectedDuties = [];
+        document.querySelectorAll('.staff-duty-cb:checked').forEach(cb => selectedDuties.push(cb.value));
+        const duty = selectedDuties.join(', ');
+
+        // Keep hidden input in sync (optional, but good for captureModalState)
+        document.getElementById('staffDutyInput').value = duty;
+
+        if (!name || !email) {
+          showToast("Name and Email are required.", 'info');
+          return;
+        }
+
+        const btn = document.getElementById('saveStaffBtn');
+        const originalText = btn.innerText;
+        btn.disabled = true;
+        btn.innerText = "Saving...";
+
+        const staffData = {
+           originalEmail: originalEmail,
+           name: name,
+           email: email,
+           role: role,
+           duty: duty
+        };
+
+        google.script.run
+          .withSuccessHandler(result => {
+             btn.disabled = false;
+             btn.innerText = originalText;
+             if (result && result.success) {
+                originalModalData = {};
+                closeAllModals();
+                document.getElementById('staffNameInput').value = '';
+                document.getElementById('staffEmailInput').value = '';
+                document.getElementById('staffRoleInput').value = 'Teacher';
+                document.getElementById('staffDutyInput').value = '';
+                loadStaffRosterSettings();
+             } else {
+                showToast("Failed to save staff member: " + (result ? result.error : "Unknown error"), "error");
+             }
+          })
+          .withFailureHandler(err => {
+             btn.disabled = false;
+             btn.innerText = originalText;
+             showToast("Connection Error: " + err.message, 'error');
+          })
+          .saveStaffMemberAdmin(staffData, window.activeUserEmail);
+      }
+
+      function deleteStaffMember(email) {
+        showConfirm(`Are you sure you want to delete ${escapeHtml(email)} from the staff roster?`, () => {
+        google.script.run
+          .withSuccessHandler(result => {
+             if (result && result.success) {
+                loadStaffRosterSettings();
+             } else {
+                showToast("Failed to delete staff member: " + (result ? result.error : "Unknown error"), "error");
+             }
+          })
+          .withFailureHandler(err => {
+             showToast("Connection Error: " + err.message, 'error');
+          })
+          .deleteStaffMemberAdmin(email, window.activeUserEmail);
+      });
+      }
+
+      function clearAllDutiesClient() {
+        showConfirm("Are you sure you want to clear the assigned duties? This action cannot be easily undone", () => {
+          const btn = document.getElementById('clearDutiesBtn');
+          const originalText = btn.innerHTML;
+          btn.disabled = true;
+          btn.innerHTML = '<span>⏳</span> Clearing...';
+
+          google.script.run
+            .withSuccessHandler(result => {
+              btn.disabled = false;
+              btn.innerHTML = originalText;
+              if (result && result.success) {
+                showToast("All duties have been successfully cleared.", "success");
+                loadStaffRosterSettings();
+              } else {
+                showToast("Failed to clear duties: " + (result ? result.error : "Unknown error"), "error");
+              }
+            })
+            .withFailureHandler(err => {
+              btn.disabled = false;
+              btn.innerHTML = originalText;
+              showToast("Error: " + err.message, "error");
+            })
+            .clearAllStaffDuties(window.activeUserEmail);
+        });
+      }
+
+      function processStaffCsvUpload() {
+         const fileInput = document.getElementById('staffCsvFileInput');
+         const textarea = document.getElementById('staffCsvTextarea');
+
+         if (fileInput.files.length > 0) {
+            const file = fileInput.files[0];
+            const reader = new FileReader();
+            reader.onload = function(e) {
+               parseAndSubmitStaffCsv(e.target.result);
+               fileInput.value = ""; // clear input
+            };
+            reader.readAsText(file);
+         } else if (textarea.value.trim() !== "") {
+            parseAndSubmitStaffCsv(textarea.value);
+            textarea.value = ""; // clear textarea
+         } else {
+            showToast("Please select a CSV file or paste Data.", 'error');
+         }
+      }
+
+      function parseAndSubmitStaffCsv(csvText) {
+         const lines = csvText.split(/\r?\n/).filter(line => line.trim() !== '');
+         if (lines.length === 0) {
+            showToast("Data is empty.", 'info');
+            return;
+         }
+
+         let delimiter = ',';
+         if (lines[0].includes('\t')) {
+             delimiter = '\t';
+         }
+
+
+
+         const firstLine = parseCsvLine(lines[0], delimiter);
+         const firstLineUpper = firstLine.map(s => s.toUpperCase());
+
+         const hasHeaders = firstLineUpper.includes('LASTFIRST') || firstLineUpper.includes('EMAIL_ADDR') || firstLineUpper.includes('DUTY');
+         const startIndex = hasHeaders ? 1 : 0;
+
+         if (lines.length <= startIndex) {
+            showToast("Data contains no data rows.", 'info');
+            return;
+         }
+
+         const updates = [];
+         for (let i = startIndex; i < lines.length; i++) {
+            let row = parseCsvLine(lines[i], delimiter);
+            if (row.length === 0 || (row.length === 1 && row[0] === '')) continue;
+
+            let email = "";
+            let name = "";
+            let role = "Teacher";
+            let duty = "";
+
+            let emailColIdx = -1;
+            for (let c = row.length - 1; c >= 0; c--) {
+                if (row[c].includes('@')) {
+                    emailColIdx = c;
+                    break;
+                }
+            }
+
+            if (emailColIdx !== -1) {
+                email = row[emailColIdx];
+                name = row.slice(0, emailColIdx).join(', ');
+
+                // If there are two columns after email, assume Role then Duty
+                if (emailColIdx + 2 < row.length) {
+                    role = row[emailColIdx + 1] || "Teacher";
+                    duty = row[emailColIdx + 2];
+                }
+                // If there is only one column after email, backwards compatibility: it could be role or duty
+                else if (emailColIdx + 1 < row.length) {
+                    let val = row[emailColIdx + 1].trim();
+                    if (val.toLowerCase() === "teacher" || val.toLowerCase() === "substitute") {
+                        role = val;
+                        duty = "";
+                    } else {
+                        role = "Teacher";
+                        duty = val;
+                    }
+                }
+            } else {
+                if (row.length >= 3) {
+                    email = row[row.length - 3];
+                    role = row[row.length - 2];
+                    duty = row[row.length - 1];
+                    name = row.slice(0, row.length - 3).join(', ');
+                } else if (row.length === 2) {
+                    email = row[row.length - 2];
+                    duty = row[row.length - 1];
+                    name = row.slice(0, row.length - 2).join(', ');
+                } else {
+                    name = row[0];
+                }
+            }
+
+            name = name.replace(/^"|"$/g, '');
+            if (name.includes(',') && name.split(',').length === 2) {
+                const parts = name.split(',');
+                name = parts[1].trim() + ' ' + parts[0].trim();
+            } else {
+                name = name.trim();
+            }
+
+            email = email.replace(/^"|"$/g, '').trim();
+            role = role.replace(/^"|"$/g, '').trim() || "Teacher";
+            duty = duty.replace(/^"|"$/g, '').trim();
+
+            if (name && email) {
+                updates.push({name: name, email: email, role: role, duty: duty});
+            }
+         }
+
+         if (updates.length === 0) {
+            showToast("No valid rows found to process. Make sure each row contains a name and an email address.", 'info');
+            return;
+         }
+
+         showConfirm(`Are you sure you want to process ${escapeHtml(updates.length)} staff records? Existing records with the same email will be updated.`, () => {
+             google.script.run
+            .withSuccessHandler(result => {
+               if (result && result.success) {
+                  showToast(`Successfully processed ${result.updated} records.`, 'success');
+                  loadStaffRosterSettings();
+               } else {
+                  showToast("Failed to process Data: " + (result ? result.error : "Unknown error"), "error");
+               }
+            })
+            .withFailureHandler(err => {
+               showToast("Connection Error: " + err.message, 'error');
+            })
+            .bulkUpsertStaffRoster(updates, window.activeUserEmail);
+         });
+      }
+
+
+      // === Pay Periods Logic ===
+      let currentPayPeriodsSettings = [];
+      let currentSpecialPayRates = [];
+
+      function renderSpecialPayRates() {
+          const list = document.getElementById('specialPayRatesList');
+          list.innerHTML = '';
+          if (currentSpecialPayRates.length === 0) {
+              list.innerHTML = '<p class="text-sm text-gray-400 italic">No special pay rates configured.</p>';
+              return;
+          }
+          currentSpecialPayRates.forEach((rateObj, index) => {
+              const div = document.createElement('div');
+              div.className = 'flex justify-between items-center p-3 bg-gray-50 border rounded-lg';
+              div.innerHTML = `
+                  <div>
+                      <span class="font-bold text-gray-700">${escapeHtml(rateObj.date)}</span>
+                      <span class="ml-2 text-gray-600">Rate: $${escapeHtml(String(rateObj.rate))}</span>
+                  </div>
+                  <button onclick="removeSpecialPayRate(${index})" class="text-red-500 hover:text-red-700 font-bold px-2 py-1">Remove</button>
+              `;
+              list.appendChild(div);
+          });
+      }
+
+      function addSpecialPayRate() {
+          const dateInput = document.getElementById('newSpecialPayRateDate');
+          const valueInput = document.getElementById('newSpecialPayRateValue');
+          if (!dateInput.value || !valueInput.value) {
+              showToast("Please enter both a date and a rate.", "error");
+              return;
+          }
+          const existing = currentSpecialPayRates.find(r => r.date === dateInput.value);
+          if (existing) {
+              existing.rate = valueInput.value;
+          } else {
+              currentSpecialPayRates.push({ date: dateInput.value, rate: valueInput.value });
+          }
+          // Sort by date
+          currentSpecialPayRates.sort((a, b) => a.date.localeCompare(b.date));
+          dateInput.value = '';
+          valueInput.value = '';
+          renderSpecialPayRates();
+      }
+
+      function removeSpecialPayRate(index) {
+          currentSpecialPayRates.splice(index, 1);
+          renderSpecialPayRates();
+      }
+
+      function saveDayPayRates() {
+        const btn = document.getElementById('saveDayPayRatesBtn');
+        const originalText = btn.innerText;
+        btn.disabled = true;
+        btn.innerText = "Saving...";
+
+        const newSettings = {
+          "Green Day Pay Rate": document.getElementById('settingsGreenDayRate').value,
+          "Blue/Gold Day Pay Rate": document.getElementById('settingsBlueGoldDayRate').value,
+          "Special Pay Rates": JSON.stringify(currentSpecialPayRates)
+        };
+
+        google.script.run
+          .withSuccessHandler(result => {
+             btn.disabled = false;
+             btn.innerText = originalText;
+             if (result && result.success) {
+                showToast("Pay rates saved successfully!", "success");
+             } else {
+                showToast("Failed to save: " + (result ? result.error : "Unknown"), "error");
+             }
+          })
+          .withFailureHandler(err => {
+             btn.disabled = false;
+             btn.innerText = originalText;
+             showToast("Error: " + err.message, "error");
+          })
+          .updateSettings(newSettings, window.activeUserEmail);
+      }
+
+      function loadPayPeriodsSettings() {
+        // Also load the Day Pay Rates
+        google.script.run
+          .withSuccessHandler(settings => {
+             if (settings) {
+                document.getElementById('settingsGreenDayRate').value = settings["Green Day Pay Rate"] || "10";
+                document.getElementById('settingsBlueGoldDayRate').value = settings["Blue/Gold Day Pay Rate"] || "20";
+                try {
+                    currentSpecialPayRates = JSON.parse(settings["Special Pay Rates"] || "[]");
+                } catch (e) {
+                    currentSpecialPayRates = [];
+                }
+                renderSpecialPayRates();
+             }
+          })
+          .getSettingsForFrontend(window.activeUserEmail);
+
+        const tbody = document.getElementById('payPeriodsTableBody');
+        tbody.innerHTML = '<tr><td colspan="3" class="p-8 text-center text-gray-400 italic">Loading pay periods...</td></tr>';
+        google.script.run
+          .withSuccessHandler(periods => {
+            currentPayPeriodsSettings = periods;
+            renderPayPeriodsTable();
+          })
+          .withFailureHandler(err => {
+            tbody.innerHTML = `<tr><td colspan="3" class="p-8 text-center text-red-600 font-bold">Failed to load pay periods: ${escapeHtml(err.message)}</td></tr>`;
+          })
+          .loadPayPeriodsSettings(window.activeUserEmail);
+
+        // Also set default date for Principal's Digest to next Friday
+        const today = new Date();
+        const nextFriday = new Date(today);
+        nextFriday.setDate(today.getDate() + (5 + 7 - today.getDay()) % 7);
+        if (today.getDay() === 5) {
+           nextFriday.setDate(today.getDate() + 7);
+        }
+        const offset = nextFriday.getTimezoneOffset() * 60000;
+        const localFriday = new Date(nextFriday - offset);
+        document.getElementById('principalsDigestDate').value = localFriday.toISOString().split('T')[0];
+      }
+
+      function renderPayPeriodsTable() {
+        const tbody = document.getElementById('payPeriodsTableBody');
+        if (currentPayPeriodsSettings.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="3" class="p-8 text-center text-gray-400 italic">No pay periods found.</td></tr>';
+          return;
+        }
+
+        let html = '';
+        currentPayPeriodsSettings.forEach((pp) => {
+          html += `
+            <tr class="hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0">
+              <td class="p-3 text-sm text-gray-800 font-medium">${escapeHtml(pp.period)}</td>
+              <td class="p-3 text-sm text-gray-600">${escapeHtml(pp.start)}</td>
+              <td class="p-3 text-sm text-gray-600">${escapeHtml(pp.end)}</td>
+            </tr>
+          `;
+        });
+        tbody.innerHTML = html;
+      }
+
+      function deleteAllPayPeriodsClient() {
+        showConfirm('Are you sure you want to delete all pay periods? This cannot be undone.', () => {
+          google.script.run
+            .withSuccessHandler(result => {
+               if (result && result.success) {
+                  showToast('All pay periods deleted.', 'success');
+                  loadPayPeriodsSettings();
+               } else {
+                  showToast("Failed to delete pay periods: " + (result ? result.error : "Unknown error"), "error");
+               }
+            })
+            .withFailureHandler(err => {
+               showToast("Connection Error: " + err.message, 'error');
+            })
+            .deleteAllPayPeriods(window.activeUserEmail);
+        });
+      }
+
+      function processPayPeriodsCsvUpload() {
+         const fileInput = document.getElementById('payPeriodsCsvFileInput');
+         const textarea = document.getElementById('payPeriodsCsvTextarea');
+
+         if (fileInput.files.length > 0) {
+            const file = fileInput.files[0];
+            const reader = new FileReader();
+            reader.onload = function(e) {
+               parseAndSubmitPayPeriodsCsv(e.target.result);
+               fileInput.value = ""; // clear input
+            };
+            reader.readAsText(file);
+         } else if (textarea.value.trim() !== "") {
+            parseAndSubmitPayPeriodsCsv(textarea.value);
+            textarea.value = ""; // clear textarea
+         } else {
+            showToast("Please select a CSV file or paste CSV/TSV data.", 'error');
+         }
+      }
+
+      function parseAndSubmitPayPeriodsCsv(csvText) {
+         const lines = csvText.split(/\r?\n/).filter(line => line.trim() !== '');
+         if (lines.length === 0) {
+            showToast("Data is empty.", 'info');
+            return;
+         }
+
+         let delimiter = ',';
+         if (lines[0].includes('	')) {
+             delimiter = '	';
+         }
+
+         const firstLine = parseCsvLine(lines[0], delimiter);
+         const firstLineUpper = firstLine.map(s => s.toUpperCase());
+
+         const hasHeaders = firstLineUpper.includes('PAYCHECK') || firstLineUpper.includes('PERIOD START') || firstLineUpper.includes('PERIOD END');
+         const startIndex = hasHeaders ? 1 : 0;
+
+         if (lines.length <= startIndex) {
+            showToast("Data contains no rows.", 'info');
+            return;
+         }
+
+         const updates = [];
+         for (let i = startIndex; i < lines.length; i++) {
+            let row = parseCsvLine(lines[i], delimiter);
+            if (row.length < 3) continue;
+
+            let period = row[0].replace(/^"|"$/g, '').trim();
+            let start = row[1].replace(/^"|"$/g, '').trim();
+            let end = row[2].replace(/^"|"$/g, '').trim();
+
+            if (period && start && end) {
+                updates.push({period: period, start: start, end: end});
+            }
+         }
+
+         if (updates.length === 0) {
+            showToast("No valid rows found to process. Make sure each row contains Period, Start Date, and End Date.", 'info');
+            return;
+         }
+
+         showConfirm(`Are you sure you want to process ${escapeHtml(updates.length)} pay periods? Existing ones will not be deleted but they will be appended to the bottom. Consider deleting all current pay periods first if replacing them.`, () => {
+             google.script.run
+            .withSuccessHandler(result => {
+               if (result && result.success) {
+                  showToast(`Successfully added ${result.updated} pay periods.`, 'success');
+                  loadPayPeriodsSettings();
+               } else {
+                  showToast("Failed to process data: " + (result ? result.error : "Unknown error"), "error");
+               }
+            })
+            .withFailureHandler(err => {
+               showToast("Connection Error: " + err.message, 'error');
+            })
+            .bulkUpsertPayPeriods(updates, window.activeUserEmail);
+         });
+      }
+
+      // === Staff Roster Modals ===
+      function updateHiddenDutyInput() {
+        let selectedDuties = [];
+        document.querySelectorAll('.staff-duty-cb:checked').forEach(cb => selectedDuties.push(cb.value));
+        document.getElementById('staffDutyInput').value = selectedDuties.join(', ');
+      }
+
+      function openAddStaffModal() {
+        document.getElementById('staffModalTitle').innerText = "Add Staff Member";
+        document.getElementById('staffOriginalEmail').value = "";
+        document.getElementById('staffNameInput').value = "";
+        document.getElementById('staffEmailInput').value = "";
+        document.getElementById('staffRoleInput').value = "Teacher";
+        document.getElementById('staffRoleInput').disabled = false;
+        document.getElementById('staffDutyInput').value = "";
+        document.querySelectorAll('.staff-duty-cb').forEach(cb => cb.checked = false);
+
+        const modal = document.querySelector('#staffModal');
+        const overlay = document.querySelector('#genericModalOverlay');
+        const body = document.querySelector('body');
+
+        modal.classList.remove('opacity-0', 'pointer-events-none');
+        overlay.classList.remove('opacity-0', 'pointer-events-none');
+        body.classList.add('overflow-hidden');
+
+        setTimeout(captureModalState, 50);
+      }
+
+      function openEditStaffModal(name, email, role, duty) {
+        document.getElementById('staffModalTitle').innerText = "Edit Staff Member";
+        document.getElementById('staffOriginalEmail').value = email;
+        document.getElementById('staffNameInput').value = name;
+        document.getElementById('staffEmailInput').value = email;
+        const roleInput = document.getElementById('staffRoleInput');
+
+        let normalizedRole = role ? role.trim() : "Teacher";
+        // Check if the current user role allows changing
+        const specialRoles = ["admin", "hr", "principal", "sub coordinator"];
+        if (specialRoles.includes(normalizedRole.toLowerCase())) {
+            // Select the disabled option (or temporarily enable to set value, then disable)
+            Array.from(roleInput.options).forEach(opt => {
+                if (opt.value.toLowerCase() === normalizedRole.toLowerCase()) {
+                    roleInput.value = opt.value;
+                }
+            });
+            roleInput.disabled = true;
+        } else {
+            roleInput.value = (normalizedRole.toLowerCase() === "substitute") ? "Substitute" : "Teacher";
+            roleInput.disabled = false;
+        }
+
+        const dutyStr = duty || "";
+        document.getElementById('staffDutyInput').value = dutyStr;
+        const dutyArr = dutyStr.split(',').map(d => d.trim());
+        document.querySelectorAll('.staff-duty-cb').forEach(cb => {
+            cb.checked = dutyArr.includes(cb.value);
+        });
+
+        const modal = document.querySelector('#staffModal');
+        const overlay = document.querySelector('#genericModalOverlay');
+        const body = document.querySelector('body');
+
+        modal.classList.remove('opacity-0', 'pointer-events-none');
+        overlay.classList.remove('opacity-0', 'pointer-events-none');
+        body.classList.add('overflow-hidden');
+
+        setTimeout(captureModalState, 50);
+      }
+
+      let currentAbsenceReasons = [];
+
+      function loadSettingsData() {
+        google.script.run
+          .withSuccessHandler(settings => {
+            const container = document.getElementById('generalSettingsContainer');
+
+            try {
+               currentAbsenceReasons = JSON.parse(settings["Absence Reasons"] || "[]");
+            } catch(e) {
+               currentAbsenceReasons = [];
+            }
+
+            let html = `
+              <div class="border bg-gray-50 rounded-lg p-5 mb-8">
+                  <h4 class="text-md font-bold text-[#002147] mb-4">Email Configurations</h4>
+                  <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                    <div>
+                      <label class="block text-sm font-bold mb-1">Email Mode</label>
+                      <select id="settingsEmailMode" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none bg-white">
+                        <option value="Live" ${settings["Email Mode"] === "Live" ? "selected" : ""}>Live (Normal Operation)</option>
+                        <option value="Redirect" ${settings["Email Mode"] === "Redirect" ? "selected" : ""}>Redirect (Beta Testing)</option>
+                        <option value="Off" ${settings["Email Mode"] === "Off" ? "selected" : ""}>Off (No Emails)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label class="block text-sm font-bold mb-1">Redirect Email Address</label>
+                      <input type="email" id="settingsRedirectEmail" value="${escapeHtml(settings["Redirect Email"] || "")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none bg-white">
+                    </div>
+                    <div>
+                      <label class="block text-sm font-bold mb-1">Email Sender Name</label>
+                      <input type="text" id="settingsEmailSenderName" value="${escapeHtml(settings["Email Sender Name"] || "Cathedral Sub App")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none bg-white">
+                    </div>
+                  </div>
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label class="block text-sm font-bold mb-1">Reply To Email</label>
+                      <input type="email" id="settingsReplyToEmail" value="${escapeHtml(settings["Reply To Email"] || "")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none bg-white" placeholder="Default: account running the script">
+                    </div>
+                  </div>
+              </div>
+
+              <div class="border bg-gray-50 rounded-lg p-5 mb-8">
+                  <h4 class="text-md font-bold text-[#002147] mb-4">Application Settings</h4>
+                  <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                    <div>
+                      <label class="block text-sm font-bold mb-1">App URL</label>
+                      <input type="text" id="settingsAppUrl" value="${escapeHtml(settings["App URL"] || "")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none bg-white">
+                    </div>
+                    <div>
+                      <label class="block text-sm font-bold mb-1">Max Multi-Select Days</label>
+                      <input type="number" id="settingsMaxMultiDays" min="1" max="14" value="${escapeHtml(settings["Max Multi-Select Days"] || "5")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none bg-white" title="Maximum number of days a teacher can select at once.">
+                    </div>
+                    <div>
+                      <label class="block text-sm font-bold mb-1">Sub Availability Window (Days)</label>
+                      <input type="number" id="settingsSubAvailabilityWindow" min="1" max="30" value="${escapeHtml(settings["Sub Availability Window (Days)"] || "5")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none bg-white" title="Number of days to show in the Sub Availability Dashboard.">
+                    </div>
+                  </div>
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div>
+                      <label class="block text-sm font-bold mb-1">Urgency Cutoff Time (24h format)</label>
+                      <input type="number" id="settingsUrgencyCutoff" min="0" max="23" value="${escapeHtml(settings["Urgency Cutoff Time"] || "15")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none bg-white" title="Hour of the day after which next-day absences become urgent. (e.g. 15 = 3 PM)">
+                    </div>
+                    <div>
+                      <label class="block text-sm font-bold mb-1">Data Fetch Window (Days)</label>
+                      <input type="number" id="settingsFetchWindow" min="1" value="${escapeHtml(settings["Data Fetch Window (Days)"] || "30")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none bg-white" title="Number of past days to load data for. Defaults to 30.">
+                    </div>
+                  </div>
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label class="block text-sm font-bold mb-1">Term ID</label>
+                      <input type="number" id="settingsTermId" value="${escapeHtml(settings["Term ID"] || "3503")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none bg-white">
+                    </div>
+                  </div>
+              </div>
+
+              <div class="border bg-gray-50 rounded-lg p-5 mb-8">
+                  <h4 class="text-md font-bold text-[#002147] mb-4">PowerSchool API Integration</h4>
+                  <div class="grid grid-cols-1 gap-4 mb-4">
+                    <div>
+                      <label class="block text-sm font-bold mb-1">PowerSchool API URL</label>
+                      <input type="text" id="settingsPsUrl" value="${escapeHtml(settings.PS_URL || "")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none bg-white">
+                    </div>
+                  </div>
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label class="block text-sm font-bold mb-1">PowerSchool Client ID</label>
+                      <input type="text" id="settingsPsClientId" value="${escapeHtml(settings.PS_CLIENT_ID || "")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none bg-white">
+                    </div>
+                    <div>
+                      <label class="block text-sm font-bold mb-1">PowerSchool Client Secret</label>
+                      <input type="password" id="settingsPsClientSecret" value="${escapeHtml(settings.PS_CLIENT_SECRET || "")}" placeholder="Enter new secret to update" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none bg-white">
+                    </div>
+                  </div>
+              </div>
+
+              <div class="border bg-gray-50 rounded-lg p-5 mb-8">
+                 <div class="flex justify-between items-center mb-4">
+                    <h4 class="text-md font-bold text-[#002147]">Absence Reasons</h4>
+                    <button onclick="addAbsenceReasonRow()" class="bg-gray-200 hover:bg-gray-300 text-gray-800 text-xs font-bold py-1 px-3 rounded transition-colors">Add Reason</button>
+                 </div>
+                 <div id="absenceReasonsContainer" class="space-y-2 max-h-60 overflow-y-auto pr-2">
+                 </div>
+              </div>
+
+              <div class="border bg-gray-50 rounded-lg p-5 mb-8">
+                  <h4 class="text-md font-bold text-[#002147] mb-4">System Actions</h4>
+                  <div class="flex flex-col sm:flex-row justify-between items-center gap-4">
+                    <div class="flex gap-2 w-full sm:w-auto">
+                      <button id="clearCacheBtn" onclick="clearMasterScheduleCacheClient()" class="w-full sm:w-auto bg-red-100 hover:bg-red-200 text-red-700 font-bold py-2 px-4 rounded-lg transition-colors shadow-sm text-sm border border-red-200">
+                        Clear Master Schedule Cache
+                      </button>
+                      <button id="refreshCacheBtn" onclick="refreshMasterScheduleCacheClient()" class="w-full sm:w-auto bg-blue-100 hover:bg-blue-200 text-blue-700 font-bold py-2 px-4 rounded-lg transition-colors shadow-sm text-sm border border-blue-200">
+                        Refresh Master Schedule Cache
+                      </button>
+                    </div>
+                    <button id="saveSettingsBtn" onclick="saveSettings()" class="w-full sm:w-auto bg-[#002147] hover:bg-blue-900 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-md">
+                      Save General Settings
+                    </button>
+                  </div>
+              </div>
+            `;
+            container.innerHTML = html;
+            renderAbsenceReasons();
+            try {
+                 const savedMatrix = JSON.parse(settings.RolePermissions || '{}');
+                 const defaultMatrix = {
+                    "admin": { "Admin Dashboard": true, "HR Dashboard": true, "Today at a Glance": true, "My Upcoming Sub Duties": true, "Today's Absences": true, "My Past Absences": true, "Settings": true, "Add Request on Behalf": true },
+                    "hr": { "Admin Dashboard": false, "HR Dashboard": true, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Absences": false, "My Past Absences": true, "Settings": true, "Add Request on Behalf": true },
+                    "sub coordinator": { "Admin Dashboard": true, "HR Dashboard": false, "Today at a Glance": true, "My Upcoming Sub Duties": true, "Today's Absences": true, "My Past Absences": true, "Settings": true, "Add Request on Behalf": true },
+                    "principal": { "Admin Dashboard": true, "HR Dashboard": true, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Absences": false, "My Past Absences": true, "Settings": true, "Add Request on Behalf": true },
+                    "teacher": { "Admin Dashboard": false, "HR Dashboard": false, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Absences": true, "My Past Absences": true, "Settings": false, "Add Request on Behalf": false },
+                    "substitute": { "Admin Dashboard": false, "HR Dashboard": false, "Today at a Glance": false, "My Upcoming Sub Duties": true, "Today's Absences": false, "My Past Absences": false, "Settings": false, "Add Request on Behalf": false }
+                 };
+
+                 // Merge saved matrix into default matrix
+                 rolePermissionsMatrix = {};
+                 const roles = ["admin", "hr", "sub coordinator", "principal", "teacher", "substitute"];
+                 const views = ["Admin Dashboard", "HR Dashboard", "Today at a Glance", "My Upcoming Sub Duties", "Today's Absences", "My Past Absences", "Settings", "Add Request on Behalf"];
+
+                 roles.forEach(role => {
+                    rolePermissionsMatrix[role] = {};
+                    views.forEach(view => {
+                       if (savedMatrix[role] && typeof savedMatrix[role][view] !== 'undefined') {
+                          rolePermissionsMatrix[role][view] = savedMatrix[role][view];
+                       } else {
+                          rolePermissionsMatrix[role][view] = defaultMatrix[role] ? defaultMatrix[role][view] === true : false;
+                       }
+                    });
+                 });
+
+                 renderRolePermissionsMatrix();
+            } catch (e) {
+                 console.error("Failed to parse RolePermissions", e);
+            }
+          })
+          .withFailureHandler(err => {
+            const container = document.getElementById('generalSettingsContainer');
+            if (container) {
+                container.innerHTML = `<p class="text-red-600 font-bold">Failed to load settings: ${escapeHtml(err.message)}</p>`;
+            }
+            if (err.message && err.message.toLowerCase().includes('unauthorized')) {
+                showToast("Unauthorized: You do not have permission to view Settings.", "error");
+            }
+          })
+          .getSettingsForFrontend(window.activeUserEmail);
+      }
+
+      function renderAbsenceReasons() {
+          const container = document.getElementById('absenceReasonsContainer');
+          if (!container) return;
+
+          let html = '';
+          if (currentAbsenceReasons.length === 0) {
+              html = '<p class="text-gray-400 italic text-sm">No reasons configured.</p>';
+          } else {
+              currentAbsenceReasons.forEach((r, idx) => {
+                  html += `
+                    <div class="flex items-center gap-2 bg-gray-50 p-2 border rounded">
+                        <input type="text" id="reason-text-${idx}" value="${escapeHtml(r.reason)}" placeholder="Reason name" class="flex-1 p-1 border rounded text-sm outline-none focus:ring-1 focus:ring-[#00843D]">
+                        <label class="flex items-center gap-1 text-sm cursor-pointer ml-2">
+                            <input type="checkbox" id="reason-hr-${idx}" ${r.hrRequired ? 'checked' : ''} class="h-4 w-4">
+                            HR Req.
+                        </label>
+                        <label class="flex items-center gap-1 text-sm cursor-pointer ml-2">
+                            <input type="checkbox" id="reason-principal-${idx}" ${r.principalRequired ? 'checked' : ''} class="h-4 w-4">
+                            Principal Req.
+                        </label>
+                        <button onclick="removeAbsenceReasonRow(${idx})" class="text-red-500 hover:text-red-700 font-bold px-2 ml-2" title="Remove">&times;</button>
+                    </div>
+                  `;
+              });
+          }
+          container.innerHTML = html;
+      }
+
+      function addAbsenceReasonRow() {
+          saveCurrentAbsenceReasonsState();
+          currentAbsenceReasons.push({reason: "New Reason", hrRequired: false, principalRequired: false});
+          renderAbsenceReasons();
+      }
+
+      function removeAbsenceReasonRow(idx) {
+          saveCurrentAbsenceReasonsState();
+          currentAbsenceReasons.splice(idx, 1);
+          renderAbsenceReasons();
+      }
+
+      function saveCurrentAbsenceReasonsState() {
+          const container = document.getElementById('absenceReasonsContainer');
+          if (!container) return;
+
+          for (let i = 0; i < currentAbsenceReasons.length; i++) {
+              const textEl = document.getElementById(`reason-text-${i}`);
+              const hrEl = document.getElementById(`reason-hr-${i}`);
+              const principalEl = document.getElementById(`reason-principal-${i}`);
+              if (textEl && hrEl && principalEl) {
+                  currentAbsenceReasons[i].reason = textEl.value;
+                  currentAbsenceReasons[i].hrRequired = hrEl.checked;
+                  currentAbsenceReasons[i].principalRequired = principalEl.checked;
+              }
+          }
+      }
+
+      function saveSettings() {
+        const btn = document.getElementById('saveSettingsBtn');
+        const originalText = btn.innerText;
+        btn.disabled = true;
+        btn.innerText = "Saving...";
+
+        saveCurrentAbsenceReasonsState();
+
+        const newSettings = {
+          "Email Mode": document.getElementById('settingsEmailMode').value,
+          "Redirect Email": document.getElementById('settingsRedirectEmail').value,
+          "Email Sender Name": document.getElementById('settingsEmailSenderName').value,
+          "Reply To Email": document.getElementById('settingsReplyToEmail').value,
+          "App URL": document.getElementById('settingsAppUrl').value,
+          "Max Multi-Select Days": document.getElementById('settingsMaxMultiDays').value,
+          "Sub Availability Window (Days)": document.getElementById('settingsSubAvailabilityWindow').value,
+          "Urgency Cutoff Time": document.getElementById('settingsUrgencyCutoff').value,
+          "Data Fetch Window (Days)": document.getElementById('settingsFetchWindow').value,
+          "Term ID": document.getElementById('settingsTermId').value,
+          "PS_URL": document.getElementById('settingsPsUrl').value,
+          "PS_CLIENT_ID": document.getElementById('settingsPsClientId').value,
+          "PS_CLIENT_SECRET": document.getElementById('settingsPsClientSecret').value,
+          "Absence Reasons": JSON.stringify(currentAbsenceReasons)
+        };
+
+        google.script.run
+          .withSuccessHandler(result => {
+            if (result && result.success) {
+              showToast("Settings saved successfully!", "success");
+            } else {
+              showToast("Failed to save settings: " + (result ? result.error : "Unknown error"), "error");
+            }
+            btn.disabled = false;
+            btn.innerText = originalText;
+          })
+          .withFailureHandler(err => {
+            showToast("Connection Error: " + err.message, 'error');
+            btn.disabled = false;
+            btn.innerText = originalText;
+          })
+          .updateSettings(newSettings, window.activeUserEmail);
+      }
+
+      function clearMasterScheduleCacheClient() {
+        showConfirm("Are you sure you want to clear the Master Schedule cache? It will be re-fetched from PowerSchool on the next load.", () => {
+        const btn = document.getElementById('clearCacheBtn');
+        const originalText = btn.innerText;
+        btn.disabled = true;
+        btn.innerText = "Clearing...";
+
+        google.script.run
+          .withSuccessHandler(result => {
+             if (result && result.success) {
+                 showToast("Cache cleared successfully! Data will be fresh on next load.", 'success');
+             } else {
+                 showToast("Failed to clear cache: " + (result ? result.error : "Unknown error"), "error");
+             }
+             btn.disabled = false;
+             btn.innerText = originalText;
+          })
+          .withFailureHandler(err => {
+             showToast("Error: " + err.message, 'error');
+             btn.disabled = false;
+             btn.innerText = originalText;
+          })
+          .clearMasterScheduleCache(window.activeUserEmail);
+        });
+      }
+
+      function refreshMasterScheduleCacheClient() {
+        const btn = document.getElementById('refreshCacheBtn');
+        const originalText = btn.innerText;
+        btn.disabled = true;
+        btn.innerText = "Refreshing...";
+
+        google.script.run
+          .withSuccessHandler(result => {
+             if (result && result.success) {
+                 showToast("Cache refreshed successfully! Data is now up to date.", 'success');
+             } else {
+                 showToast("Failed to refresh cache: " + (result ? result.error : "Unknown error"), "error");
+             }
+             btn.disabled = false;
+             btn.innerText = originalText;
+          })
+          .withFailureHandler(err => {
+             showToast("Error: " + err.message, 'error');
+             btn.disabled = false;
+             btn.innerText = originalText;
+          })
+          .refreshMasterScheduleCache(window.activeUserEmail);
+      }
+
+
+      let rolePermissionsMatrix = {};
+
+      function renderRolePermissionsMatrix() {
+        const tbody = document.getElementById('rolePermissionsTableBody');
+        const roles = ["admin", "hr", "sub coordinator", "principal", "teacher", "substitute"];
+        const views = ["Admin Dashboard", "HR Dashboard", "Today at a Glance", "My Upcoming Sub Duties", "Today's Absences", "My Past Absences", "Settings", "Add Request on Behalf"];
+
+        let html = '';
+        roles.forEach(role => {
+          let perms = rolePermissionsMatrix[role] || {};
+          html += `<tr class="hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0">`;
+          html += `<td class="p-3 text-sm text-gray-800 font-medium capitalize">${escapeHtml(role)}</td>`;
+
+          views.forEach(view => {
+             const isChecked = perms[view] === true ? 'checked' : '';
+             const isDisabled = (role === 'admin' && view === 'Settings') ? 'disabled' : '';
+             html += `
+                <td class="p-3 text-center">
+                    <input type="checkbox" class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                           data-role="${role}" data-view="${view}" ${isChecked} ${isDisabled}>
+                </td>
+             `;
+          });
+          html += `</tr>`;
+        });
+
+        tbody.innerHTML = html;
+      }
+
+      function saveRolePermissions() {
+         const checkboxes = document.querySelectorAll('#rolePermissionsTableBody input[type="checkbox"]');
+         let newMatrix = {};
+
+         checkboxes.forEach(cb => {
+            const role = cb.dataset.role;
+            const view = cb.dataset.view;
+            if (!newMatrix[role]) newMatrix[role] = {};
+            newMatrix[role][view] = cb.checked;
+         });
+
+         // Enforce Admin -> Settings is true
+         if (!newMatrix['admin']) newMatrix['admin'] = {};
+         newMatrix['admin']['Settings'] = true;
+
+         const settingsToUpdate = {
+             "RolePermissions": JSON.stringify(newMatrix)
+         };
+
+         showToast('Saving permissions...', 'info');
+         google.script.run
+          .withSuccessHandler(() => {
+             showToast('Permissions saved successfully! Reloading...', 'success');
+             rolePermissionsMatrix = newMatrix;
+             setTimeout(() => { location.reload() }, 1000);
+          })
+          .withFailureHandler(err => {
+             showToast('Failed to save permissions: ' + err.message, 'error');
+          })
+          .updateSettings(settingsToUpdate, window.activeUserEmail);
+      }
+      function generateAuditReport() {
+        const startDate = document.getElementById('auditStartDate').value;
+        const endDate = document.getElementById('auditEndDate').value;
+
+        if (!startDate || !endDate) {
+          showToast("Please select both start and end dates.", "error");
+          return;
+        }
+
+        if (startDate > endDate) {
+          showToast("Start date cannot be after end date.", "error");
+          return;
+        }
+
+        const btn = document.getElementById('btnGenerateAudit');
+        const originalText = btn.innerText;
+        btn.disabled = true;
+        btn.innerText = "Loading...";
+
+        const tbody = document.getElementById('auditLogsTableBody');
+        tbody.innerHTML = '<tr><td colspan="5" class="p-8 text-center text-gray-400 italic">Fetching logs...</td></tr>';
+
+        google.script.run
+          .withSuccessHandler(logs => {
+             btn.disabled = false;
+             btn.innerText = originalText;
+
+             if (logs.length === 0) {
+               tbody.innerHTML = '<tr><td colspan="5" class="p-8 text-center text-gray-400 italic">No logs found in this date range.</td></tr>';
+               return;
+             }
+
+             let html = '';
+             logs.forEach(log => {
+               html += `
+                 <tr class="hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0">
+                   <td class="p-3 text-sm text-gray-600 whitespace-nowrap">${escapeHtml(log.timestamp)}</td>
+                   <td class="p-3 text-sm text-gray-800 font-medium">${escapeHtml(log.actor)}</td>
+                   <td class="p-3 text-sm font-bold text-gray-700">
+                     <span class="bg-gray-100 text-gray-800 px-2 py-1 rounded text-xs border border-gray-200">${escapeHtml(log.actionType)}</span>
+                   </td>
+                   <td class="p-3 text-sm text-gray-500 truncate max-w-[150px]" title="${escapeHtml(log.targetId)}">${escapeHtml(log.targetId)}</td>
+                   <td class="p-3 text-sm text-gray-600">${escapeHtml(log.details)}</td>
+                 </tr>
+               `;
+             });
+             tbody.innerHTML = html;
+          })
+          .withFailureHandler(err => {
+             btn.disabled = false;
+             btn.innerText = originalText;
+             tbody.innerHTML = `<tr><td colspan="5" class="p-8 text-center text-red-600 font-bold">Failed to load logs: ${escapeHtml(err.message)}</td></tr>`;
+             showToast("Connection Error: " + err.message, "error");
+          })
+          .getAuditLogs(startDate, endDate, window.activeUserEmail);
+      }
+      function exportAllAbsenceRequestsClient() {
+        const btn = document.getElementById('btn-exportAllData');
+        const originalText = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span>⏳</span> Exporting...';
+
+        google.script.run
+          .withSuccessHandler(data => {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+            if (!data || data.length === 0) {
+               showToast("No data found to export.", "info");
+               return;
+            }
+
+            try {
+              let csvContent = "";
+              data.forEach(row => {
+                 let rowStr = row.map(val => {
+                    if (val === null || val === undefined) return '""';
+                    // Check if it's a date string that needs formatting
+                    let strVal = String(val);
+                    if (strVal.includes('GMT') || strVal.includes('Z')) {
+                        let tryDate = new Date(val);
+                        if (!isNaN(tryDate.getTime())) {
+                            strVal = tryDate.toISOString().split('T')[0];
+                        }
+                    }
+
+                    if (/^[=+\-@\t\r]/.test(strVal)) {
+                        strVal = "'" + strVal;
+                    }
+
+                    strVal = strVal.replace(/"/g, '""');
+                    if (strVal.search(/("|,|\n)/g) >= 0) {
+                        strVal = `"${strVal}"`;
+                    }
+                    return strVal;
+                 }).join(",");
+                 csvContent += rowStr + "\r\n";
+              });
+              const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+              const link = document.createElement("a");
+              const url = URL.createObjectURL(blob);
+              link.setAttribute("href", url);
+              link.setAttribute("download", "All_Absence_Requests.csv");
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+              URL.revokeObjectURL(url);
+              showToast("Exported complete history.", "success");
+            } catch(e) {
+              showToast("Error processing export data: " + e.message, "error");
+            }
+          })
+          .withFailureHandler(err => {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+            showToast("Export failed: " + err.message, "error");
+          })
+          .exportAllAbsenceRequests(window.activeUserEmail);
+      }
+
+      function archiveOldDataClient() {
+        const dateInput = document.getElementById('archiveCutoffDate').value;
+        if (!dateInput) {
+            showToast("Please select a valid date.", "warning");
+            return;
+        }
+
+        showConfirm(`Are you sure you want to archive all absence requests strictly BEFORE ${dateInput}? This will move them to the Archived Data sheet and they will no longer be visible here.`, () => {
+            const btn = document.getElementById('btn-archiveData');
+            const originalText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<span>⏳</span> Archiving...';
+
+            google.script.run
+              .withSuccessHandler(res => {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+                if (res && res.success) {
+                    showToast(`Successfully archived ${res.count} records.`, "success");
+                    document.getElementById('archiveCutoffDate').value = "";
+                    // Refresh data if needed, but not strictly necessary since they are historical
+                } else {
+                    showToast("Failed to archive: " + (res ? res.error : "Unknown Error"), "error");
+                }
+              })
+              .withFailureHandler(err => {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+                showToast("Connection Error: " + err.message, "error");
+              })
+              .archiveAbsenceRequests(dateInput, window.activeUserEmail);
+        });
+      }
+
+      function toggleSettingsDashboard() {
+        const mainContent = document.getElementById('mainContent');
+        const userRole = (document.getElementById('userName').dataset.role || 'teacher').toLowerCase();
+
+        if (userRole === 'hr') {
+            const adminTabs = ['btn-generalSettingsTab', 'btn-staffRosterTab', 'btn-auditLogsTab', 'btn-dataManagementTab'];
+            adminTabs.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.classList.add('hidden');
+            });
+        }
+        const adminView = document.getElementById('adminDashboardView');
+        const hrView = document.getElementById('hrDashboardView');
+        const atAGlanceView = document.getElementById('atAGlanceDashboardView');
+        const settingsView = document.getElementById('settingsDashboardView');
+
+        if (settingsView.classList.contains('hidden')) {
+          mainContent.classList.add('hidden');
+          if (adminView) adminView.classList.add('hidden');
+          if (hrView) hrView.classList.add('hidden');
+          if (atAGlanceView) atAGlanceView.classList.add('hidden');
+          settingsView.classList.remove('hidden');
+
+          // load Settings Data
+          if (userRole !== 'teacher' && userRole !== 'substitute') {
+             loadSettingsData();
+          }
+          if (userRole !== 'teacher' && userRole !== 'substitute') {
+             if (typeof loadPayPeriodsSettings === 'function') {
+                loadPayPeriodsSettings();
+             }
+          }
+          if (typeof loadStaffRosterSettings === 'function') {
+            loadStaffRosterSettings();
+          }
+          if (userRole === 'hr') {
+            switchSettingsTab('hrSettingsTab');
+          } else {
+            switchSettingsTab('generalSettingsTab');
+          }
+          const today = new Date();
+          const offset = today.getTimezoneOffset() * 60000;
+          const localISOTime = (new Date(today - offset)).toISOString().split('T')[0];
+          const pastDate = new Date(today - offset);
+          pastDate.setDate(pastDate.getDate() - 7);
+          const pastISOTime = pastDate.toISOString().split('T')[0];
+
+          if (!document.getElementById('auditStartDate').value) document.getElementById('auditStartDate').value = pastISOTime;
+          if (!document.getElementById('auditEndDate').value) document.getElementById('auditEndDate').value = localISOTime;
+        } else {
+          settingsView.classList.add('hidden');
+          mainContent.classList.remove('hidden');
+        }
+      }
+
+</script>

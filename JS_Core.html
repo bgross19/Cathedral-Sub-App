@@ -1,0 +1,976 @@
+<!-- ====================================================================== -->
+<!-- JS_CORE.HTML — Global State, EventBus, App Init, Formatters & Dialogs  -->
+<!-- ====================================================================== -->
+<script>
+      // === Globals ===
+      window.activeUserEmail = "";
+      
+      function reloadApp() {
+          if (window.globalAppUrl) {
+              window.top.location.href = window.globalAppUrl;
+          } else {
+              window.top.location.href = window.SCRIPT_SERVICE_URL || '';
+          }
+      }
+
+      function handleLogout() {
+          localStorage.removeItem('subAppEmail');
+          reloadApp();
+      }
+      
+      function handleCustomLogin(e) {
+          e.preventDefault();
+          const emailInput = document.getElementById('loginEmailInput').value.trim().toLowerCase();
+          if (!emailInput) return;
+          
+          const btn = document.getElementById('loginBtn');
+          const originalText = btn.innerHTML;
+          btn.disabled = true;
+          btn.innerHTML = '<span class="inline-block animate-spin mr-2">↻</span> Authenticating...';
+          
+          // Verify with backend
+          google.script.run
+              .withSuccessHandler(payload => {
+                  if (payload && payload.userData && payload.userData.name) {
+                      // Success
+                      localStorage.setItem('subAppEmail', emailInput);
+                      window.activeUserEmail = emailInput;
+                      window.isManualLogin = true;
+                      document.getElementById('loginView').classList.add('hidden');
+                      finishInitApp(payload);
+                  }
+              })
+              .withFailureHandler(err => {
+                  alert("Access Denied: " + err.message);
+                  btn.disabled = false;
+                  btn.innerHTML = originalText;
+              })
+              .getInitialPayload(emailInput);
+      }
+
+      function parseCsvLine(text, delimiter) {
+         const result = [];
+         let current = '';
+         let inQuotes = false;
+         for (let i = 0; i < text.length; i++) {
+             const char = text[i];
+             if (char === '"') {
+                 if (inQuotes && text[i+1] === '"') {
+                     current += '"';
+                     i++;
+                 } else {
+                     inQuotes = !inQuotes;
+                 }
+             } else if (char === delimiter && !inQuotes) {
+                 result.push(current);
+                 current = '';
+             } else {
+                 current += char;
+             }
+         }
+         result.push(current);
+         return result.map(s => s.trim());
+      }
+
+      let userDateColors = {};
+      let userTeacherSchedule = [];
+      // Return the schedule to use for pre-selection
+      function getActiveTeacherSchedule() {
+          const onBehalfSection = document.getElementById('onBehalfSection');
+          if (onBehalfSection && !onBehalfSection.classList.contains('hidden')) {
+              const onBehalfInput = document.getElementById('onBehalfTeacher');
+              if (onBehalfInput) {
+                  const selectedName = onBehalfInput.value.trim().toLowerCase();
+                  if (selectedName) {
+                      const teacher = staffList.find(s => s.name.toLowerCase() === selectedName);
+                      if (teacher && teacher.teacherSchedule) {
+                          return teacher.teacherSchedule;
+                      }
+                      return []; // If not found, return empty schedule
+                  } else {
+                      return []; // Empty input, return empty schedule
+                  }
+              }
+          }
+          return userTeacherSchedule;
+      }
+
+      // === Mobile Navigation Menu ===
+      function toggleMobileMenu() {
+        const menu = document.getElementById('navMenu');
+        if (menu.classList.contains('hidden')) {
+            menu.classList.remove('hidden');
+            menu.classList.add('flex');
+        } else {
+            menu.classList.add('hidden');
+            menu.classList.remove('flex');
+        }
+      }
+
+      function closeMobileMenu() {
+        const menu = document.getElementById('navMenu');
+        menu.classList.add('hidden');
+        menu.classList.remove('flex');
+      }
+
+
+      let currentAppVersion = "";
+
+      function generateCSVString(tableId) {
+        const table = document.getElementById(tableId);
+        if (!table) return '';
+
+        let csv = '';
+
+        // Get headers
+        const headers = Array.from(table.querySelectorAll(':scope > thead tr.sm\\:table-row th, :scope > thead tr:not(.sm\\:table-row) th'))
+                             .map(th => {
+                                 let text = th.textContent.trim();
+                                 if (/^[=+\-@\t\r]/.test(text)) {
+                                     text = "'" + text;
+                                 }
+                                 return `"${text.replace(/"/g, '""')}"`;
+                             });
+        if(headers.length > 0) csv += headers.join(',') + '\n';
+
+        // Get rows (only immediate children of tbody to exclude nested sub-tables)
+        const tbody = table.querySelector('tbody');
+        if (!tbody) return csv;
+
+        const rows = Array.from(tbody.querySelectorAll(':scope > tr'));
+        rows.forEach(tr => {
+            // Skip details rows for summary export
+            if (tr.classList.contains('hr-detail-row')) return;
+
+            const cols = tr.querySelectorAll(':scope > td.sm\\:table-cell, :scope > td:not(.sm\\:hidden):not(.sm\\:table-cell)');
+            // Check if this is a loading/empty row (colspan)
+            if (cols.length === 1 && cols[0].hasAttribute('colspan')) return;
+
+            const rowData = Array.from(cols).map(td => {
+                let text = td.getAttribute('data-export');
+                if (!text) {
+                    // Extract text but remove the arrow character
+                    text = td.textContent.trim().replace(/▼/g, '').replace(/(\r\n|\n|\r)/gm, ' ').trim();
+                }
+                if (/^[=+\-@\t\r]/.test(text)) {
+                    text = "'" + text;
+                }
+                text = text.replace(/"/g, '""');
+                return `"${text}"`;
+            });
+            if (rowData.length > 0) csv += rowData.join(',') + '\n';
+        });
+
+        return csv;
+      }
+
+      function exportToCSV(filename, tableId) {
+        const csv = generateCSVString(tableId);
+
+        if (csv.trim() === '') {
+            showToast('No data to export.', 'info');
+            return;
+        }
+
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', filename);
+        link.classList.add('invisible');
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        showToast(`Exported ${filename}`, 'success');
+      }
+
+      // --- PUB-SUB EVENT EMITTER WITH COALESCED REFRESH BATCHING ---
+      const EventBus = {
+        listeners: {},
+        subscribe: function(event, callback) {
+          if (!this.listeners[event]) {
+            this.listeners[event] = [];
+          }
+          this.listeners[event].push(callback);
+        },
+        publish: function(event, data) {
+          if (this.listeners[event]) {
+            this.listeners[event].forEach(callback => callback(data));
+          }
+        }
+      };
+
+      let _pendingRefreshComponents = new Set();
+      let _pendingRefreshRenderAtAGlance = false;
+      let _pendingRefreshTimer = null;
+
+      function queueComponentRefresh(component, options = {}) {
+        _pendingRefreshComponents.add(component);
+        if (options && options.renderAtAGlance) {
+          _pendingRefreshRenderAtAGlance = true;
+        }
+        if (_pendingRefreshTimer) return;
+        _pendingRefreshTimer = setTimeout(() => {
+          const components = Array.from(_pendingRefreshComponents);
+          const renderAtAGlance = _pendingRefreshRenderAtAGlance;
+          _pendingRefreshComponents.clear();
+          _pendingRefreshRenderAtAGlance = false;
+          _pendingRefreshTimer = null;
+
+          if (components.length === 0) return;
+
+          google.script.run
+            .withSuccessHandler(res => {
+              if (!res) return;
+              if (res.myAbsences !== undefined) renderMyAbsences(res.myAbsences);
+              if (res.myPastAbsences !== undefined) renderMyPastAbsences(res.myPastAbsences);
+              if (res.mySubDuties !== undefined) renderMySubDuties(res.mySubDuties);
+              if (res.myPastSubDuties !== undefined) renderMyPastSubDuties(res.myPastSubDuties);
+              if (res.todaysAbsences !== undefined) renderTodaysAbsences(res.todaysAbsences);
+              if (res.quickCover !== undefined) renderQuickCover(res.quickCover);
+              if (res.adminData !== undefined) renderAdminDashboardData(res.adminData, renderAtAGlance);
+            })
+            .withFailureHandler(err => {
+              console.error("Batch refresh failed:", err);
+            })
+            .refreshData(components, window.activeUserEmail);
+        }, 15);
+      }
+
+      // Subscribe UI components to coalesced data refresh events
+      EventBus.subscribe('refresh_myAbsences', () => queueComponentRefresh('myAbsences'));
+      EventBus.subscribe('refresh_myPastAbsences', () => queueComponentRefresh('myPastAbsences'));
+      EventBus.subscribe('refresh_mySubDuties', () => queueComponentRefresh('mySubDuties'));
+      EventBus.subscribe('refresh_myPastSubDuties', () => queueComponentRefresh('myPastSubDuties'));
+      EventBus.subscribe('refresh_todaysAbsences', () => queueComponentRefresh('todaysAbsences'));
+      EventBus.subscribe('refresh_quickCover', () => queueComponentRefresh('quickCover'));
+      EventBus.subscribe('refresh_adminData', (data) => queueComponentRefresh('adminData', { renderAtAGlance: !!(data && data.renderAtAGlance) }));
+      // -------------------------------
+
+      function toggleSection(wrapperId, iconId) {
+        const wrapper = document.getElementById(wrapperId);
+        const icon = document.getElementById(iconId);
+
+        // Check current state
+        const isOpen = wrapper.classList.contains('grid-rows-1');
+
+        if (isOpen) {
+          // Close it
+          wrapper.classList.remove('grid-rows-1');
+          wrapper.classList.add('grid-rows-[0fr]');
+          icon.classList.add('-rotate-90');
+          localStorage.setItem(`toggle_${wrapperId}`, 'closed');
+        } else {
+          // Open it
+          wrapper.classList.remove('grid-rows-[0fr]');
+          wrapper.classList.add('grid-rows-1');
+          icon.classList.remove('-rotate-90');
+          localStorage.setItem(`toggle_${wrapperId}`, 'open');
+        }
+      }
+
+      function initToggles() {
+        const sections = [
+          { wrapperId: 'quickCoverWrapper', iconId: 'iconQuickCover' },
+          { wrapperId: 'subAvailabilityWrapper', iconId: 'iconSubAvailability' },
+          { wrapperId: 'myAbsencesWrapper', iconId: 'iconMyAbsences' },
+          { wrapperId: 'mySubDutiesWrapper', iconId: 'iconMySubDuties' },
+          { wrapperId: 'todaysAbsencesWrapper', iconId: 'iconTodaysOpenJobs' },
+          { wrapperId: 'myPastAbsencesWrapper', iconId: 'iconMyPastAbsences' }
+        ];
+
+        sections.forEach(sec => {
+          const state = localStorage.getItem(`toggle_${sec.wrapperId}`);
+          if (state === 'closed') {
+            const wrapper = document.getElementById(sec.wrapperId);
+            const icon = document.getElementById(sec.iconId);
+            if (wrapper && icon) {
+              wrapper.classList.remove('grid-rows-1');
+              wrapper.classList.add('grid-rows-[0fr]');
+              icon.classList.add('-rotate-90');
+            }
+          }
+        });
+      }
+
+      let staffList = [];
+      let currentUnfilledData = [];
+      let myAbsencesData = [];
+      let myPastAbsencesData = [];
+      let mySubDutiesData = [];
+      function escapeHtml(str) {
+        if (str === null || str === undefined) return '';
+        if (str === 0) return '0';
+        if (str === false) return 'false';
+        if (str === '') return '';
+        return String(str)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+      }
+
+      function formatPeriodLabel(period) {
+        const p = String(period).trim().toLowerCase();
+        if (p === '10' || p === 'advisory' || p === 'a') return 'Advisory';
+        return `Period ${escapeHtml(period)}`;
+      }
+
+      function formatPeriodValue(period) {
+        const p = String(period).trim().toLowerCase();
+        if (p === '10' || p === 'advisory' || p === 'a') return 'Advisory';
+        return escapeHtml(period);
+      }
+
+      function formatPeriodsList(periodsStr) {
+        if (!periodsStr) return '';
+        return String(periodsStr)
+          .split(',')
+          .map(p => p.trim())
+          .filter(p => p !== '')
+          .map(p => {
+            const lower = p.toLowerCase();
+            return (lower === '10' || lower === 'advisory' || lower === 'a') ? 'Advisory' : p;
+          })
+          .join(', ');
+      }
+
+      function escapeJs(str) {
+        if (str === null || str === undefined) return '';
+        const jsEscaped = String(str)
+          .replace(/\\/g, '\\\\')
+          .replace(/'/g, "\\'")
+          .replace(/"/g, '\\"')
+          .replace(/\n/g, '\\n')
+          .replace(/\r/g, '\\r');
+        return escapeHtml(jsEscaped);
+      }
+
+      let adminDataRaw = [];
+      let adminDataFiltered = [];
+      let adminSortCol = 'date';
+      let adminSortAsc = true;
+      let adminCurrentView = 'period'; // 'period' or 'request'
+      let hrDataRaw = [];
+      let hrPayPeriods = [];
+      let hrDateColors = {};
+      let hrRates = { green: 10, blueGold: 20, special: "[]" };
+      let globalDateColors = {};
+      let hrDashboardLoaded = false;
+      let hrCurrentView = 'absences'; // 'absences' or 'subs'
+      let currentUserPermissions = {};
+      let currentUserRole = '';
+
+
+      function checkAppVersion() {
+          if (!currentAppVersion) return; // Don't check if we haven't loaded yet
+          google.script.run
+              .withSuccessHandler(serverVersion => {
+                  if (serverVersion && serverVersion !== currentAppVersion) {
+                      document.getElementById('versionUpdateModal').classList.remove('hidden');
+                  }
+              })
+              .withFailureHandler(err => {
+                  console.error("Failed to check app version", err);
+              })
+              .getAppVersion(window.activeUserEmail);
+      }
+
+
+      // --- Inactivity and Stale Data Tracking ---
+      let lastActivityTime = Date.now();
+      const INACTIVITY_THRESHOLD = 30 * 60 * 1000; // 30 minutes
+
+      function updateActivityTime() {
+          lastActivityTime = Date.now();
+      }
+
+      function checkStaleData() {
+          if (Date.now() - lastActivityTime > INACTIVITY_THRESHOLD) {
+              sessionStorage.setItem('staleDataRefreshed', 'true');
+              reloadApp();
+              updateActivityTime(); // Prevent reload loop while reloading
+          }
+      }
+
+      function setupInactivityTracker() {
+          const events = ['mousedown', 'keydown', 'scroll', 'touchstart']; // Removed mousemove to prevent accidental timer resets
+          let throttleTimer = false;
+          events.forEach(event => {
+              document.addEventListener(event, () => {
+                  if(!throttleTimer) {
+                      checkStaleData();
+                      updateActivityTime();
+                      throttleTimer = true;
+                      setTimeout(() => { throttleTimer = false; }, 1000);
+                  }
+              }, { passive: true });
+          });
+
+          document.addEventListener('visibilitychange', () => {
+              if (document.visibilityState === 'visible') {
+                  checkStaleData();
+                  updateActivityTime();
+              }
+          });
+
+          setInterval(() => {
+              if (document.visibilityState === 'visible') {
+                  checkStaleData();
+              }
+          }, 60 * 1000); // Check every minute
+      }
+      // ------------------------------------------
+
+      function scheduleVersionCheck() {
+          // Calculate ms until next 6:00 AM
+          const now = new Date();
+          let next6AM = new Date();
+          next6AM.setHours(6, 0, 0, 0);
+
+          if (now >= next6AM) {
+              // If it's already past 6 AM today, schedule for 6 AM tomorrow
+              next6AM.setDate(next6AM.getDate() + 1);
+          }
+
+          const msUntilNext6AM = next6AM.getTime() - now.getTime();
+
+          setTimeout(() => {
+              checkAppVersion();
+              // After the first check, check every 24 hours
+              setInterval(checkAppVersion, 24 * 60 * 60 * 1000);
+          }, msUntilNext6AM);
+      }
+
+      function initApp() {
+        initToggles();
+        window.absDatePicker = flatpickr("#absDate", {
+            mode: "multiple",
+            dateFormat: "Y-m-d",
+            disable: [
+                function(date) {
+                    return (date.getDay() === 0 || date.getDay() === 6);
+                }
+            ],
+            onChange: function(selectedDates, dateStr, instance) {
+                handleAbsDateChangeMulti(selectedDates);
+            }
+        });
+
+        scheduleVersionCheck();
+        setupInactivityTracker();
+
+        
+        let serverEmail = String(window.SERVER_USER_EMAIL || "").trim().toLowerCase();
+        let storedEmail = localStorage.getItem('subAppEmail');
+        
+        window.isManualLogin = false;
+
+        if (sessionStorage.getItem('staleDataRefreshed') === 'true') {
+             sessionStorage.removeItem('staleDataRefreshed');
+             // Small delay to ensure the DOM is ready for the toast
+             setTimeout(() => {
+                 showToast("Session refreshed to ensure data is up to date.", "info");
+             }, 500);
+        }
+
+
+        if (serverEmail && serverEmail !== "undefined" && serverEmail !== "" && !serverEmail.includes("<" + "?=")) {
+             window.activeUserEmail = serverEmail;
+             localStorage.setItem('subAppEmail', serverEmail);
+        } else if (storedEmail) {
+             window.activeUserEmail = storedEmail;
+             window.isManualLogin = true;
+        }
+        
+        if (!window.activeUserEmail) {
+             // Show login
+             document.getElementById('loginView').classList.remove('hidden');
+             return;
+        }
+
+        // Show loading state if active user is loading
+        google.script.run
+          .withSuccessHandler(payload => {
+              finishInitApp(payload);
+          })
+          .withFailureHandler(err => {
+              console.error("Failed initial payload", err);
+              // If it fails with access denied, show login
+              if (err.message && err.message.includes("Access Denied")) {
+                  localStorage.removeItem('subAppEmail');
+                  document.getElementById('loginView').classList.remove('hidden');
+              } else {
+                  alert("Failed to load app data: " + err.message);
+              }
+          })
+          .getInitialPayload(window.activeUserEmail);
+}
+
+function finishInitApp(payload) {
+        // Parse URL parameters for "Sign Me Up" links and Deep Links
+        google.script.url.getLocation(function(location) {
+           if (location.parameter && location.parameter.action === 'quickCover') {
+               const absenceId = location.parameter.absenceId;
+               const period = location.parameter.period;
+               if (absenceId && period) {
+                   google.script.run
+                     .withSuccessHandler(details => {
+                         setTimeout(() => {
+                             const dummyBtnId = 'dummy-btn-' + Date.now();
+                             const dummyBtn = document.createElement('button');
+                             dummyBtn.id = dummyBtnId;
+                             dummyBtn.innerText = "Sign Me Up";
+                             dummyBtn.classList.add("hidden");
+                             document.body.appendChild(dummyBtn);
+                             if (details) {
+                                 handleSignMeUp(absenceId, period, dummyBtnId, details.teacherName, details.course);
+                             } else {
+                                 handleSignMeUp(absenceId, period, dummyBtnId);
+                             }
+                         }, 1500); 
+                     })
+                     .withFailureHandler(err => {
+                         console.error("Failed to fetch absence details for Quick Cover:", err);
+                     })
+                     .getAbsenceDetails(absenceId, period, undefined, window.activeUserEmail);
+               }
+           } else if (location.parameter && location.parameter.feedbackAbsenceId) {
+               const absenceId = location.parameter.feedbackAbsenceId;
+               const feedbackPeriod = location.parameter.feedbackPeriod;
+
+               if (absenceId && feedbackPeriod) {
+                   setTimeout(() => {
+                       // Make sure section is visible
+                       const myPastSubDutiesSection = document.getElementById('myPastSubDutiesSection');
+                       if (myPastSubDutiesSection && !myPastSubDutiesSection.classList.contains('hidden')) {
+                           toggleSection('myPastSubDutiesWrapper', 'iconMyPastSubDuties', true);
+                           openSubFeedbackModal(absenceId, feedbackPeriod);
+                       }
+                   }, 1000);
+               }
+           }
+        });
+        
+const data = payload.userData;
+            currentAppVersion = data.appVersion;
+            document.getElementById('userName').innerText = data.name;
+            document.getElementById('userName').dataset.role = data.role;
+            document.getElementById('welcomeName').innerText = (data.name.split(',')[1] || data.name).trim();
+            
+            if (data.appUrl) {
+                window.globalAppUrl = data.appUrl;
+                const footerLink = document.getElementById('atAGlanceFooterUrl');
+                if (footerLink) footerLink.href = data.appUrl;
+            }
+
+            try {
+               let reasons = JSON.parse(data.absenceReasons || "[]");
+               let html = "";
+               reasons.forEach(r => {
+                 // Store hrRequired property dynamically to be accessed later
+                 let hrStr = (r.hrRequired === true || String(r.hrRequired).toLowerCase() === "true") ? "true" : "false";
+                 let prStr = (r.principalRequired === true || String(r.principalRequired).toLowerCase() === "true") ? "true" : "false";
+                 html += `<option value="${escapeHtml(r.reason)}" data-hr-required="${hrStr}" data-principal-required="${prStr}">${escapeHtml(r.reason)}</option>`;
+               });
+               if (html === "") {
+                 html = `<option value="Personal" data-hr-required="false" data-principal-required="false">Personal</option>`; // Fallback
+               }
+               document.getElementById('absReason').innerHTML = html;
+               checkSpecialReason(); // Call initially to set HR checkbox state
+            } catch(e) {
+               console.error("Failed to parse absence reasons", e);
+               document.getElementById('absReason').innerHTML = `<option value="Personal" data-hr-required="false" data-principal-required="false">Personal</option>`;
+            }
+
+            // Render common parts
+            renderMyAbsences(payload.myAbsences);
+            renderMyPastAbsences(payload.myPastAbsences);
+            renderMySubDuties(payload.mySubDuties);
+            renderMyPastSubDuties(payload.myPastSubDuties || []);
+            renderTodaysAbsences(payload.todaysAbsences);
+
+            globalDateColors = payload.dateColors || {};
+            window.appSettings = payload.settings || {};
+            userDateColors = payload.dateColors || {};
+            userTeacherSchedule = data.teacherSchedule || [];
+
+            let lowerRole = data.role.toLowerCase();
+
+            if (lowerRole === 'substitute') {
+               const welcomeDesc = document.getElementById('welcomeDescription');
+               if (welcomeDesc) welcomeDesc.innerText = "Review your assignments and upcoming availability below.";
+               const newAbsBtn = document.getElementById('newAbsenceBtn');
+               if (newAbsBtn) newAbsBtn.classList.add('hidden');
+            }
+
+            // Toggle Navigation Buttons and Main Sections using permissions payload
+            var perms = payload.permissions || {};
+            currentUserPermissions = perms;
+            currentUserRole = lowerRole;
+
+            if (perms["Add Request on Behalf"]) {
+               document.getElementById('newAbsenceOnBehalfBtn').classList.remove('hidden');
+               document.getElementById('newAbsenceOnBehalfBtn').classList.add('flex');
+               document.getElementById('newSubAvailabilityOnBehalfBtn').classList.remove('hidden');
+               document.getElementById('newSubAvailabilityOnBehalfBtn').classList.add('flex');
+            }
+
+            if (perms["Admin Dashboard"] || perms["HR Dashboard"] || perms["Today at a Glance"]) {
+               if (payload.staffList) renderStaffList(payload.staffList);
+            }
+
+            if (perms["Admin Dashboard"]) {
+              document.getElementById('navAdminBtn').classList.remove('hidden');
+            }
+
+            if (perms["HR Dashboard"]) {
+              document.getElementById('navHRBtn').classList.remove('hidden');
+              if (payload.hrData) {
+                  hrDataRaw = payload.hrData.requests || [];
+                  hrPayPeriods = payload.hrData.payPeriods || [];
+                  hrDateColors = payload.dateColors || payload.hrData.dateColors || {};
+                  hrRates = payload.hrData.rates || { green: 10, blueGold: 20, special: "[]" };
+              }
+            }
+
+            if (perms["Today at a Glance"]) {
+              document.getElementById('navAtAGlanceBtn').classList.remove('hidden');
+            }
+
+            if (perms["Settings"]) {
+              document.getElementById('navSettingsBtn').classList.remove('hidden');
+            }
+
+            if (window.isManualLogin) {
+              const logoutBtns = document.querySelectorAll('#navLogoutBtn');
+              logoutBtns.forEach(btn => btn.classList.remove('hidden'));
+            }
+
+            if (perms["Admin Dashboard"] || perms["Today's Absences"] || perms["Today at a Glance"]) {
+              if (payload.quickCover) {
+                  renderQuickCover(payload.quickCover);
+              }
+            }
+
+            if (perms["Admin Dashboard"] || perms["Today's Absences"]) {
+               if (perms["Admin Dashboard"]) document.getElementById('adminSection').classList.remove('hidden');
+               if (payload.adminData) {
+                  renderAdminDataRawSilent(payload.adminData);
+              }
+            }
+
+            if (!perms["My Upcoming Sub Duties"]) {
+                document.getElementById('headerMySubDuties').classList.add('hidden');
+                document.getElementById('mySubDutiesWrapper').classList.add('hidden');
+            }
+            if (lowerRole === 'substitute') {
+                const myAbsHeader = document.getElementById('headerMyAbsences');
+                if (myAbsHeader) myAbsHeader.classList.add('hidden');
+                const myAbsWrapper = document.getElementById('myAbsencesWrapper');
+                if (myAbsWrapper) myAbsWrapper.classList.add('hidden');
+                const myOpenJobsHeader = document.getElementById('headerTodaysOpenJobs');
+                if (myOpenJobsHeader) myOpenJobsHeader.classList.add('hidden');
+                const myOpenJobsWrapper = document.getElementById('todaysAbsencesWrapper');
+                if (myOpenJobsWrapper) myOpenJobsWrapper.classList.add('hidden');
+
+                const myAvailSection = document.getElementById('myAvailabilitySection');
+                if (myAvailSection) myAvailSection.classList.remove('hidden');
+
+                // Initialize availability calendar
+                initAvailabilityCalendar(payload.subAvailability || {});
+            }
+            if (lowerRole === 'hr' || lowerRole === 'principal') {
+              document.getElementById('navHRBtn').classList.remove('hidden');
+              if (payload.hrData) {
+                  renderHRDashboardData(payload.hrData);
+              }
+            }
+            if (lowerRole === 'hr') {
+              toggleHRDashboard();
+              // Hide the return to homepage button inside the HR dashboard
+              const returnBtn = document.querySelector('#hrDashboardView button[onclick="toggleHRDashboard()"]');
+              if (returnBtn) returnBtn.classList.add('hidden');
+            }
+
+            if (lowerRole === 'sub coordinator') {
+              document.getElementById('subAvailabilitySection').classList.remove('hidden');
+              renderSubAvailabilityDashboard();
+            }
+      }
+
+      function renderStaffList(list) {
+            staffList = list;
+
+            // Populate the datalist for "Add Request on Behalf"
+            const allStaffDatalist = document.getElementById('allStaffDataList');
+            if (allStaffDatalist) {
+                let optionsHtml = '';
+                staffList.forEach(staff => {
+                    optionsHtml += `<option value="${escapeHtml(staff.name)}"></option>`;
+                });
+                allStaffDatalist.innerHTML = optionsHtml;
+            }
+
+            // Populate the datalist for "Add Availability for Sub"
+            const allSubsDatalist = document.getElementById('allSubsDataList');
+            if (allSubsDatalist) {
+                let optionsHtml = '';
+                staffList.forEach(staff => {
+                    if (staff.role && staff.role.toLowerCase().includes('substitute')) {
+                        optionsHtml += `<option value="${escapeHtml(staff.name)}"></option>`;
+                    }
+                });
+                allSubsDatalist.innerHTML = optionsHtml;
+            }
+
+            // Rerender Quick Cover in case it loaded before the staff list
+            if (typeof currentUnfilledData !== 'undefined' && currentUnfilledData && currentUnfilledData.length > 0) {
+               renderQuickCover(currentUnfilledData);
+            }
+      }
+
+      function loadStaffList() {
+        google.script.run
+          .withSuccessHandler(res => { if (res.staffList) renderStaffList(res.staffList); })
+          .refreshData(['staffList'], window.activeUserEmail);
+      }
+
+
+      // --- MODAL CLOSE AND UNSAVED DATA LOGIC ---
+      let originalModalData = {};
+
+      function captureModalState() {
+        const isRequestModalOpen = !document.querySelector('#modal').classList.contains('opacity-0');
+
+        const isStaffModalOpen = !document.getElementById('staffModal').classList.contains('opacity-0');
+
+        if (isStaffModalOpen) {
+          originalModalData = {
+            name: document.getElementById('staffNameInput').value,
+            email: document.getElementById('staffEmailInput').value,
+            duty: document.getElementById('staffDutyInput').value
+          };
+          const periodCbs = document.querySelectorAll('.period-cb');
+          const checkedPeriods = [];
+          periodCbs.forEach(cb => { if(cb.checked) checkedPeriods.push(cb.value) });
+
+          originalModalData = {
+            date: document.getElementById('absDate').value,
+            duration: document.getElementById('absDuration').value,
+            reason: document.getElementById('absReason').value,
+            urgency: document.getElementById('urgencyValue').value,
+            specialInst: document.getElementById('specialInst').value,
+            subPlanUrl: document.getElementById('subPlanUrlInput').value,
+            periods: checkedPeriods.join(',')
+          };
+        } else {
+          originalModalData = {};
+        }
+      }
+
+      function hasUnsavedData() {
+        const isRequestModalOpen = !document.querySelector('#modal').classList.contains('opacity-0');
+
+        const isStaffModalOpen = !document.getElementById('staffModal').classList.contains('opacity-0');
+
+        if (isStaffModalOpen) {
+          const currentName = document.getElementById('staffNameInput').value;
+          const currentEmail = document.getElementById('staffEmailInput').value;
+          const currentDuty = document.getElementById('staffDutyInput').value;
+          if (originalModalData.name === undefined && (currentName.trim() !== "" || currentEmail.trim() !== "" || currentDuty.trim() !== "")) return true;
+          if (originalModalData.name !== undefined && (currentName !== originalModalData.name || currentEmail !== originalModalData.email || currentDuty !== originalModalData.duty)) return true;
+        }
+
+
+        if (isRequestModalOpen) {
+          const periodCbs = document.querySelectorAll('.period-cb');
+          const checkedPeriods = [];
+          periodCbs.forEach(cb => { if(cb.checked) checkedPeriods.push(cb.value) });
+
+          const currentDate = document.getElementById('absDate').value;
+          const currentDuration = document.getElementById('absDuration').value;
+          const currentReason = document.getElementById('absReason').value;
+          const currentUrgency = document.getElementById('urgencyValue').value;
+          const currentSpecialInst = document.getElementById('specialInst').value;
+          const currentSubPlanUrl = document.getElementById('subPlanUrlInput').value;
+          const currentPeriods = checkedPeriods.join(',');
+
+          const isEdit = document.getElementById('editAbsenceId').value !== "";
+
+          if (!isEdit) {
+            // Adding new: if they typed *anything* that isn't default
+            if (currentDate || currentSpecialInst.trim() !== "" || currentSubPlanUrl.trim() !== "" || checkedPeriods.length > 0) return true;
+          } else {
+            // Editing existing: compare to original state
+            if (originalModalData.date !== undefined && (
+                currentDate !== originalModalData.date ||
+                currentDuration !== originalModalData.duration ||
+                currentReason !== originalModalData.reason ||
+                currentUrgency !== originalModalData.urgency ||
+                currentSpecialInst !== originalModalData.specialInst ||
+                currentSubPlanUrl !== originalModalData.subPlanUrl ||
+                currentPeriods !== originalModalData.periods)) {
+                return true;
+            }
+          }
+        }
+
+        return false;
+      }
+
+      function attemptCloseAllModals() {
+        if (hasUnsavedData()) {
+
+          showConfirm("You have unsaved changes. Are you sure you want to close this modal and discard them?", () => {
+             originalModalData = {};
+             closeAllModals();
+          });
+          return;
+        }
+
+        // Reset the captured state
+        originalModalData = {};
+        closeAllModals();
+      }
+
+
+      document.addEventListener('keydown', function(event) {
+        if (event.key === "Escape") {
+          const modals = document.querySelectorAll('.modal');
+          let anyOpen = false;
+          modals.forEach(m => {
+            if (!m.classList.contains('opacity-0') && m.id !== 'genericModalOverlay') {
+              anyOpen = true;
+            }
+          });
+
+          if (anyOpen) {
+            attemptCloseAllModals();
+          }
+        }
+      });
+      // --- END MODAL CLOSE AND UNSAVED DATA LOGIC ---
+
+      function closeAllModals() {
+        const modals = document.querySelectorAll('.modal');
+        modals.forEach(m => {
+          m.classList.add('opacity-0');
+          m.classList.add('pointer-events-none');
+        });
+        document.querySelector('body').classList.remove('overflow-hidden');
+      }
+
+      function showToast(message, type = 'success') {
+        const container = document.getElementById('toast-container');
+        const toast = document.createElement('div');
+
+        let bgColor, icon;
+        if (type === 'success') {
+          bgColor = 'bg-[#00843D]';
+          icon = '✅';
+        } else if (type === 'error') {
+          bgColor = 'bg-red-600';
+          icon = '❌';
+        } else if (type === 'warning') {
+          bgColor = 'bg-yellow-500';
+          icon = '⚠️';
+        } else {
+          bgColor = 'bg-gray-800';
+          icon = 'ℹ️';
+        }
+
+        toast.className = `${bgColor} text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 transform transition-all duration-300 translate-y-[-100%] opacity-0 pointer-events-auto`;
+
+        toast.innerHTML = `
+          <span class="text-lg">${icon}</span>
+          <span class="font-medium text-sm max-w-xs break-words">${escapeHtml(message)}</span>
+          <button class="ml-auto text-white hover:text-gray-200" onclick="this.parentElement.remove()">
+             <svg class="w-4 h-4 fill-current" viewBox="0 0 20 20"><path d="M10 8.586l4.95-4.95 1.414 1.414L11.414 10l4.95 4.95-1.414 1.414L10 11.414l-4.95 4.95-1.414-1.414L8.586 10 3.636 5.05l1.414-1.414L10 8.586z"></path></svg>
+          </button>
+        `;
+
+        container.appendChild(toast);
+
+        // Animate in
+        requestAnimationFrame(() => {
+          toast.classList.remove('translate-y-[-100%]', 'opacity-0');
+        });
+
+        // Auto remove
+        setTimeout(() => {
+          toast.classList.add('translate-y-[-100%]', 'opacity-0');
+          setTimeout(() => {
+            if (toast.parentElement) toast.remove();
+          }, 300);
+        }, 5000);
+      }
+      let currentConfirmCallback = null;
+      //  // Stash existing state if we open over another modal
+      function showConfirm(message, callback) {
+        document.getElementById('confirmModalMessage').innerText = message;
+        currentConfirmCallback = callback;
+
+        const modal = document.getElementById('customConfirmModal');
+        modal.classList.remove('opacity-0', 'pointer-events-none');
+
+        document.getElementById('confirmModalActionBtn').onclick = () => {
+           const cb = currentConfirmCallback;
+           closeCustomConfirm();
+           if (cb) cb();
+        };
+      }
+
+      function closeCustomConfirm() {
+        const modal = document.getElementById('customConfirmModal');
+        modal.classList.add('opacity-0', 'pointer-events-none');
+        currentConfirmCallback = null;
+      }
+
+      function showDuplicateWarning(existingIndex) {
+        const modal = document.getElementById('duplicateAbsenceModal');
+        modal.classList.remove('opacity-0', 'pointer-events-none');
+        document.getElementById('duplicateModalEditBtn').onclick = () => {
+          closeDuplicateWarning();
+          toggleModal(); // Close the current creation form first
+          setTimeout(() => {
+            editAbsence(existingIndex);
+          }, 100); // Give it a slight delay to allow the modal state to reset
+        };
+      }
+
+      function closeDuplicateWarning() {
+        const modal = document.getElementById('duplicateAbsenceModal');
+        modal.classList.add('opacity-0', 'pointer-events-none');
+      }
+
+      function cancelDuplicateWarning() {
+        closeDuplicateWarning();
+        toggleModal(); // Close the new request form
+      }
+
+      // Override attemptCloseAllModals to use showConfirm
+      let oldAttemptCloseAllModals = "";
+      try {
+        oldAttemptCloseAllModals = attemptCloseAllModals.toString();
+
+        // Let's actually override it properly
+        window.attemptCloseAllModals = function() {
+          if (hasUnsavedData()) {
+            showConfirm("You have unsaved changes. Are you sure you want to close this modal and discard them?", () => {
+               originalModalData = {};
+               closeAllModals();
+            });
+            return;
+          }
+
+          // Reset the captured state
+          originalModalData = {};
+          closeAllModals();
+        };
+      } catch(e) {
+        console.warn("Error overriding attemptCloseAllModals: ", e);
+      }
+
+</script>
