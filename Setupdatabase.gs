@@ -85,4 +85,23 @@ function setupDatabase() {
   var payPeriodsHeaders = ["Period Number", "Start Date", "End Date", "Approved"];
   payPeriodsSheet.getRange(1, 1, 1, payPeriodsHeaders.length).setValues([payPeriodsHeaders]);
   payPeriodsSheet.getRange(1, 1, 1, payPeriodsHeaders.length).setFontWeight("bold");
+
+  // 8. Dates (Bell Schedule) Sheet
+  var datesSheet = ss.getSheetByName("Dates");
+  if (!datesSheet) {
+    datesSheet = ss.insertSheet("Dates");
+  }
+  var datesHeaders = ["Date", "Color"];
+  datesSheet.getRange(1, 1, 1, datesHeaders.length).setValues([datesHeaders]);
+  datesSheet.getRange(1, 1, 1, datesHeaders.length).setFontWeight("bold");
+  datesSheet.getRange("A:A").setNumberFormat("@");
+
+  // 9. Email Queue Sheet
+  var emailQueueSheet = ss.getSheetByName("Email Queue");
+  if (!emailQueueSheet) {
+    emailQueueSheet = ss.insertSheet("Email Queue");
+  }
+  var emailQueueHeaders = ["Timestamp", "To", "Subject", "Body", "Options", "Status"];
+  emailQueueSheet.getRange(1, 1, 1, emailQueueHeaders.length).setValues([emailQueueHeaders]);
+  emailQueueSheet.getRange(1, 1, 1, emailQueueHeaders.length).setFontWeight("bold");
 }

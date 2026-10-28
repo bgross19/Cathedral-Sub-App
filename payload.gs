@@ -73,22 +73,7 @@ function getInitialPayload(clientEmail, requestedComponents) {
     var payPeriodsData = payPeriodsSheet ? payPeriodsSheet.getDataRange().getValues() : [];
 
     var needDates = want("dateColors") || want("hrData");
-    var datesSheet = needDates ? ss.getSheetByName("Dates") : null;
-    var datesData = datesSheet ? datesSheet.getDataRange().getValues() : [];
-
-    var dateColors = {};
-    if (datesData && datesData.length > 0) {
-      for (var d = 1; d < datesData.length; d++) {
-      if (!datesData[d] || datesData[d].length < 2) continue;
-        var dateRaw = datesData[d][0];
-        var colorRaw = datesData[d][1];
-        if (dateRaw && colorRaw) {
-          var dateFormatted = dateRaw instanceof Date ? Utilities.formatDate(dateRaw, Session.getScriptTimeZone(), "yyyy-MM-dd") :
-            (function(){ try { return Utilities.formatDate(new Date(dateRaw), Session.getScriptTimeZone(), "yyyy-MM-dd"); } catch(e) { return String(dateRaw); } })();
-          dateColors[dateFormatted] = String(colorRaw).trim();
-        }
-      }
-    }
+    var dateColors = needDates ? getDateColorsCached(ss) : {};
 
 
 

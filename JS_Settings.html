@@ -4,11 +4,17 @@
 <script>
       // === Settings Dashboard Tab Switching ===
       function switchSettingsTab(tabId) {
+        if (tabId === 'bellScheduleTab' && typeof loadBellScheduleSettings === 'function') {
+           loadBellScheduleSettings();
+        }
         if (tabId === 'staffRosterTab' && typeof loadStaffRosterSettings === 'function') {
            loadStaffRosterSettings();
         }
         if (tabId === 'hrSettingsTab' && typeof loadPayPeriodsSettings === 'function') {
            loadPayPeriodsSettings();
+        }
+        if (tabId === 'dataManagementTab' && typeof loadEmailQueueStatus === 'function') {
+           loadEmailQueueStatus();
         }
         // Hide all tabs
         const tabs = document.querySelectorAll('.settings-tab-content');
@@ -18,7 +24,7 @@
         });
 
         // Reset all tab buttons
-        const tabBtns = ['generalSettingsTab', 'staffRosterTab', 'auditLogsTab', 'hrSettingsTab', 'dataManagementTab'];
+        const tabBtns = ['generalSettingsTab', 'bellScheduleTab', 'staffRosterTab', 'auditLogsTab', 'hrSettingsTab', 'dataManagementTab'];
         tabBtns.forEach(btn => {
           const btnEl = document.getElementById('btn-' + btn);
           if (btnEl) {
@@ -1318,7 +1324,7 @@
         const userRole = (document.getElementById('userName').dataset.role || 'teacher').toLowerCase();
 
         if (userRole === 'hr') {
-            const adminTabs = ['btn-generalSettingsTab', 'btn-staffRosterTab', 'btn-auditLogsTab', 'btn-dataManagementTab'];
+            const adminTabs = ['btn-generalSettingsTab', 'btn-bellScheduleTab', 'btn-staffRosterTab', 'btn-auditLogsTab', 'btn-dataManagementTab'];
             adminTabs.forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.classList.add('hidden');
@@ -1366,6 +1372,468 @@
           settingsView.classList.add('hidden');
           mainContent.classList.remove('hidden');
         }
+      }
+
+      // === Bell Schedule (Dates Sheet) Visual Calendar & CSV Logic ===
+      let bellScheduleDates = {};
+      let currentBellScheduleMonth = new Date();
+      let currentBellScheduleBrush = 'cycle';
+
+      function syncGlobalDateColors(newMap) {
+        bellScheduleDates = newMap || {};
+        globalDateColors = Object.assign({}, bellScheduleDates);
+        userDateColors = Object.assign({}, bellScheduleDates);
+        if (typeof hrDateColors !== 'undefined') {
+          hrDateColors = Object.assign({}, bellScheduleDates);
+        }
+        const countBadge = document.getElementById('bellScheduleCountBadge');
+        if (countBadge) {
+          countBadge.innerText = Object.keys(bellScheduleDates).length;
+        }
+      }
+
+      function loadBellScheduleSettings() {
+        const grid = document.getElementById('bellScheduleCalendarGrid');
+        if (grid && Object.keys(bellScheduleDates).length === 0 && Object.keys(globalDateColors || {}).length > 0) {
+          syncGlobalDateColors(globalDateColors);
+          renderBellScheduleCalendar();
+        }
+        google.script.run
+          .withSuccessHandler(dateMap => {
+            syncGlobalDateColors(dateMap || {});
+            renderBellScheduleCalendar();
+          })
+          .withFailureHandler(err => {
+            showToast("Failed to load bell schedule: " + err.message, "error");
+          })
+          .getBellScheduleDatesAdmin(window.activeUserEmail);
+      }
+
+      function setBellScheduleBrush(brush) {
+        currentBellScheduleBrush = brush;
+        const buttons = document.querySelectorAll('.bell-brush-btn');
+        buttons.forEach(btn => {
+          btn.classList.remove('ring-2', 'ring-offset-1', 'ring-[#002147]', 'scale-105');
+        });
+        const targetId = brush === '' ? 'bellBrush-Clear' : ('bellBrush-' + brush);
+        const activeBtn = document.getElementById(targetId);
+        if (activeBtn) {
+          activeBtn.classList.add('ring-2', 'ring-offset-1', 'ring-[#002147]', 'scale-105');
+        }
+      }
+
+      function changeBellScheduleMonth(delta) {
+        currentBellScheduleMonth = new Date(currentBellScheduleMonth.getFullYear(), currentBellScheduleMonth.getMonth() + delta, 1);
+        renderBellScheduleCalendar();
+      }
+
+      function resetBellScheduleMonthToToday() {
+        currentBellScheduleMonth = new Date();
+        renderBellScheduleCalendar();
+      }
+
+      function handleBellScheduleDayClick(dateStr) {
+        const prevColor = bellScheduleDates[dateStr] || '';
+        let nextColor = '';
+
+        if (currentBellScheduleBrush === 'cycle') {
+          const cycleOrder = ['Green', 'Blue', 'Gold', 'Red', ''];
+          const idx = cycleOrder.indexOf(prevColor);
+          nextColor = cycleOrder[(idx + 1) % cycleOrder.length];
+        } else {
+          // If clicking with the same color brush, toggle it off; otherwise paint the selected color
+          nextColor = (prevColor === currentBellScheduleBrush) ? '' : currentBellScheduleBrush;
+        }
+
+        if (nextColor) {
+          bellScheduleDates[dateStr] = nextColor;
+        } else {
+          delete bellScheduleDates[dateStr];
+        }
+        syncGlobalDateColors(bellScheduleDates);
+        renderBellScheduleCalendar();
+
+        google.script.run
+          .withSuccessHandler(res => {
+            if (!res || !res.success) {
+              showToast("Failed to save date color: " + (res ? res.error : "Unknown error"), "error");
+              if (prevColor) bellScheduleDates[dateStr] = prevColor;
+              else delete bellScheduleDates[dateStr];
+              syncGlobalDateColors(bellScheduleDates);
+              renderBellScheduleCalendar();
+            }
+          })
+          .withFailureHandler(err => {
+            showToast("Failed to save date color: " + err.message, "error");
+            if (prevColor) bellScheduleDates[dateStr] = prevColor;
+            else delete bellScheduleDates[dateStr];
+            syncGlobalDateColors(bellScheduleDates);
+            renderBellScheduleCalendar();
+          })
+          .saveBellScheduleDateAdmin(dateStr, nextColor, window.activeUserEmail);
+      }
+
+      function renderBellScheduleCalendar() {
+        const grid = document.getElementById('bellScheduleCalendarGrid');
+        const label = document.getElementById('bellScheduleMonthLabel');
+        if (!grid || !label) return;
+
+        const year = currentBellScheduleMonth.getFullYear();
+        const month = currentBellScheduleMonth.getMonth();
+        const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+        label.innerText = `${monthNames[month]} ${year}`;
+
+        const firstDay = new Date(year, month, 1);
+        const lastDay = new Date(year, month + 1, 0);
+        const startingDayOfWeek = firstDay.getDay();
+        const totalDays = lastDay.getDate();
+
+        let html = '';
+
+        for (let i = 0; i < startingDayOfWeek; i++) {
+          html += `<div class="p-4 border rounded-lg bg-gray-50 border-gray-100 opacity-50"></div>`;
+        }
+
+        for (let day = 1; day <= totalDays; day++) {
+          const currentDate = new Date(year, month, day);
+          const dayOfWeek = currentDate.getDay();
+          const mm = String(month + 1).padStart(2, '0');
+          const dd = String(day).padStart(2, '0');
+          const stdDateStr = `${year}-${mm}-${dd}`;
+
+          const color = bellScheduleDates[stdDateStr] || '';
+          const isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
+
+          let cellClasses = "bg-white border-gray-200 hover:bg-gray-50 text-gray-700";
+          let badgeText = isWeekend ? "Weekend" : "Unset";
+          let badgeClasses = "text-gray-400 font-normal";
+
+          if (color === 'Green') {
+            cellClasses = "bg-green-100 border-green-500 text-green-900 hover:bg-green-200";
+            badgeText = "Green";
+            badgeClasses = "text-green-800 font-bold";
+          } else if (color === 'Blue') {
+            cellClasses = "bg-blue-100 border-blue-400 text-blue-900 hover:bg-blue-200";
+            badgeText = "Blue";
+            badgeClasses = "text-blue-800 font-bold";
+          } else if (color === 'Gold') {
+            cellClasses = "bg-yellow-100 border-yellow-400 text-yellow-900 hover:bg-yellow-200";
+            badgeText = "Gold";
+            badgeClasses = "text-yellow-800 font-bold";
+          } else if (color === 'Red') {
+            cellClasses = "bg-red-100 border-red-400 text-red-900 hover:bg-red-200";
+            badgeText = "Red";
+            badgeClasses = "text-red-800 font-bold";
+          } else if (color) {
+            cellClasses = "bg-purple-100 border-purple-400 text-purple-900 hover:bg-purple-200";
+            badgeText = color;
+            badgeClasses = "text-purple-800 font-bold";
+          } else if (isWeekend) {
+            cellClasses = "bg-gray-50 border-gray-200 text-gray-400 hover:bg-gray-100";
+          }
+
+          html += `
+            <div onclick="handleBellScheduleDayClick('${escapeJs(stdDateStr)}')" class="p-3 sm:p-5 border rounded-lg cursor-pointer transition-colors relative flex items-center justify-center select-none ${cellClasses}">
+              <span class="absolute top-1 left-2 text-xs sm:text-sm font-bold">${day}</span>
+              <span class="text-xs mt-3 ${badgeClasses}">${escapeHtml(badgeText)}</span>
+            </div>
+          `;
+        }
+
+        grid.innerHTML = html;
+      }
+
+      function processBellScheduleCsvUpload() {
+        const fileInput = document.getElementById('bellScheduleCsvFileInput');
+        const textarea = document.getElementById('bellScheduleCsvTextarea');
+
+        if (fileInput && fileInput.files.length > 0) {
+          const file = fileInput.files[0];
+          const reader = new FileReader();
+          reader.onload = function(e) {
+            parseAndSubmitBellScheduleCsv(e.target.result);
+            fileInput.value = "";
+          };
+          reader.readAsText(file);
+        } else if (textarea && textarea.value.trim() !== "") {
+          parseAndSubmitBellScheduleCsv(textarea.value);
+          textarea.value = "";
+        } else {
+          showToast("Please select a CSV file or paste CSV/TSV data.", "error");
+        }
+      }
+
+      function parseAndSubmitBellScheduleCsv(csvText) {
+        const lines = csvText.split(/\r?\n/).filter(line => line.trim() !== '');
+        if (lines.length === 0) {
+          showToast("Data is empty.", "info");
+          return;
+        }
+
+        let delimiter = ',';
+        if (lines[0].includes('\t')) {
+          delimiter = '\t';
+        }
+
+        const firstLine = parseCsvLine(lines[0], delimiter);
+        const firstLineUpper = firstLine.map(s => s.toUpperCase().trim());
+        const hasHeaders = firstLineUpper.includes('DATE') || firstLineUpper.includes('COLOR') || firstLineUpper.includes('DAY TYPE') || firstLineUpper.includes('DAY');
+        const startIndex = hasHeaders ? 1 : 0;
+
+        if (lines.length <= startIndex) {
+          showToast("Data contains no schedule rows.", "info");
+          return;
+        }
+
+        const updates = [];
+        for (let i = startIndex; i < lines.length; i++) {
+          const row = parseCsvLine(lines[i], delimiter);
+          if (row.length < 2) continue;
+          const dateVal = row[0].replace(/^"|"$/g, '').trim();
+          const colorVal = row[1].replace(/^"|"$/g, '').trim();
+          if (dateVal && colorVal) {
+            updates.push({ date: dateVal, color: colorVal });
+          }
+        }
+
+        if (updates.length === 0) {
+          showToast("No valid rows found. Make sure each row has Date and Color.", "error");
+          return;
+        }
+
+        const replaceAllEl = document.getElementById('bellScheduleReplaceAllCheckbox');
+        const replaceAll = replaceAllEl ? replaceAllEl.checked : false;
+        const modeDesc = replaceAll ? "REPLACE all existing bell schedule dates with" : "merge/update";
+
+        showConfirm(`Are you sure you want to ${modeDesc} ${updates.length} bell schedule date(s)?`, () => {
+          const btn = document.getElementById('btnProcessBellScheduleCsv');
+          const origText = btn ? btn.innerText : "Process Bell Schedule";
+          if (btn) {
+            btn.disabled = true;
+            btn.innerText = "Processing...";
+          }
+
+          google.script.run
+            .withSuccessHandler(result => {
+              if (btn) {
+                btn.disabled = false;
+                btn.innerText = origText;
+              }
+              if (result && result.success) {
+                showToast(`Processed ${result.updated} bell schedule date(s).`, "success");
+                if (result.dateColors) {
+                  syncGlobalDateColors(result.dateColors);
+                  renderBellScheduleCalendar();
+                } else {
+                  loadBellScheduleSettings();
+                }
+              } else {
+                showToast("Failed to process bell schedule: " + (result ? result.error : "Unknown error"), "error");
+              }
+            })
+            .withFailureHandler(err => {
+              if (btn) {
+                btn.disabled = false;
+                btn.innerText = origText;
+              }
+              showToast("Connection Error: " + err.message, "error");
+            })
+            .bulkUpsertBellScheduleDates(updates, replaceAll, window.activeUserEmail);
+        });
+      }
+
+      function exportBellScheduleCSV() {
+        const keys = Object.keys(bellScheduleDates).sort();
+        if (keys.length === 0) {
+          showToast("No bell schedule dates to export.", "info");
+          return;
+        }
+        let csv = '"Date","Color"\n';
+        keys.forEach(dt => {
+          const c = String(bellScheduleDates[dt] || "").replace(/"/g, '""');
+          csv += `"${dt}","${c}"\n`;
+        });
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', 'Bell_Schedule_Dates.csv');
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        showToast("Exported Bell_Schedule_Dates.csv", "success");
+      }
+
+      function clearAllBellScheduleClient() {
+        showConfirm("Are you sure you want to clear ALL bell schedule dates? This cannot be undone.", () => {
+          google.script.run
+            .withSuccessHandler(res => {
+              if (res && res.success) {
+                showToast("All bell schedule dates cleared.", "success");
+                syncGlobalDateColors({});
+                renderBellScheduleCalendar();
+              } else {
+                showToast("Failed to clear schedule: " + (res ? res.error : "Unknown error"), "error");
+              }
+            })
+            .withFailureHandler(err => {
+              showToast("Connection Error: " + err.message, "error");
+            })
+            .clearAllBellScheduleDates(window.activeUserEmail);
+        });
+      }
+
+      // === Email Queue Monitor & Operations Logic ===
+      function loadEmailQueueStatus() {
+        const tbody = document.getElementById('emailQueueTableBody');
+        if (tbody) {
+          tbody.innerHTML = '<tr><td colspan="4" class="p-6 text-center text-gray-400 italic">Loading email queue...</td></tr>';
+        }
+        google.script.run
+          .withSuccessHandler(statusObj => {
+            renderEmailQueueStatus(statusObj);
+          })
+          .withFailureHandler(err => {
+            if (tbody) {
+              tbody.innerHTML = `<tr><td colspan="4" class="p-6 text-center text-red-600 font-bold">Failed to load email queue: ${escapeHtml(err.message)}</td></tr>`;
+            }
+          })
+          .getEmailQueueStatus(window.activeUserEmail);
+      }
+
+      function renderEmailQueueStatus(statusObj) {
+        const pendingBadge = document.getElementById('emailQueuePendingBadge');
+        const failedBadge = document.getElementById('emailQueueFailedBadge');
+        const tbody = document.getElementById('emailQueueTableBody');
+
+        const pendingCount = (statusObj && typeof statusObj.pendingCount === 'number') ? statusObj.pendingCount : 0;
+        const failedCount = (statusObj && typeof statusObj.failedCount === 'number') ? statusObj.failedCount : 0;
+        const items = (statusObj && Array.isArray(statusObj.items)) ? statusObj.items : [];
+
+        if (pendingBadge) pendingBadge.innerText = pendingCount;
+        if (failedBadge) failedBadge.innerText = failedCount;
+        if (!tbody) return;
+
+        if (items.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="4" class="p-6 text-center text-gray-400 italic">Email queue is empty — no pending or failed emails.</td></tr>';
+          return;
+        }
+
+        let html = '';
+        items.forEach(item => {
+          const isFailed = String(item.status || '').indexOf('Failed') === 0;
+          const badgeClass = isFailed
+            ? 'bg-red-100 text-red-800 border-red-200'
+            : 'bg-blue-100 text-blue-800 border-blue-200';
+          html += `
+            <tr class="hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0">
+              <td class="p-2.5 text-xs text-gray-600 whitespace-nowrap">${escapeHtml(item.timestamp)}</td>
+              <td class="p-2.5 text-xs font-medium text-gray-800">${escapeHtml(item.to)}</td>
+              <td class="p-2.5 text-xs text-gray-700 max-w-xs truncate" title="${escapeHtml(item.subject)}">${escapeHtml(item.subject)}</td>
+              <td class="p-2.5 text-xs">
+                <span class="inline-block px-2 py-0.5 rounded border font-semibold ${badgeClass}">${escapeHtml(item.status)}</span>
+              </td>
+            </tr>
+          `;
+        });
+        tbody.innerHTML = html;
+      }
+
+      function runEmailQueueNowClient() {
+        const btn = document.getElementById('btnProcessEmailQueueNow');
+        const origHtml = btn ? btn.innerHTML : '';
+        if (btn) {
+          btn.disabled = true;
+          btn.innerHTML = '<span>⏳</span> Processing...';
+        }
+        google.script.run
+          .withSuccessHandler(res => {
+            if (btn) {
+              btn.disabled = false;
+              btn.innerHTML = origHtml;
+            }
+            if (res && res.success) {
+              showToast("Processed email queue.", "success");
+              renderEmailQueueStatus(res.status);
+            } else {
+              showToast("Failed to process email queue: " + (res ? res.error : "Unknown error"), "error");
+            }
+          })
+          .withFailureHandler(err => {
+            if (btn) {
+              btn.disabled = false;
+              btn.innerHTML = origHtml;
+            }
+            showToast("Connection Error: " + err.message, "error");
+          })
+          .runEmailQueueNow(window.activeUserEmail);
+      }
+
+      function retryFailedEmailsClient() {
+        const btn = document.getElementById('btnRetryFailedEmails');
+        const origHtml = btn ? btn.innerHTML : '';
+        if (btn) {
+          btn.disabled = true;
+          btn.innerHTML = '<span>⏳</span> Retrying...';
+        }
+        google.script.run
+          .withSuccessHandler(res => {
+            if (btn) {
+              btn.disabled = false;
+              btn.innerHTML = origHtml;
+            }
+            if (res && res.success) {
+              if (res.retriedCount > 0) {
+                showToast(`Retried ${res.retriedCount} failed email(s).`, "success");
+              } else {
+                showToast("No failed emails to retry.", "info");
+              }
+              renderEmailQueueStatus(res.status);
+            } else {
+              showToast("Failed to retry emails: " + (res ? res.error : "Unknown error"), "error");
+            }
+          })
+          .withFailureHandler(err => {
+            if (btn) {
+              btn.disabled = false;
+              btn.innerHTML = origHtml;
+            }
+            showToast("Connection Error: " + err.message, "error");
+          })
+          .retryFailedEmails(window.activeUserEmail);
+      }
+
+      function clearFailedEmailsClient() {
+        showConfirm("Are you sure you want to permanently remove all failed emails from the queue?", () => {
+          const btn = document.getElementById('btnClearFailedEmails');
+          const origHtml = btn ? btn.innerHTML : '';
+          if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<span>⏳</span> Clearing...';
+          }
+          google.script.run
+            .withSuccessHandler(res => {
+              if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = origHtml;
+              }
+              if (res && res.success) {
+                showToast(`Cleared ${res.deletedCount} failed email(s).`, "success");
+                loadEmailQueueStatus();
+              } else {
+                showToast("Failed to clear emails: " + (res ? res.error : "Unknown error"), "error");
+              }
+            })
+            .withFailureHandler(err => {
+              if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = origHtml;
+              }
+              showToast("Connection Error: " + err.message, "error");
+            })
+            .clearFailedEmails(window.activeUserEmail);
+        });
       }
 
 </script>

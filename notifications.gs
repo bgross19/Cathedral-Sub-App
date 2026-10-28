@@ -246,6 +246,197 @@ function processEmailQueue() {
 }
 
 /**
+ * Returns the status of the Email Queue for the Admin Settings / Data Management view.
+ */
+function getEmailQueueStatus(clientEmail) {
+  try {
+    var ss = getSS();
+    var user = getUserData(ss, typeof clientEmail !== 'undefined' ? clientEmail : undefined);
+    assertPermission(user, "Settings");
+
+    var sheet = ss.getSheetByName("Email Queue");
+    if (!sheet) {
+      return { pendingCount: 0, failedCount: 0, items: [] };
+    }
+
+    var data = sheet.getDataRange().getValues();
+    if (data.length <= 1) {
+      return { pendingCount: 0, failedCount: 0, items: [] };
+    }
+
+    var pendingCount = 0;
+    var failedCount = 0;
+    var items = [];
+    var tz = Session.getScriptTimeZone();
+
+    for (var i = 1; i < data.length; i++) {
+      if (!data[i]) continue;
+      var status = String(data[i][5] || "").trim();
+      var isPending = (status === "Pending");
+      var isFailed = (status.indexOf("Failed") === 0);
+
+      if (isPending) pendingCount++;
+      if (isFailed) failedCount++;
+
+      if ((isPending || isFailed) && items.length < 50) {
+        var tsRaw = data[i][0];
+        var tsFormatted = (tsRaw instanceof Date && !isNaN(tsRaw.getTime()))
+          ? Utilities.formatDate(tsRaw, tz, "yyyy-MM-dd HH:mm:ss")
+          : String(tsRaw || "");
+        items.push({
+          rowNumber: i + 1,
+          timestamp: tsFormatted,
+          to: String(data[i][1] || ""),
+          subject: String(data[i][2] || ""),
+          status: status
+        });
+      }
+    }
+
+    return {
+      pendingCount: pendingCount,
+      failedCount: failedCount,
+      items: items
+    };
+  } catch (err) {
+    notifyAdminOfError("getEmailQueueStatus", err);
+    throw new Error("Failed to load email queue status: " + err.message);
+  }
+}
+
+/**
+ * Resets all Failed rows in the Email Queue back to Pending and processes the queue immediately.
+ */
+function retryFailedEmails(clientEmail) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+  } catch (e) {
+    notifyAdminOfError("retryFailedEmails_lock", e);
+    return { success: false, error: "The server is currently busy. Please try again." };
+  }
+
+  var retriedCount = 0;
+  try {
+    var ss = getSS();
+    var user = getUserData(ss, typeof clientEmail !== 'undefined' ? clientEmail : undefined);
+    assertPermission(user, "Settings");
+
+    var sheet = ss.getSheetByName("Email Queue");
+    if (!sheet) {
+      return { success: true, retriedCount: 0, status: { pendingCount: 0, failedCount: 0, items: [] } };
+    }
+
+    var data = sheet.getDataRange().getValues();
+    if (data.length <= 1) {
+      return { success: true, retriedCount: 0, status: { pendingCount: 0, failedCount: 0, items: [] } };
+    }
+
+    var statuses = [];
+    for (var i = 0; i < data.length; i++) {
+      var st = data[i] ? String(data[i][5] || "") : "";
+      if (i > 0 && st.indexOf("Failed") === 0) {
+        statuses.push(["Pending"]);
+        retriedCount++;
+      } else {
+        statuses.push([st]);
+      }
+    }
+
+    if (retriedCount > 0) {
+      sheet.getRange(1, 6, statuses.length, 1).setValues(statuses);
+      logAuditAction("EMAIL_QUEUE_RETRY", "Email Queue", "Reset " + retriedCount + " failed email(s) to Pending", clientEmail);
+    }
+  } catch (err) {
+    notifyAdminOfError("retryFailedEmails", err);
+    return { success: false, error: err.message };
+  } finally {
+    lock.releaseLock();
+  }
+
+  if (retriedCount > 0) {
+    processEmailQueue();
+  }
+  return {
+    success: true,
+    retriedCount: retriedCount,
+    status: getEmailQueueStatus(clientEmail)
+  };
+}
+
+/**
+ * Deletes all Failed rows from the Email Queue sheet.
+ */
+function clearFailedEmails(clientEmail) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+  } catch (e) {
+    notifyAdminOfError("clearFailedEmails_lock", e);
+    return { success: false, error: "The server is currently busy. Please try again." };
+  }
+
+  try {
+    var ss = getSS();
+    var user = getUserData(ss, typeof clientEmail !== 'undefined' ? clientEmail : undefined);
+    assertPermission(user, "Settings");
+
+    var sheet = ss.getSheetByName("Email Queue");
+    if (!sheet) {
+      return { success: true, deletedCount: 0, status: { pendingCount: 0, failedCount: 0, items: [] } };
+    }
+
+    var data = sheet.getDataRange().getValues();
+    var rowsToDelete = [];
+    for (var k = data.length - 1; k >= 1; k--) {
+      if (!data[k]) continue;
+      var status = String(data[k][5] || "");
+      if (status.indexOf("Failed") === 0) {
+        rowsToDelete.push(k + 1);
+      }
+    }
+
+    for (var d = 0; d < rowsToDelete.length; d++) {
+      sheet.deleteRow(rowsToDelete[d]);
+    }
+
+    if (rowsToDelete.length > 0) {
+      logAuditAction("EMAIL_QUEUE_CLEAR_FAILED", "Email Queue", "Cleared " + rowsToDelete.length + " failed email(s)", clientEmail);
+    }
+
+    return {
+      success: true,
+      deletedCount: rowsToDelete.length
+    };
+  } catch (err) {
+    notifyAdminOfError("clearFailedEmails", err);
+    return { success: false, error: err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * Triggers processEmailQueue immediately from the Settings UI and returns updated status.
+ */
+function runEmailQueueNow(clientEmail) {
+  try {
+    var ss = getSS();
+    var user = getUserData(ss, typeof clientEmail !== 'undefined' ? clientEmail : undefined);
+    assertPermission(user, "Settings");
+
+    processEmailQueue();
+    return {
+      success: true,
+      status: getEmailQueueStatus(clientEmail)
+    };
+  } catch (err) {
+    notifyAdminOfError("runEmailQueueNow", err);
+    return { success: false, error: err.message };
+  }
+}
+
+/**
  * Sets up a time-driven trigger to process the email queue every 1 minute.
  * Note: This function is meant to be run manually from the Apps Script editor
  * exactly once during the initial setup of the application.
@@ -459,19 +650,7 @@ function generatePrincipalsDigestHTML(dateObj) {
   };
 
   // Get data
-  var dateColors = {};
-  var datesSheet = ss.getSheetByName("Dates");
-  if (datesSheet) {
-    var datesRaw = datesSheet.getDataRange().getValues();
-    for (var i = 1; i < datesRaw.length; i++) {
-        var dStr = datesRaw[i][0];
-        if (dStr) {
-           var formatted = dStr instanceof Date ? Utilities.formatDate(dStr, Session.getScriptTimeZone(), "yyyy-MM-dd") : String(dStr).trim();
-           if (!datesRaw[i]) continue;
-           dateColors[formatted] = String(datesRaw[i][1]).trim();
-        }
-    }
-  }
+  var dateColors = getDateColorsCached(ss);
 
   var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
   var rosterData = rosterSheet.getDataRange().getValues();

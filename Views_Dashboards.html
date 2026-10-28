@@ -217,9 +217,12 @@
 
 
       <!-- Settings Tabs -->
-      <div class="flex border-b border-gray-200 mb-6">
+      <div class="flex flex-wrap border-b border-gray-200 mb-6">
         <button onclick="switchSettingsTab('generalSettingsTab')" id="btn-generalSettingsTab" class="py-2 px-4 text-[#002147] font-semibold border-b-2 border-[#002147] focus:outline-none">
           General Settings
+        </button>
+        <button onclick="switchSettingsTab('bellScheduleTab')" id="btn-bellScheduleTab" class="py-2 px-4 text-gray-500 hover:text-[#002147] font-medium focus:outline-none">
+          Bell Schedule
         </button>
         <button onclick="switchSettingsTab('staffRosterTab')" id="btn-staffRosterTab" class="py-2 px-4 text-gray-500 hover:text-[#002147] font-medium focus:outline-none">
           Staff Roster
@@ -242,6 +245,96 @@
         <div id="generalSettingsContainer">
            <!-- Dynamic content injected here -->
            <p class="text-gray-400 italic">Loading settings...</p>
+        </div>
+      </div>
+
+      <!-- Bell Schedule Tab -->
+      <div id="bellScheduleTab" class="settings-tab-content bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8 hidden">
+        <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-3 mb-4 border-b pb-2">
+           <div>
+             <h3 class="text-xl font-bold text-[#002147]">Bell Schedule (Green / Blue / Gold Days)</h3>
+             <p class="text-sm text-gray-500">Click dates on the calendar to assign day colors, or bulk upload a schedule via CSV.</p>
+           </div>
+           <div class="flex flex-wrap gap-2">
+               <button onclick="exportBellScheduleCSV()" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-1.5 px-4 rounded-lg transition-colors text-sm flex items-center gap-2">
+                   <span>📥</span> Export CSV
+               </button>
+               <button onclick="clearAllBellScheduleClient()" class="bg-red-100 hover:bg-red-200 text-red-700 font-bold py-1.5 px-4 rounded-lg transition-colors text-sm flex items-center gap-2 border border-red-200">
+                   <span>🗑️</span> Clear All Dates
+               </button>
+           </div>
+        </div>
+
+        <!-- Visual Bell Schedule Calendar -->
+        <div class="mb-8 p-4 bg-white rounded-xl border border-gray-200 shadow-sm">
+           <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4 pb-3 border-b border-gray-100">
+              <div class="flex items-center flex-wrap gap-2">
+                 <span class="text-xs font-bold text-gray-600 uppercase tracking-wider mr-1">Click Mode:</span>
+                 <button type="button" id="bellBrush-cycle" onclick="setBellScheduleBrush('cycle')" class="bell-brush-btn px-3 py-1 rounded-full text-xs font-bold border-2 border-[#002147] bg-[#002147] text-white transition-colors">
+                   ↻ Cycle
+                 </button>
+                 <button type="button" id="bellBrush-Green" onclick="setBellScheduleBrush('Green')" class="bell-brush-btn px-3 py-1 rounded-full text-xs font-bold border border-green-300 bg-green-100 text-green-800 hover:bg-green-200 transition-colors">
+                   Green Day
+                 </button>
+                 <button type="button" id="bellBrush-Blue" onclick="setBellScheduleBrush('Blue')" class="bell-brush-btn px-3 py-1 rounded-full text-xs font-bold border border-blue-300 bg-blue-100 text-blue-800 hover:bg-blue-200 transition-colors">
+                   Blue Day
+                 </button>
+                 <button type="button" id="bellBrush-Gold" onclick="setBellScheduleBrush('Gold')" class="bell-brush-btn px-3 py-1 rounded-full text-xs font-bold border border-yellow-300 bg-yellow-100 text-yellow-800 hover:bg-yellow-200 transition-colors">
+                   Gold Day
+                 </button>
+                 <button type="button" id="bellBrush-Red" onclick="setBellScheduleBrush('Red')" class="bell-brush-btn px-3 py-1 rounded-full text-xs font-bold border border-red-300 bg-red-100 text-red-800 hover:bg-red-200 transition-colors">
+                   Red / No School
+                 </button>
+                 <button type="button" id="bellBrush-Clear" onclick="setBellScheduleBrush('')" class="bell-brush-btn px-3 py-1 rounded-full text-xs font-bold border border-gray-300 bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors">
+                   ✕ Clear
+                 </button>
+              </div>
+              <div class="text-xs text-gray-500">
+                 Total Configured Dates: <span id="bellScheduleCountBadge" class="font-bold text-[#002147]">0</span>
+              </div>
+           </div>
+
+           <div class="flex items-center justify-between gap-4 mb-4">
+              <button type="button" onclick="changeBellScheduleMonth(-1)" class="px-3 py-1.5 rounded-lg border border-gray-300 text-[#002147] hover:bg-gray-100 font-bold text-sm">&lt; Prev</button>
+              <div class="flex items-center gap-3">
+                 <h4 id="bellScheduleMonthLabel" class="text-lg font-bold text-[#002147] text-center">Loading...</h4>
+                 <button type="button" onclick="resetBellScheduleMonthToToday()" class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold px-2.5 py-1 rounded border border-gray-300">Today</button>
+              </div>
+              <button type="button" onclick="changeBellScheduleMonth(1)" class="px-3 py-1.5 rounded-lg border border-gray-300 text-[#002147] hover:bg-gray-100 font-bold text-sm">Next &gt;</button>
+           </div>
+
+           <div class="grid grid-cols-7 gap-1 text-center font-bold text-sm text-gray-700 mb-2">
+              <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+           </div>
+           <div id="bellScheduleCalendarGrid" class="grid grid-cols-7 gap-1">
+              <!-- Populated dynamically -->
+           </div>
+        </div>
+
+        <!-- CSV Upload for Bell Schedule -->
+        <div class="p-4 bg-gray-50 rounded-lg border border-gray-200">
+           <h4 class="text-md font-bold text-[#002147] mb-2">CSV Upload (Bulk Update/Create Bell Schedule)</h4>
+           <p class="text-xs text-gray-600 mb-3">Upload a 2-column CSV or paste rows with <code class="bg-white px-1 py-0.5 rounded border">Date, Color</code> (accepts <code class="bg-white px-1 py-0.5 rounded border">YYYY-MM-DD</code> or <code class="bg-white px-1 py-0.5 rounded border">M/D/YYYY</code>, and colors <code class="bg-white px-1 py-0.5 rounded border">Green</code>, <code class="bg-white px-1 py-0.5 rounded border">Blue</code>, <code class="bg-white px-1 py-0.5 rounded border">Gold</code>, or <code class="bg-white px-1 py-0.5 rounded border">Red</code>).</p>
+           <div class="flex flex-col gap-3">
+               <div>
+                 <label class="block text-sm text-gray-600 mb-1">Select a .csv file...</label>
+                 <input type="file" id="bellScheduleCsvFileInput" accept=".csv" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-[#002147] file:text-white hover:file:bg-blue-900"/>
+               </div>
+               <div class="text-center text-gray-500 font-semibold text-sm">OR</div>
+               <div>
+                 <label class="block text-sm text-gray-600 mb-1">...Paste CSV / Tab-Delimited data directly</label>
+                 <textarea id="bellScheduleCsvTextarea" rows="4" placeholder="Date&#9;Color&#10;2026-08-17&#9;Green&#10;2026-08-18&#9;Blue&#10;2026-08-19&#9;Gold" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none text-sm font-mono"></textarea>
+               </div>
+               <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+                  <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                    <input type="checkbox" id="bellScheduleReplaceAllCheckbox" class="h-4 w-4 rounded text-[#00843D]">
+                    <span>Replace entire existing schedule (clear old dates before importing)</span>
+                  </label>
+                  <button onclick="processBellScheduleCsvUpload()" id="btnProcessBellScheduleCsv" class="bg-[#002147] hover:bg-blue-900 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-md text-sm">
+                    Process Bell Schedule
+                  </button>
+               </div>
+           </div>
         </div>
       </div>
 
@@ -336,7 +429,58 @@
 
       <!-- Data Management Tab -->
       <div id="dataManagementTab" class="settings-tab-content bg-white rounded-xl shadow-sm border border-gray-200 p-6 hidden">
-        <h3 class="text-xl font-bold text-[#002147] mb-4 border-b pb-2">Data Management</h3>
+        <h3 class="text-xl font-bold text-[#002147] mb-4 border-b pb-2">Data &amp; Operations Management</h3>
+
+        <!-- Email Queue Monitor & Manager -->
+        <div class="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+              <div>
+                <h4 class="text-md font-bold text-[#002147] flex items-center gap-2">
+                  <span>✉️</span> Email Queue Monitor
+                </h4>
+                <p class="text-xs text-gray-600 mt-0.5">Inspect pending or failed background emails and retry or clear delivery failures without opening the spreadsheet.</p>
+              </div>
+              <div class="flex items-center gap-3">
+                <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800 border border-blue-200">
+                  Pending: <span id="emailQueuePendingBadge">0</span>
+                </span>
+                <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-red-100 text-red-800 border border-red-200">
+                  Failed: <span id="emailQueueFailedBadge">0</span>
+                </span>
+              </div>
+           </div>
+
+           <div class="flex flex-wrap gap-2 mb-4">
+              <button type="button" onclick="loadEmailQueueStatus()" id="btnRefreshEmailQueue" class="bg-white hover:bg-gray-100 text-[#002147] font-bold py-1.5 px-3 rounded-lg border border-gray-300 transition-colors text-xs flex items-center gap-1.5 shadow-sm">
+                <span>↻</span> Refresh Status
+              </button>
+              <button type="button" onclick="runEmailQueueNowClient()" id="btnProcessEmailQueueNow" class="bg-[#002147] hover:bg-blue-900 text-white font-bold py-1.5 px-3 rounded-lg transition-colors text-xs flex items-center gap-1.5 shadow-sm">
+                <span>▶️</span> Process Queue Now
+              </button>
+              <button type="button" onclick="retryFailedEmailsClient()" id="btnRetryFailedEmails" class="bg-[#00843D] hover:bg-green-700 text-white font-bold py-1.5 px-3 rounded-lg transition-colors text-xs flex items-center gap-1.5 shadow-sm">
+                <span>🔁</span> Retry Failed Emails
+              </button>
+              <button type="button" onclick="clearFailedEmailsClient()" id="btnClearFailedEmails" class="bg-red-100 hover:bg-red-200 text-red-700 font-bold py-1.5 px-3 rounded-lg border border-red-200 transition-colors text-xs flex items-center gap-1.5 shadow-sm">
+                <span>🗑️</span> Clear Failed
+              </button>
+           </div>
+
+           <div class="overflow-x-auto bg-white rounded-lg border border-gray-200">
+              <table class="w-full text-left border-collapse min-w-max">
+                <thead>
+                  <tr class="bg-gray-50 border-b border-gray-200 text-xs text-gray-700 uppercase">
+                    <th class="p-2.5">Timestamp</th>
+                    <th class="p-2.5">Recipient</th>
+                    <th class="p-2.5">Subject</th>
+                    <th class="p-2.5">Status / Error</th>
+                  </tr>
+                </thead>
+                <tbody id="emailQueueTableBody" class="divide-y divide-gray-100 text-sm">
+                  <tr><td colspan="4" class="p-6 text-center text-gray-400 italic">Loading email queue...</td></tr>
+                </tbody>
+              </table>
+           </div>
+        </div>
 
         <div class="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
            <h4 class="text-md font-bold text-[#002147] mb-2">Export Complete History</h4>

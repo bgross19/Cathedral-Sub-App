@@ -1037,25 +1037,12 @@ function assignSubToPeriod(absenceId, period, subName, forceOverride, clientEmai
                  throw new Error(JSON.stringify({type: "AVAILABILITY_ERROR", message: "Sub not listed as available, proceed?"}));
              }
 
-             // Fetch day color directly from Dates sheet to avoid locking issues with getInitialPayload
+             // Fetch day color from cached Dates lookup
              var dayColor = "Green"; // default
              try {
-               var datesSheet = ss.getSheetByName("Dates");
-               if (datesSheet) {
-                 var datesData = datesSheet.getDataRange().getValues();
-                 for (var d = 1; d < datesData.length; d++) {
-      if (!datesData[d] || datesData[d].length < 2) continue;
-                   var rowDateRaw = datesData[d][0];
-                   var rowColor = datesData[d][1];
-                   if (rowDateRaw) {
-                     var formattedDate = rowDateRaw instanceof Date ? Utilities.formatDate(rowDateRaw, Session.getScriptTimeZone(), "yyyy-MM-dd") : 
-                        (function(){ try { return Utilities.formatDate(new Date(rowDateRaw), Session.getScriptTimeZone(), "yyyy-MM-dd"); } catch(e) { return String(rowDateRaw); } })();
-                     if (formattedDate === targetDateStr && rowColor) {
-                       dayColor = String(rowColor).trim();
-                       break;
-                     }
-                   }
-                 }
+               var cachedDateColors = getDateColorsCached(ss);
+               if (cachedDateColors && cachedDateColors[targetDateStr]) {
+                 dayColor = String(cachedDateColors[targetDateStr]).trim();
                }
              } catch(e) {
                console.error("Failed to fetch day color: " + e.message);

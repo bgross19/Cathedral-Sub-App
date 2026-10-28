@@ -984,3 +984,298 @@ function loadPayPeriodsSettings(clientEmail) {
   }
 }
 
+// ============================================================================
+// BELL SCHEDULE (DATES SHEET) MANAGEMENT & CACHING
+// ============================================================================
+var _globalDatesCache = null;
+
+function _normalizeScheduleDateStr(dateRaw) {
+  if (!dateRaw) return "";
+  if (dateRaw instanceof Date) {
+    if (isNaN(dateRaw.getTime())) return "";
+    return Utilities.formatDate(dateRaw, Session.getScriptTimeZone(), "yyyy-MM-dd");
+  }
+  var s = String(dateRaw).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+
+  // Support M/D/YYYY or M-D-YYYY
+  var parts = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if (parts) {
+    var mm = parts[1].length < 2 ? "0" + parts[1] : parts[1];
+    var dd = parts[2].length < 2 ? "0" + parts[2] : parts[2];
+    return parts[3] + "-" + mm + "-" + dd;
+  }
+
+  try {
+    var parsed = new Date(s);
+    if (!isNaN(parsed.getTime())) {
+      return Utilities.formatDate(parsed, Session.getScriptTimeZone(), "yyyy-MM-dd");
+    }
+  } catch (e) {}
+  return "";
+}
+
+function _normalizeBellColor(colorRaw) {
+  if (!colorRaw) return "";
+  var c = String(colorRaw).trim().toLowerCase();
+  if (c === "none" || c === "clear" || c === "unset" || c === "") return "";
+  if (c === "green" || c === "green day" || c === "g") return "Green";
+  if (c === "blue" || c === "blue day" || c === "b") return "Blue";
+  if (c === "gold" || c === "gold day" || c === "y") return "Gold";
+  if (c === "red" || c === "red day" || c === "no school" || c === "holiday" || c === "r") return "Red";
+  // Preserve capitalized custom day types if ever used
+  var rawTrim = String(colorRaw).trim();
+  return rawTrim.charAt(0).toUpperCase() + rawTrim.slice(1);
+}
+
+/**
+ * Retrieves the Date -> Color map from CacheService or the Dates sheet.
+ */
+function getDateColorsCached(ss) {
+  if (_globalDatesCache) return _globalDatesCache;
+
+  var cache = CacheService.getScriptCache();
+  var cached = cache ? cache.get("bell_schedule_dates") : null;
+  if (cached) {
+    try {
+      _globalDatesCache = JSON.parse(cached);
+      return _globalDatesCache;
+    } catch (e) {
+      console.warn("Failed to parse cached bell schedule dates.");
+    }
+  }
+
+  var sheetSS = ss || getSS();
+  var datesSheet = sheetSS.getSheetByName("Dates");
+  var dateColors = {};
+
+  if (datesSheet) {
+    var datesData = datesSheet.getDataRange().getValues();
+    for (var d = 1; d < datesData.length; d++) {
+      if (!datesData[d] || datesData[d].length < 2) continue;
+      var dateFormatted = _normalizeScheduleDateStr(datesData[d][0]);
+      var colorNormalized = _normalizeBellColor(datesData[d][1]);
+      if (dateFormatted && colorNormalized) {
+        dateColors[dateFormatted] = colorNormalized;
+      }
+    }
+  }
+
+  try {
+    if (cache) {
+      var str = JSON.stringify(dateColors);
+      if (str.length < 100000) {
+        cache.put("bell_schedule_dates", str, 1800); // 30 minutes
+      }
+    }
+  } catch (e) {}
+
+  _globalDatesCache = dateColors;
+  return dateColors;
+}
+
+function clearDatesCache() {
+  _globalDatesCache = null;
+  try {
+    var cache = CacheService.getScriptCache();
+    if (cache) cache.remove("bell_schedule_dates");
+  } catch (e) {}
+}
+
+function _getOrCreateDatesSheet(ss) {
+  var sheet = ss.getSheetByName("Dates");
+  if (!sheet) {
+    sheet = ss.insertSheet("Dates");
+    sheet.getRange(1, 1, 1, 2).setValues([["Date", "Color"]]);
+    sheet.getRange(1, 1, 1, 2).setFontWeight("bold");
+    sheet.getRange("A:A").setNumberFormat("@");
+  }
+  return sheet;
+}
+
+/**
+ * Returns the full Date -> Color map for the Settings Bell Schedule editor.
+ */
+function getBellScheduleDatesAdmin(clientEmail) {
+  try {
+    var ss = getSS();
+    var user = getUserData(ss, typeof clientEmail !== 'undefined' ? clientEmail : undefined);
+    assertPermission(user, "Settings");
+    return getDateColorsCached(ss);
+  } catch (err) {
+    notifyAdminOfError("getBellScheduleDatesAdmin", err);
+    throw new Error("Failed to load bell schedule dates: " + err.message);
+  }
+}
+
+/**
+ * Saves or clears a single date's bell schedule color from the visual calendar.
+ */
+function saveBellScheduleDateAdmin(dateStr, color, clientEmail) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+  } catch (e) {
+    notifyAdminOfError("saveBellScheduleDateAdmin_lock", e);
+    return { success: false, error: "The server is currently busy. Please try again." };
+  }
+
+  try {
+    var ss = getSS();
+    var user = getUserData(ss, typeof clientEmail !== 'undefined' ? clientEmail : undefined);
+    assertPermission(user, "Settings");
+
+    var normalizedDate = _normalizeScheduleDateStr(dateStr);
+    if (!normalizedDate) {
+      throw new Error("Invalid date format: " + dateStr);
+    }
+    var normalizedColor = _normalizeBellColor(color);
+
+    var sheet = _getOrCreateDatesSheet(ss);
+    var data = sheet.getDataRange().getValues();
+    var matchingRows = [];
+
+    for (var i = 1; i < data.length; i++) {
+      if (!data[i]) continue;
+      var rowDate = _normalizeScheduleDateStr(data[i][0]);
+      if (rowDate === normalizedDate) {
+        matchingRows.push(i + 1); // 1-based sheet row
+      }
+    }
+
+    if (!normalizedColor) {
+      // Delete matching rows bottom-up if clearing the date
+      for (var d = matchingRows.length - 1; d >= 0; d--) {
+        sheet.deleteRow(matchingRows[d]);
+      }
+    } else if (matchingRows.length > 0) {
+      sheet.getRange(matchingRows[0], 1, 1, 2).setValues([[normalizedDate, normalizedColor]]);
+      for (var k = matchingRows.length - 1; k > 0; k--) {
+        sheet.deleteRow(matchingRows[k]);
+      }
+    } else {
+      sheet.appendRow([normalizedDate, normalizedColor]);
+    }
+
+    clearDatesCache();
+    logAuditAction("BELL_SCHEDULE_UPDATED", normalizedDate, "Set bell schedule color to " + (normalizedColor || "Cleared"), clientEmail);
+
+    return { success: true, date: normalizedDate, color: normalizedColor };
+  } catch (err) {
+    notifyAdminOfError("saveBellScheduleDateAdmin", err);
+    return { success: false, error: err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * Bulk upserts (or replaces) Bell Schedule dates from CSV/TSV upload.
+ */
+function bulkUpsertBellScheduleDates(updates, replaceAll, clientEmail) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+  } catch (e) {
+    notifyAdminOfError("bulkUpsertBellScheduleDates_lock", e);
+    return { success: false, error: "The server is currently busy. Please try again." };
+  }
+
+  try {
+    var ss = getSS();
+    var user = getUserData(ss, typeof clientEmail !== 'undefined' ? clientEmail : undefined);
+    assertPermission(user, "Settings");
+
+    if (!updates || !Array.isArray(updates) || updates.length === 0) {
+      return { success: false, error: "No valid schedule rows provided." };
+    }
+
+    var sheet = _getOrCreateDatesSheet(ss);
+    var dateMap = {};
+
+    if (!replaceAll) {
+      var existingData = sheet.getDataRange().getValues();
+      for (var i = 1; i < existingData.length; i++) {
+        if (!existingData[i] || existingData[i].length < 2) continue;
+        var exDate = _normalizeScheduleDateStr(existingData[i][0]);
+        var exColor = _normalizeBellColor(existingData[i][1]);
+        if (exDate && exColor) {
+          dateMap[exDate] = exColor;
+        }
+      }
+    }
+
+    var validUpdatesCount = 0;
+    for (var u = 0; u < updates.length; u++) {
+      var item = updates[u];
+      if (!item) continue;
+      var normDate = _normalizeScheduleDateStr(item.date);
+      var normColor = _normalizeBellColor(item.color);
+      if (!normDate) continue;
+      if (!normColor) {
+        delete dateMap[normDate];
+      } else {
+        dateMap[normDate] = normColor;
+      }
+      validUpdatesCount++;
+    }
+
+    var sortedDates = Object.keys(dateMap).sort();
+    var allRows = [["Date", "Color"]];
+    for (var s = 0; s < sortedDates.length; s++) {
+      var dt = sortedDates[s];
+      allRows.push([dt, dateMap[dt]]);
+    }
+
+    sheet.clearContents();
+    sheet.getRange(1, 1, allRows.length, 2).setValues(allRows);
+    sheet.getRange(1, 1, 1, 2).setFontWeight("bold");
+
+    clearDatesCache();
+    logAuditAction("BELL_SCHEDULE_BULK_UPLOAD", "Multiple (" + validUpdatesCount + ")", (replaceAll ? "Replaced" : "Merged") + " bell schedule with " + validUpdatesCount + " entries", clientEmail);
+
+    return { success: true, updated: validUpdatesCount, total: sortedDates.length, dateColors: dateMap };
+  } catch (err) {
+    notifyAdminOfError("bulkUpsertBellScheduleDates", err);
+    return { success: false, error: err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * Clears all rows in the Dates sheet.
+ */
+function clearAllBellScheduleDates(clientEmail) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+  } catch (e) {
+    notifyAdminOfError("clearAllBellScheduleDates_lock", e);
+    return { success: false, error: "The server is currently busy. Please try again." };
+  }
+
+  try {
+    var ss = getSS();
+    var user = getUserData(ss, typeof clientEmail !== 'undefined' ? clientEmail : undefined);
+    assertPermission(user, "Settings");
+
+    var sheet = _getOrCreateDatesSheet(ss);
+    var lastRow = sheet.getLastRow();
+    if (lastRow > 1) {
+      sheet.getRange(2, 1, lastRow - 1, 2).clearContent();
+    }
+
+    clearDatesCache();
+    logAuditAction("BELL_SCHEDULE_CLEARED", "All", "Cleared all bell schedule dates", clientEmail);
+
+    return { success: true };
+  } catch (err) {
+    notifyAdminOfError("clearAllBellScheduleDates", err);
+    return { success: false, error: err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+

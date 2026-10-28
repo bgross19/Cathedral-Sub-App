@@ -782,6 +782,161 @@ function runTests() {
 
       if (origHtmlService !== undefined) global.HtmlService = origHtmlService;
     });
+
+    it("Admin & Operations Tooling: Bell Schedule CRUD/CSV and Email Queue Manager", function() {
+      var origGetSS = getSS;
+      var origSendEmailHelper = sendEmailHelper;
+      var origLockService = typeof LockService !== 'undefined' ? LockService : undefined;
+      var origSession = typeof Session !== 'undefined' ? Session : undefined;
+      var origCacheService = typeof CacheService !== 'undefined' ? CacheService : undefined;
+      var origUtilities = typeof Utilities !== 'undefined' ? Utilities : undefined;
+
+      global.LockService = {
+        getScriptLock: function() {
+          return {
+            waitLock: function() {},
+            tryLock: function() { return true; },
+            releaseLock: function() {}
+          };
+        }
+      };
+      global.Session = {
+        getActiveUser: function() { return { getEmail: function() { return "admin@gocathedral.com"; } }; },
+        getScriptTimeZone: function() { return "America/Indiana/Indianapolis"; }
+      };
+      global.CacheService = {
+        getScriptCache: function() {
+          return {
+            get: function() { return null; },
+            put: function() {},
+            remove: function() {}
+          };
+        }
+      };
+      global.Utilities = {
+        formatDate: function(d) { return "2026-10-28 12:00:00"; }
+      };
+
+      var datesRows = [
+        ["Date", "Color"],
+        ["2026-08-17", "Green"]
+      ];
+      var emailQueueRows = [
+        ["Timestamp", "To", "Subject", "Body", "Options", "Status"],
+        [new Date(), "pending@gocathedral.com", "Sub Needed", "Body 1", "{}", "Pending"],
+        [new Date(), "failed1@gocathedral.com", "Digest", "Body 2", "{}", "Failed: Quota exceeded"],
+        [new Date(), "failed2@gocathedral.com", "Alert", "Body 3", "{}", "Failed: Invalid recipient"]
+      ];
+
+      var mockDatesSheet = {
+        getDataRange: function() {
+          return { getValues: function() { return datesRows; } };
+        },
+        getLastRow: function() { return datesRows.length; },
+        appendRow: function(r) { datesRows.push(r); },
+        deleteRow: function(rowNum) { datesRows.splice(rowNum - 1, 1); },
+        clearContents: function() { datesRows = []; },
+        getRange: function(row, col, numRows, numCols) {
+          return {
+            setValues: function(vals) {
+              for (var r = 0; r < vals.length; r++) {
+                var targetIdx = (row - 1) + r;
+                if (!datesRows[targetIdx]) datesRows[targetIdx] = [];
+                for (var c = 0; c < vals[r].length; c++) {
+                  datesRows[targetIdx][(col - 1) + c] = vals[r][c];
+                }
+              }
+            },
+            setFontWeight: function() {},
+            clearContent: function() {
+              datesRows = [datesRows[0]];
+            }
+          };
+        }
+      };
+
+      var mockEmailQueueSheet = {
+        getDataRange: function() {
+          return { getValues: function() { return emailQueueRows; } };
+        },
+        deleteRow: function(rowNum) { emailQueueRows.splice(rowNum - 1, 1); },
+        deleteRows: function(startRow, count) { emailQueueRows.splice(startRow - 1, count); },
+        getRange: function(row, col, numRows, numCols) {
+          return {
+            setValues: function(vals) {
+              for (var r = 0; r < vals.length; r++) {
+                var targetIdx = (row - 1) + r;
+                if (emailQueueRows[targetIdx]) {
+                  emailQueueRows[targetIdx][col - 1] = vals[r][0];
+                }
+              }
+            }
+          };
+        }
+      };
+
+      var mockRosterSheet = {
+        getDataRange: function() {
+          return {
+            getValues: function() {
+              return [
+                ["Name", "Email", "Role", "Duty"],
+                ["Admin User", "admin@gocathedral.com", "Admin", ""]
+              ];
+            }
+          };
+        }
+      };
+
+      _globalRosterCache = null;
+      _globalDatesCache = null;
+
+      getSS = function() {
+        return {
+          getSheetByName: function(name) {
+            if (name === "Dates") return mockDatesSheet;
+            if (name === "Email Queue") return mockEmailQueueSheet;
+            if (name === "Staff Roster") return mockRosterSheet;
+            return null;
+          }
+        };
+      };
+
+      // 1. Test single date save & clear
+      var singleSave = saveBellScheduleDateAdmin("8/18/2026", "blue", "admin@gocathedral.com");
+      assert(singleSave.success === true && singleSave.date === "2026-08-18" && singleSave.color === "Blue", "Expected M/D/YYYY and lowercase color to normalize to 2026-08-18 / Blue");
+      var cachedColors = getDateColorsCached();
+      assert(cachedColors["2026-08-17"] === "Green" && cachedColors["2026-08-18"] === "Blue", "Expected cached bell schedule to include both dates");
+
+      var clearRes = saveBellScheduleDateAdmin("2026-08-17", "", "admin@gocathedral.com");
+      assert(clearRes.success === true, "Expected clearing a date to succeed");
+      cachedColors = getDateColorsCached();
+      assert(cachedColors["2026-08-17"] === undefined && cachedColors["2026-08-18"] === "Blue", "Expected 2026-08-17 to be removed after clearing");
+
+      // 2. Test bulk CSV upsert (merge & replace)
+      var bulkRes = bulkUpsertBellScheduleDates([
+        { date: "2026-08-19", color: "Gold" },
+        { date: "8/20/2026", color: "No School" }
+      ], false, "admin@gocathedral.com");
+      assert(bulkRes.success === true && bulkRes.total === 3, "Expected merge bulk upsert to result in 3 total dates");
+      assert(bulkRes.dateColors["2026-08-20"] === "Red", "Expected 'No School' to normalize to 'Red'");
+
+      // 3. Test Email Queue status, clear failed, and retry failed
+      var qStatus = getEmailQueueStatus("admin@gocathedral.com");
+      assert(qStatus.pendingCount === 1 && qStatus.failedCount === 2 && qStatus.items.length === 3, "Expected 1 pending and 2 failed emails in queue status");
+
+      sendEmailHelper = function() { return "SENT"; };
+      var retryRes = retryFailedEmails("admin@gocathedral.com");
+      assert(retryRes.success === true && retryRes.retriedCount === 2, "Expected 2 failed emails to be retried");
+      assert(retryRes.status.pendingCount === 0 && retryRes.status.failedCount === 0, "Expected queue to be empty after retry and processEmailQueue");
+
+      sendEmailHelper = origSendEmailHelper;
+      getSS = origGetSS;
+      if (origLockService !== undefined) global.LockService = origLockService;
+      if (origSession !== undefined) global.Session = origSession;
+      if (origCacheService !== undefined) global.CacheService = origCacheService;
+      if (origUtilities !== undefined) global.Utilities = origUtilities;
+    });
   });
 
   // Teardown
