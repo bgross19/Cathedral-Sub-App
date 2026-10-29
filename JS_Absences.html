@@ -199,7 +199,7 @@
           }
 
           let finalPeriods = [];
-          let scheduleToUse = getActiveTeacherSchedule();
+          let scheduleToUse = getActiveTeacherSchedule(dateStr);
           if (scheduleToUse && scheduleToUse.length > 0) {
               activePeriods.forEach(ap => {
                   // scheduleToUse may contain strings ('9' for 0, '10' for Advisory, or ints)
@@ -245,7 +245,7 @@
           }
 
           let finalPeriods = [];
-          let scheduleToUse = getActiveTeacherSchedule();
+          let scheduleToUse = getActiveTeacherSchedule(dateStr);
           if (scheduleToUse && scheduleToUse.length > 0) {
               activePeriods.forEach(ap => {
                   // scheduleToUse may contain strings ('9' for 0, '10' for Advisory, or ints)
@@ -1018,6 +1018,84 @@
           .assignSubToPeriod(absenceId, period, subName, false, window.activeUserEmail);
       }
 
+      const CLIENT_DEFAULT_PERIOD_BELL_TIMES = {
+        Green: {
+          "9":  { start: "07:00", end: "07:45" },
+          "0":  { start: "07:00", end: "07:45" },
+          "1":  { start: "07:50", end: "08:35" },
+          "10": { start: "08:40", end: "09:05" },
+          "2":  { start: "09:10", end: "09:50" },
+          "3":  { start: "09:55", end: "10:35" },
+          "4":  { start: "10:40", end: "11:20" },
+          "5":  { start: "11:25", end: "12:05" },
+          "6":  { start: "12:10", end: "12:50" },
+          "7":  { start: "12:55", end: "13:35" },
+          "8":  { start: "13:40", end: "14:20" }
+        },
+        Blue: {
+          "9":  { start: "07:00", end: "07:45" },
+          "0":  { start: "07:00", end: "07:45" },
+          "1":  { start: "07:50", end: "09:15" },
+          "10": { start: "09:20", end: "09:50" },
+          "2":  { start: "09:55", end: "11:20" },
+          "3":  { start: "11:25", end: "12:50" },
+          "4":  { start: "12:55", end: "14:20" },
+          "5":  { start: "07:50", end: "09:15" },
+          "6":  { start: "09:55", end: "11:20" },
+          "7":  { start: "11:25", end: "12:50" },
+          "8":  { start: "12:55", end: "14:20" }
+        },
+        Gold: {
+          "9":  { start: "07:00", end: "07:45" },
+          "0":  { start: "07:00", end: "07:45" },
+          "5":  { start: "07:50", end: "09:15" },
+          "10": { start: "09:20", end: "09:50" },
+          "6":  { start: "09:55", end: "11:20" },
+          "7":  { start: "11:25", end: "12:50" },
+          "8":  { start: "12:55", end: "14:20" },
+          "1":  { start: "07:50", end: "09:15" },
+          "2":  { start: "09:55", end: "11:20" },
+          "3":  { start: "11:25", end: "12:50" },
+          "4":  { start: "12:55", end: "14:20" }
+        }
+      };
+
+      function getClientPeriodTimeRange(isoDate, period) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(String(isoDate || ''))) return null;
+        const pKey = String(period || '').trim();
+        if (!pKey) return null;
+
+        const dayColorRaw = (typeof userDateColors === 'object' && userDateColors && userDateColors[isoDate])
+          ? String(userDateColors[isoDate]).trim()
+          : 'Green';
+        const dayColor = (dayColorRaw === 'Blue' || dayColorRaw === 'Gold' || dayColorRaw === 'Green')
+          ? dayColorRaw
+          : 'Green';
+
+        let timesMap = CLIENT_DEFAULT_PERIOD_BELL_TIMES;
+        const rawBellTimes = window.appSettings && window.appSettings['Period Bell Times'];
+        if (rawBellTimes) {
+          try {
+            const parsed = typeof rawBellTimes === 'string' ? JSON.parse(rawBellTimes) : rawBellTimes;
+            if (parsed && typeof parsed === 'object') {
+              timesMap = Object.assign({}, CLIENT_DEFAULT_PERIOD_BELL_TIMES, parsed);
+            }
+          } catch (e) {}
+        }
+
+        const colorMap = timesMap[dayColor] || CLIENT_DEFAULT_PERIOD_BELL_TIMES[dayColor] || CLIENT_DEFAULT_PERIOD_BELL_TIMES.Green;
+        const slot = colorMap[pKey] || (pKey === '0' ? colorMap['9'] : null) || CLIENT_DEFAULT_PERIOD_BELL_TIMES.Green[pKey];
+        if (!slot || !slot.start || !slot.end) return null;
+
+        const ymd = isoDate.replace(/-/g, '');
+        return {
+          startTime: slot.start,
+          endTime: slot.end,
+          startLocalStr: `${ymd}T${slot.start.replace(':', '')}00`,
+          endLocalStr: `${ymd}T${slot.end.replace(':', '')}00`
+        };
+      }
+
       function getCalendarAllDayRangeStrings(dateStr, fallbackDateStr) {
         let iso = String(dateStr || '').trim();
         if (!/^\d{4}-\d{2}-\d{2}$/.test(iso) && fallbackDateStr) {
@@ -1044,10 +1122,12 @@
 
       function buildSubDutyCalendarEvent(duty) {
         const range = getCalendarAllDayRangeStrings(duty.formDateString, duty.date);
+        const periodTime = range.iso ? getClientPeriodTimeRange(range.iso, duty.period) : null;
         const dayColor = (range.iso && typeof userDateColors === 'object' && userDateColors[range.iso])
           ? `${userDateColors[range.iso]} Day`
           : '';
         const periodLabel = formatPeriodLabel(duty.period);
+        const timeRangeLabel = periodTime ? ` (${periodTime.startTime} - ${periodTime.endTime})` : '';
         const hasRealCourse = duty.course && duty.course !== 'No Class Assigned';
         const hasRealRoom = duty.room && duty.room !== 'No Class Assigned';
 
@@ -1056,7 +1136,7 @@
         const detailsLines = [
           `Teacher: ${duty.teacherName}${duty.teacherEmail ? ' (' + duty.teacherEmail + ')' : ''}`,
           `Date: ${duty.date}${dayColor ? ' (' + dayColor + ')' : ''}`,
-          `Period: ${periodLabel}`,
+          `Period: ${periodLabel}${timeRangeLabel}`,
           `Room: ${duty.room || 'N/A'}`,
           `Course: ${duty.course || 'N/A'}`,
           `Special Instructions: ${duty.instructions || 'None provided'}`,
@@ -1070,13 +1150,20 @@
           description: detailsLines.join('\n'),
           startYMD: range.startYMD,
           endYMD: range.endYMD,
+          startLocalStr: periodTime ? periodTime.startLocalStr : '',
+          endLocalStr: periodTime ? periodTime.endLocalStr : '',
           uid: `subduty-${duty.id || 'req'}-p${duty.period || '0'}@cathedral-sub-app`
         };
       }
 
       function openGoogleCalendarTemplateUrl(ev) {
         if (!ev) return;
-        const datesParam = (ev.startYMD && ev.endYMD) ? `&dates=${ev.startYMD}/${ev.endYMD}` : '';
+        let datesParam = '';
+        if (ev.startLocalStr && ev.endLocalStr) {
+          datesParam = `&dates=${ev.startLocalStr}/${ev.endLocalStr}`;
+        } else if (ev.startYMD && ev.endYMD) {
+          datesParam = `&dates=${ev.startYMD}/${ev.endYMD}`;
+        }
         const url = `https://calendar.google.com/calendar/render?action=TEMPLATE` +
           `&text=${encodeURIComponent(ev.title)}` +
           datesParam +
@@ -1094,11 +1181,15 @@
       }
 
       function downloadCalendarIcsFile(ev, filename) {
-        if (!ev || !ev.startYMD || !ev.endYMD) {
+        const hasTimed = Boolean(ev && ev.startLocalStr && ev.endLocalStr);
+        const hasAllDay = Boolean(ev && ev.startYMD && ev.endYMD);
+        if (!hasTimed && !hasAllDay) {
           showToast('Unable to determine event date for calendar file.', 'error');
           return;
         }
         const nowUtc = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+        const dtStartLine = hasTimed ? `DTSTART:${ev.startLocalStr}` : `DTSTART;VALUE=DATE:${ev.startYMD}`;
+        const dtEndLine = hasTimed ? `DTEND:${ev.endLocalStr}` : `DTEND;VALUE=DATE:${ev.endYMD}`;
         const icsLines = [
           'BEGIN:VCALENDAR',
           'VERSION:2.0',
@@ -1108,8 +1199,8 @@
           'BEGIN:VEVENT',
           `UID:${ev.uid || ('event-' + nowUtc + '@cathedral-sub-app')}`,
           `DTSTAMP:${nowUtc}`,
-          `DTSTART;VALUE=DATE:${ev.startYMD}`,
-          `DTEND;VALUE=DATE:${ev.endYMD}`,
+          dtStartLine,
+          dtEndLine,
           `SUMMARY:${escapeIcsText(ev.title)}`,
           `LOCATION:${escapeIcsText(ev.location)}`,
           `DESCRIPTION:${escapeIcsText(ev.description)}`,

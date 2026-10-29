@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <queries>
-    <!-- 1. Master Schedule PowerQuery -->
+    <!-- 1. Master Schedule PowerQuery (Full School Year / Multi-Term) -->
     <query name="com.cathedral.subapp.masterschedule" coreTable="CC" flattened="true">
         <summary>Cathedral Sub App - Master Schedule</summary>
-        <description>Returns distinct teacher/period/room/course combinations (with co-seated courses combined via LISTAGG) for a given PowerSchool term ID.</description>
+        <description>Returns distinct teacher/period/room/course/term combinations (with co-seated courses combined via LISTAGG) across all active terms in the school year corresponding to target_term.</description>
         <args>
-            <arg name="target_term" required="true" type="primitive" default="3601" description="PowerSchool Term ID (e.g. 3600 or 3601)" />
+            <arg name="target_term" required="true" type="primitive" default="3601" description="PowerSchool Term ID (e.g. 3600, 3601, or 3603)" />
         </args>
         <columns>
             <column column="TEACHERS.LASTFIRST" description="Teacher Last, First Name">lastfirst</column>
@@ -15,6 +15,7 @@
             <column column="SECTIONS.ROOM" description="Section Room Number">room</column>
             <column column="COURSES.COURSE_NAME" description="Combined Co-Seated Course Names">course_names</column>
             <column column="TEACHERS.ID" description="PowerSchool Teacher ID">teacher_id</column>
+            <column column="CC.TERMID" description="PowerSchool Term ID (e.g. 3600, 3601, 3603)">term_id</column>
         </columns>
         <sql><![CDATA[
             WITH DistinctClasses AS (
@@ -25,7 +26,8 @@
                     t.EMAIL_Addr || '-' || REPLACE(cc.expression, '(A)', '') AS email_period_join,
                     c.course_name,
                     s.room,
-                    t.id AS teacher_id
+                    t.id AS teacher_id,
+                    cc.termid AS term_id
                 FROM cc cc
                 JOIN courses c
                     ON c.course_number = cc.course_number
@@ -33,7 +35,8 @@
                     ON cc.TEACHERID = t.id
                 JOIN sections s
                     ON cc.sectionid = s.id
-                WHERE cc.termid = :target_term
+                WHERE cc.termid > 0
+                  AND FLOOR(cc.termid / 100) = FLOOR(TO_NUMBER(:target_term) / 100)
             )
             SELECT
                 LASTFIRST AS lastfirst,
@@ -42,15 +45,17 @@
                 email_period_join AS email_period_join,
                 room AS room,
                 LISTAGG(course_name, ' / ') WITHIN GROUP (ORDER BY course_name) AS course_names,
-                MAX(teacher_id) AS teacher_id
+                MAX(teacher_id) AS teacher_id,
+                TO_CHAR(term_id) AS term_id
             FROM DistinctClasses
             GROUP BY
                 LASTFIRST,
                 EMAIL_Addr,
                 period,
                 email_period_join,
-                room
-            ORDER BY LASTFIRST
+                room,
+                term_id
+            ORDER BY LASTFIRST, term_id
         ]]></sql>
     </query>
 
@@ -90,6 +95,37 @@
             WHERE cd.schoolid <> 0
               AND (TRUNC(cd.date_value) - TRUNC(cd.date_value, 'IW')) BETWEEN 0 AND 4
             ORDER BY cd.date_value ASC
+        ]]></sql>
+    </query>
+
+    <!-- 3. Bell Schedule Period Start/End Times PowerQuery -->
+    <query name="com.cathedral.subapp.bellscheduletimes" coreTable="BELL_SCHEDULE_ITEMS" flattened="true">
+        <summary>Cathedral Sub App - Bell Schedule Period Times</summary>
+        <description>Returns exact start and end times for each period in each bell schedule for the school year corresponding to target_term.</description>
+        <args>
+            <arg name="target_term" required="true" type="primitive" default="3601" description="PowerSchool Term ID (e.g. 3600 or 3601) used to derive the 2-digit Year ID" />
+        </args>
+        <columns>
+            <column column="BELL_SCHEDULE.NAME" description="Bell Schedule Name">bell_schedule_name</column>
+            <column column="PERIOD.ABBREVIATION" description="Period Abbreviation (e.g. 1, 2, Adv)">period_abbr</column>
+            <column column="PERIOD.PERIOD_NUMBER" description="Period Number">period_number</column>
+            <column column="BELL_SCHEDULE_ITEMS.START_TIME" description="Start Time (seconds or minutes from midnight)">start_time</column>
+            <column column="BELL_SCHEDULE_ITEMS.END_TIME" description="End Time (seconds or minutes from midnight)">end_time</column>
+        </columns>
+        <sql><![CDATA[
+            SELECT DISTINCT
+                bs.name AS bell_schedule_name,
+                p.abbreviation AS period_abbr,
+                p.period_number AS period_number,
+                bsi.start_time AS start_time,
+                bsi.end_time AS end_time
+            FROM bell_schedule_items bsi
+            JOIN bell_schedule bs
+                ON bs.id = bsi.bell_schedule_id
+            JOIN period p
+                ON p.id = bsi.period_id
+            WHERE p.yearid = FLOOR(TO_NUMBER(:target_term) / 100)
+            ORDER BY bs.name ASC, bsi.start_time ASC
         ]]></sql>
     </query>
 </queries>

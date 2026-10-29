@@ -483,6 +483,14 @@ function cancelMySubDuty(absenceId, period, clientEmail) {
           sheet.getRange(i + 1, subColumnIndex).setValue("");
           logAuditAction("SUB_DUTY_CANCELLED", absenceId, "Cancelled coverage for period " + period, clientEmail);
 
+          if (details && typeof syncSubDutyCalendarEvent === "function") {
+            try {
+              syncSubDutyCalendarEvent(userEmail, "Canceled", details);
+            } catch (calErr) {
+              console.warn("Calendar removal on cancelMySubDuty failed: " + calErr.message);
+            }
+          }
+
           if (coordinatorEmail && details) {
             var subject = "SUB CANCELLATION: " + userName + " cancelled coverage";
             var settings = getSettings();
@@ -557,7 +565,9 @@ function getAbsenceDetailsLocal(row, period, scheduleLookup, nameLookup) {
   if (period) {
     var joinKey = teacherEmail.toLowerCase() + "-" + getScheduleJoinPeriod(period);
     if (scheduleLookup) {
-      var scheduleInfo = scheduleLookup[joinKey];
+      var scheduleInfo = (typeof lookupTeacherScheduleInfo === "function")
+        ? lookupTeacherScheduleInfo(scheduleLookup, teacherEmail, period, isoDate)
+        : scheduleLookup[joinKey];
       if (scheduleInfo) {
         roomStr = scheduleInfo.room || roomStr;
         courseStr = scheduleInfo.course || courseStr;
@@ -570,7 +580,7 @@ function getAbsenceDetailsLocal(row, period, scheduleLookup, nameLookup) {
   }
 
   return {
-
+    id: String(row[0] || ""),
     teacherName: teacherName,
     date: formattedDate,
     isoDate: isoDate,
@@ -791,6 +801,7 @@ function updateAbsence(absenceId, formData, clientEmail) {
                   var modDetails = getAbsenceDetailsLocal(data[i], p, scheduleLookup, nameLookup);
                   if(modDetails) {
                     modDetails.instructions = instructions;
+                    modDetails.subPlanUrl = newSubPlanUrl;
                     sendSubNotification(email, "Modified", modDetails);
                   }
                }
@@ -1064,17 +1075,30 @@ function assignSubToPeriod(absenceId, period, subName, forceOverride, clientEmai
                  }
              }
            } else {
-             // For teachers/others, check master schedule
+             // For teachers/others, check master schedule for the date's semester term
              var scheduleData = getMasterScheduleData();
              var teacherSchedule = [];
+             var targetTermForDate = (typeof resolveTermIdForDate === "function")
+               ? String(resolveTermIdForDate(targetDateStr, settingsForPerm) || "").trim()
+               : "";
+             var fullYearTermForDate = (!isNaN(parseInt(targetTermForDate, 10)) && parseInt(targetTermForDate, 10) >= 100)
+               ? String(Math.floor(parseInt(targetTermForDate, 10) / 100) * 100)
+               : "";
              if (scheduleData && scheduleData.length > 0) {
                var headers = scheduleData[0];
                var emailIdx = headers.indexOf("EMAIL_ADDR");
                var periodIdx = headers.indexOf("PERIOD");
+               var termColIdx = headers.indexOf("TERM");
                if (emailIdx > -1 && periodIdx > -1) {
                  for (var s = 1; s < scheduleData.length; s++) {
-          if (!scheduleData[s] || scheduleData[s].length <= Math.max(emailIdx, periodIdx)) continue;
-          if (String(scheduleData[s][emailIdx]).toLowerCase().trim() === newSubEmail) {
+                   if (!scheduleData[s] || scheduleData[s].length <= Math.max(emailIdx, periodIdx)) continue;
+                   if (String(scheduleData[s][emailIdx]).toLowerCase().trim() === newSubEmail) {
+                     var rowTermVal = (termColIdx > -1 && scheduleData[s][termColIdx] !== undefined)
+                       ? String(scheduleData[s][termColIdx]).trim()
+                       : "";
+                     if (rowTermVal && targetTermForDate && rowTermVal !== targetTermForDate && rowTermVal !== fullYearTermForDate) {
+                       continue;
+                     }
                      var pVal = String(scheduleData[s][periodIdx]).trim();
                      var joinP = getScheduleJoinPeriod(pVal);
                      if (teacherSchedule.indexOf(joinP) === -1) {
@@ -1086,7 +1110,7 @@ function assignSubToPeriod(absenceId, period, subName, forceOverride, clientEmai
              }
              var requestedJoinPeriod = getScheduleJoinPeriod(period);
              if (teacherSchedule.indexOf(requestedJoinPeriod) !== -1) {
-                 // The teacher has a class during this period
+                 // The teacher has a class during this period in this semester
                  throw new Error(JSON.stringify({type: "AVAILABILITY_ERROR", message: "Sub not listed as available, proceed?"}));
              }
            }

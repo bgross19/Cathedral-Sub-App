@@ -427,3 +427,161 @@ function getAppVersion(clientEmail) {
   return APP_VERSION;
 }
 
+/**
+ * Default period start/end clock times (24-hour HH:MM) by day type / bell schedule.
+ * Synced automatically from PowerSchool `com.cathedral.subapp.bellscheduletimes` when available,
+ * or customizable via Settings["Period Bell Times"].
+ */
+var DEFAULT_PERIOD_BELL_TIMES = {
+  "Green": {
+    "0":  { start: "07:00", end: "07:45" },
+    "9":  { start: "07:00", end: "07:45" },
+    "1":  { start: "07:50", end: "08:35" },
+    "10": { start: "08:40", end: "09:05" },
+    "2":  { start: "09:10", end: "09:55" },
+    "3":  { start: "10:00", end: "10:45" },
+    "4":  { start: "10:50", end: "11:35" },
+    "5":  { start: "11:40", end: "12:55" },
+    "6":  { start: "13:00", end: "13:45" },
+    "7":  { start: "13:50", end: "14:35" },
+    "8":  { start: "14:40", end: "15:25" }
+  },
+  "Blue": {
+    "0":  { start: "07:00", end: "07:45" },
+    "9":  { start: "07:00", end: "07:45" },
+    "1":  { start: "07:50", end: "09:15" },
+    "10": { start: "09:20", end: "09:50" },
+    "2":  { start: "09:55", end: "11:20" },
+    "3":  { start: "11:25", end: "13:25" },
+    "4":  { start: "13:30", end: "14:55" }
+  },
+  "Gold": {
+    "0":  { start: "07:00", end: "07:45" },
+    "9":  { start: "07:00", end: "07:45" },
+    "5":  { start: "07:50", end: "09:15" },
+    "10": { start: "09:20", end: "09:50" },
+    "6":  { start: "09:55", end: "11:20" },
+    "7":  { start: "11:25", end: "13:25" },
+    "8":  { start: "13:30", end: "14:55" }
+  }
+};
+
+/**
+ * Resolves the PowerSchool Semester Term ID (e.g. "3601" for Semester 1, "3603" for Semester 2)
+ * for a given date string.
+ */
+function resolveTermIdForDate(dateStr, optionalSettings) {
+  var settings = optionalSettings || (typeof getSettings === "function" ? getSettings() : {});
+  var configuredTerm = String(settings["Term ID"] || "3601").trim();
+  var termNum = parseInt(configuredTerm, 10);
+  var yearPrefix = !isNaN(termNum) && termNum >= 100 ? Math.floor(termNum / 100) : 36;
+  var sem1Term = String(yearPrefix * 100 + 1);
+  var sem2Term = String(yearPrefix * 100 + 3);
+
+  if (!dateStr) return configuredTerm;
+  var isoDate = typeof getStandardizedDateString === "function" ? getStandardizedDateString(dateStr) : String(dateStr).trim();
+  if (!isoDate || !/^\d{4}-\d{2}-\d{2}$/.test(isoDate)) {
+    return configuredTerm;
+  }
+
+  var sem2Start = String(settings["Semester 2 Start Date"] || "").trim();
+  if (sem2Start && /^\d{4}-\d{2}-\d{2}$/.test(sem2Start)) {
+    return isoDate >= sem2Start ? sem2Term : sem1Term;
+  }
+
+  var month = parseInt(isoDate.split("-")[1], 10);
+  if (month >= 1 && month <= 7) {
+    return sem2Term;
+  }
+  return sem1Term;
+}
+
+/**
+ * Resolves the exact start and end clock times for a specific date and period
+ * using the day's Bell Schedule (from PowerSchool or Settings) and Day Color.
+ *
+ * @return {Object|null} { startTime: "HH:MM", endTime: "HH:MM", startLocalStr: "YYYYMMDDTHHMM00", endLocalStr: "YYYYMMDDTHHMM00", startDateObj: Date, endDateObj: Date, scheduleName: string }
+ */
+function getPeriodTimeRangeForDate(dateStr, period, optionalDateColors, optionalSettings) {
+  if (!dateStr || period === undefined || period === null || String(period).trim() === "") return null;
+
+  var isoDate = typeof getStandardizedDateString === "function" ? getStandardizedDateString(dateStr) : String(dateStr).trim();
+  if (!isoDate || !/^\d{4}-\d{2}-\d{2}$/.test(isoDate)) return null;
+
+  var settings = optionalSettings || (typeof getSettings === "function" ? getSettings() : {});
+  var dateColors = optionalDateColors || (typeof getDateColorsCached === "function" ? getDateColorsCached() : {});
+  var dayColor = (dateColors && dateColors[isoDate]) ? String(dateColors[isoDate]).trim() : "Green";
+  if (dayColor === "Red") return null;
+
+  var bellTimesMap = DEFAULT_PERIOD_BELL_TIMES;
+  if (settings && settings["Period Bell Times"]) {
+    try {
+      var parsed = JSON.parse(settings["Period Bell Times"]);
+      if (parsed && typeof parsed === "object") {
+        bellTimesMap = parsed;
+      }
+    } catch (e) {
+      // fallback to DEFAULT_PERIOD_BELL_TIMES
+    }
+  }
+
+  var scheduleName = dayColor;
+  if (settings && settings["Date Bell Schedule Names"]) {
+    try {
+      var dateSchedMap = JSON.parse(settings["Date Bell Schedule Names"]);
+      if (dateSchedMap && dateSchedMap[isoDate] && bellTimesMap[dateSchedMap[isoDate]]) {
+        scheduleName = dateSchedMap[isoDate];
+      }
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  var schedTimes = bellTimesMap[scheduleName] || bellTimesMap[dayColor] || DEFAULT_PERIOD_BELL_TIMES[dayColor] || DEFAULT_PERIOD_BELL_TIMES["Green"];
+  if (!schedTimes) return null;
+
+  var normP = parsePeriod(period);
+  var timeEntry = schedTimes[normP] || (normP === "0" ? schedTimes["9"] : (normP === "9" ? schedTimes["0"] : null));
+  if (!timeEntry && DEFAULT_PERIOD_BELL_TIMES[dayColor]) {
+    timeEntry = DEFAULT_PERIOD_BELL_TIMES[dayColor][normP];
+  }
+  if (!timeEntry && DEFAULT_PERIOD_BELL_TIMES["Green"]) {
+    timeEntry = DEFAULT_PERIOD_BELL_TIMES["Green"][normP];
+  }
+  if (!timeEntry || !timeEntry.start || !timeEntry.end) return null;
+
+  var startMatch = String(timeEntry.start).trim().match(/^(\d{1,2}):(\d{2})$/);
+  var endMatch = String(timeEntry.end).trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (!startMatch || !endMatch) return null;
+
+  var dParts = isoDate.split("-");
+  var yr = parseInt(dParts[0], 10);
+  var mo = parseInt(dParts[1], 10);
+  var dy = parseInt(dParts[2], 10);
+
+  var sh = parseInt(startMatch[1], 10);
+  var sm = parseInt(startMatch[2], 10);
+  var eh = parseInt(endMatch[1], 10);
+  var em = parseInt(endMatch[2], 10);
+
+  var pad2 = function(n) { return n < 10 ? "0" + n : String(n); };
+  var ymd = String(yr) + pad2(mo) + pad2(dy);
+  var startLocalStr = ymd + "T" + pad2(sh) + pad2(sm) + "00";
+  var endLocalStr = ymd + "T" + pad2(eh) + pad2(em) + "00";
+
+  var startDateObj = new Date(yr, mo - 1, dy, sh, sm, 0);
+  var endDateObj = new Date(yr, mo - 1, dy, eh, em, 0);
+
+  return {
+    startTime: pad2(sh) + ":" + pad2(sm),
+    endTime: pad2(eh) + ":" + pad2(em),
+    startLocalStr: startLocalStr,
+    endLocalStr: endLocalStr,
+    startDateObj: startDateObj,
+    endDateObj: endDateObj,
+    scheduleName: scheduleName,
+    dayColor: dayColor
+  };
+}
+
+

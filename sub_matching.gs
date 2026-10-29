@@ -538,15 +538,33 @@ function batchAssignSubs(assignments, clientEmail) {
              subEmail = matchedSub.email;
           }
 
+          // Check if an existing sub is being cleared or replaced
+          var prevSubRaw = String(data[i][subColIdx - 1] || "").trim();
+          var prevSubClean = prevSubRaw.replace(/\s+-\s+.*$/, '').trim();
+          if (prevSubClean && prevSubClean.toLowerCase() !== "no sub needed" && prevSubClean.toLowerCase() !== finalSubName.toLowerCase()) {
+             var prevMatchedSub = canonicalSubLookup[prevSubClean.toLowerCase()];
+             if (prevMatchedSub && prevMatchedSub.email) {
+                var cancelDetails = getAbsenceDetailsLocal(row, targetPeriod, null, nameLookup);
+                if (cancelDetails) {
+                   notifications.push({
+                      subEmail: prevMatchedSub.email,
+                      type: "Canceled",
+                      details: cancelDetails
+                   });
+                }
+             }
+          }
+
           // Update only the specific period's substitute column (0-based index is subColIdx - 1)
           data[i][subColIdx - 1] = finalSubName;
           hasChanges = true;
 
-          if (!isNoSubNeeded && finalSubName && subEmail) {
+          if (!isNoSubNeeded && finalSubName && subEmail && prevSubClean.toLowerCase() !== finalSubName.toLowerCase()) {
              var details = getAbsenceDetailsLocal(row, targetPeriod, null, nameLookup);
              if (details) {
                 notifications.push({
                    subEmail: subEmail,
+                   type: "Assigned",
                    details: details
                 });
              }
@@ -568,7 +586,7 @@ function batchAssignSubs(assignments, clientEmail) {
     for (i = 0; i < notifications.length; i++) {
         var n = notifications[i];
         try {
-           sendSubNotification(n.subEmail, "Assigned", n.details);
+           sendSubNotification(n.subEmail, n.type || "Assigned", n.details);
         } catch (e) {
            console.error("Failed to send notification to " + n.subEmail, e);
         }
