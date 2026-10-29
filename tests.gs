@@ -814,7 +814,8 @@ function runTests() {
         }
       };
       global.Utilities = {
-        formatDate: function(d) { return "2026-10-28 12:00:00"; }
+        formatDate: function(d) { return "2026-10-28 12:00:00"; },
+        base64Encode: function(s) { return s; }
       };
 
       var datesRows = [
@@ -929,6 +930,53 @@ function runTests() {
       var retryRes = retryFailedEmails("admin@gocathedral.com");
       assert(retryRes.success === true && retryRes.retriedCount === 2, "Expected 2 failed emails to be retried");
       assert(retryRes.status.pendingCount === 0 && retryRes.status.failedCount === 0, "Expected queue to be empty after retry and processEmailQueue");
+
+      // 4. Test PowerSchool Bell Schedule record color mapping & sync
+      assert(resolveBellScheduleColorFromPSRecord({ insession: "0", cycle_day_name: "Green" }) === "Red", "Expected insession=0 to override cycle day as Red");
+      assert(resolveBellScheduleColorFromPSRecord({ insession: "1", cycle_day_name: "Green Day" }) === "Green", "Expected Green Day cycle name to map to Green");
+      assert(resolveBellScheduleColorFromPSRecord({ insession: "1", bell_schedule_name: "Blue (All Mass)" }) === "Blue", "Expected Blue bell schedule name to map to Blue");
+      assert(resolveBellScheduleColorFromPSRecord({ insession: "1", cycle_day_name: "Gold", bell_schedule_name: "Late Start" }) === "Gold", "Expected Gold cycle day to map to Gold");
+
+      var origUrlFetchApp = global.UrlFetchApp;
+      var origGetSettings = getSettings;
+      getSettings = function() {
+        return {
+          "PS_URL": "https://ps.gocathedral.com",
+          "PS_CLIENT_ID": "test-id",
+          "PS_CLIENT_SECRET": "test-secret",
+          "Term ID": "3503"
+        };
+      };
+      global.UrlFetchApp = {
+        fetch: function(url) {
+          if (url.indexOf("/oauth/access_token") !== -1) {
+            return {
+              getResponseCode: function() { return 200; },
+              getContentText: function() { return JSON.stringify({ access_token: "mock-ps-token" }); }
+            };
+          }
+          return {
+            getResponseCode: function() { return 200; },
+            getContentText: function() {
+              return JSON.stringify({
+                record: [
+                  { calendar_date: "2026-08-24", insession: "1", cycle_day_name: "Green Day", bell_schedule_name: "Green Regular" },
+                  { calendar_date: "2026-08-25", insession: "1", cycle_day_name: "Blue Day", bell_schedule_name: "Blue Regular" },
+                  { calendar_date: "2026-08-26", insession: "1", cycle_day_name: "Gold Day", bell_schedule_name: "Gold Regular" },
+                  { calendar_date: "2026-09-07", insession: "0", cycle_day_name: "", day_note: "Labor Day" }
+                ]
+              });
+            }
+          };
+        }
+      };
+
+      var psSyncRes = syncBellScheduleFromPowerSchool(true, "admin@gocathedral.com");
+      assert(psSyncRes.success === true && psSyncRes.updated === 4 && psSyncRes.total === 4, "Expected PowerSchool bell schedule sync to replace with 4 dates");
+      assert(psSyncRes.dateColors["2026-08-24"] === "Green" && psSyncRes.dateColors["2026-09-07"] === "Red", "Expected synced PowerSchool dates to map Green and Labor Day Red");
+
+      getSettings = origGetSettings;
+      if (origUrlFetchApp !== undefined) global.UrlFetchApp = origUrlFetchApp;
 
       sendEmailHelper = origSendEmailHelper;
       getSS = origGetSS;

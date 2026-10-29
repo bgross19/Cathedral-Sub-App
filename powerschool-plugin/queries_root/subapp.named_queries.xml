@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<queries>
+    <!-- 1. Master Schedule PowerQuery -->
+    <query name="com.cathedral.subapp.masterschedule" coreTable="CC" flattened="true">
+        <summary>Cathedral Sub App - Master Schedule</summary>
+        <description>Returns distinct teacher/period/room/course combinations (with co-seated courses combined via LISTAGG) for a given PowerSchool term ID.</description>
+        <args>
+            <arg name="target_term" required="true" type="primitive" default="3503" description="PowerSchool Term ID (e.g. 3500 or 3503)" />
+        </args>
+        <columns>
+            <column column="TEACHERS.LASTFIRST" description="Teacher Last, First Name">lastfirst</column>
+            <column column="TEACHERS.EMAIL_ADDR" description="Teacher Email Address">email_addr</column>
+            <column column="CC.EXPRESSION" description="Cleaned Period Expression">period</column>
+            <column column="TEACHERS.EMAIL_ADDR" description="Email-Period Composite Key">email_period_join</column>
+            <column column="SECTIONS.ROOM" description="Section Room Number">room</column>
+            <column column="COURSES.COURSE_NAME" description="Combined Co-Seated Course Names">course_names</column>
+            <column column="TEACHERS.ID" description="PowerSchool Teacher ID">teacher_id</column>
+        </columns>
+        <sql><![CDATA[
+            WITH DistinctClasses AS (
+                SELECT DISTINCT
+                    t.LASTFIRST,
+                    t.EMAIL_Addr,
+                    REPLACE(cc.expression, '(A)', '') AS period,
+                    t.EMAIL_Addr || '-' || REPLACE(cc.expression, '(A)', '') AS email_period_join,
+                    c.course_name,
+                    s.room,
+                    t.id AS teacher_id
+                FROM cc cc
+                JOIN courses c
+                    ON c.course_number = cc.course_number
+                JOIN teachers t
+                    ON cc.TEACHERID = t.id
+                JOIN sections s
+                    ON cc.sectionid = s.id
+                WHERE cc.termid = :target_term
+            )
+            SELECT
+                LASTFIRST AS lastfirst,
+                EMAIL_Addr AS email_addr,
+                period AS period,
+                email_period_join AS email_period_join,
+                room AS room,
+                LISTAGG(course_name, ' / ') WITHIN GROUP (ORDER BY course_name) AS course_names,
+                MAX(teacher_id) AS teacher_id
+            FROM DistinctClasses
+            GROUP BY
+                LASTFIRST,
+                EMAIL_Addr,
+                period,
+                email_period_join,
+                room
+            ORDER BY LASTFIRST
+        ]]></sql>
+    </query>
+
+    <!-- 2. Bell Schedule & Calendar PowerQuery -->
+    <query name="com.cathedral.subapp.bellschedule" coreTable="CALENDAR_DAY" flattened="true">
+        <summary>Cathedral Sub App - Bell Schedule &amp; Calendar Days</summary>
+        <description>Returns all weekday calendar days (Monday-Friday) for the school year corresponding to target_term, including in-session flag, cycle day name/letter, bell schedule name, and day note.</description>
+        <args>
+            <arg name="target_term" required="true" type="primitive" default="3503" description="PowerSchool Term ID (e.g. 3500 or 3503) used to derive the 2-digit Year ID" />
+        </args>
+        <columns>
+            <column column="CALENDAR_DAY.DATE_VALUE" description="Calendar Date formatted as YYYY-MM-DD">calendar_date</column>
+            <column column="CALENDAR_DAY.INSESSION" description="1 if school is in session, 0 if no school">insession</column>
+            <column column="CYCLE_DAY.DAY_NAME" description="Cycle Day Name (e.g. Green, Blue, Gold)">cycle_day_name</column>
+            <column column="CYCLE_DAY.LETTER" description="Cycle Day Letter / Abbreviation">cycle_day_letter</column>
+            <column column="BELL_SCHEDULE.NAME" description="Bell Schedule Name">bell_schedule_name</column>
+            <column column="CALENDAR_DAY.NOTE" description="Calendar Day Note">day_note</column>
+        </columns>
+        <sql><![CDATA[
+            SELECT
+                TO_CHAR(cd.date_value, 'YYYY-MM-DD') AS calendar_date,
+                cd.insession AS insession,
+                cy.day_name AS cycle_day_name,
+                cy.letter AS cycle_day_letter,
+                bs.name AS bell_schedule_name,
+                cd.note AS day_note
+            FROM calendar_day cd
+            JOIN terms tm
+                ON tm.schoolid = cd.schoolid
+               AND tm.isyearrec = 1
+               AND tm.yearid = FLOOR(TO_NUMBER(:target_term) / 100)
+               AND cd.date_value BETWEEN tm.firstday AND tm.lastday
+            LEFT JOIN cycle_day cy
+                ON cy.id = cd.cycle_day_id
+            LEFT JOIN bell_schedule bs
+                ON bs.id = cd.bell_schedule_id
+            WHERE cd.schoolid <> 0
+              AND (TRUNC(cd.date_value) - TRUNC(cd.date_value, 'IW')) BETWEEN 0 AND 4
+            ORDER BY cd.date_value ASC
+        ]]></sql>
+    </query>
+</queries>

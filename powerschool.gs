@@ -248,8 +248,203 @@ function warmMasterScheduleCache() {
     } catch (e) {
       Logger.log("Error syncing master schedule to staff roster: " + e.toString());
     }
+
+    // Also attempt a non-destructive merge sync of the Bell Schedule from PowerSchool
+    try {
+      syncBellScheduleFromPowerSchool(false);
+    } catch (e) {
+      Logger.log("Error syncing bell schedule during cache warm: " + e.toString());
+    }
   } else {
     Logger.log("Master Schedule fetch returned empty data. Cache sheet not updated.");
+  }
+}
+
+/**
+ * Maps a single PowerSchool `com.cathedral.subapp.bellschedule` record to a normalized
+ * Sub App day color ("Green", "Blue", "Gold", "Red", or "").
+ */
+function resolveBellScheduleColorFromPSRecord(r) {
+  if (!r || typeof r !== 'object') return "";
+
+  const insessionRaw = r.insession !== undefined ? r.insession : r.INSESSION;
+  if (insessionRaw !== undefined && insessionRaw !== null && String(insessionRaw).trim() !== "") {
+    if (Number(insessionRaw) === 0) {
+      return "Red";
+    }
+  }
+
+  const candidates = [
+    r.cycle_day_name || r.CYCLE_DAY_NAME || "",
+    r.bell_schedule_name || r.BELL_SCHEDULE_NAME || "",
+    r.day_note || r.DAY_NOTE || ""
+  ];
+
+  for (let i = 0; i < candidates.length; i++) {
+    const text = String(candidates[i] || "").trim();
+    if (!text) continue;
+
+    if (typeof normalizeBellScheduleColor === "function") {
+      const exact = normalizeBellScheduleColor(text);
+      if (exact === "Green" || exact === "Blue" || exact === "Gold" || exact === "Red") {
+        return exact;
+      }
+    }
+
+    const lower = text.toLowerCase();
+    if (lower.indexOf("green") !== -1) return "Green";
+    if (lower.indexOf("blue") !== -1) return "Blue";
+    if (lower.indexOf("gold") !== -1) return "Gold";
+    if (lower.indexOf("no school") !== -1 || lower.indexOf("holiday") !== -1 || lower.indexOf("break") !== -1 || lower.indexOf("red") !== -1) {
+      return "Red";
+    }
+  }
+
+  const letter = String(r.cycle_day_letter || r.CYCLE_DAY_LETTER || "").trim().toUpperCase();
+  if (letter === "G") return "Green";
+  if (letter === "B") return "Blue";
+  if (letter === "AU" || letter === "Y") return "Gold";
+  if (letter === "R" || letter === "N") return "Red";
+
+  return "";
+}
+
+/**
+ * Fetches the Bell Schedule / Calendar days from PowerSchool using the
+ * `com.cathedral.subapp.bellschedule` PowerQuery endpoint.
+ *
+ * @return {{success: boolean, updates: Array<{date: string, color: string}>, rawCount?: number, termId?: string, error?: string}}
+ */
+function fetchBellScheduleFromAPI() {
+  let token;
+  try {
+    token = getPowerSchoolToken();
+  } catch (err) {
+    return { success: false, error: err.message, updates: [] };
+  }
+  if (!token) {
+    return { success: false, error: "Failed to authenticate with PowerSchool API.", updates: [] };
+  }
+
+  const settings = typeof getSettings === "function" ? getSettings() : {};
+  const rawUrl = settings['PS_URL'];
+  const POWERSCHOOL_URL = rawUrl ? rawUrl.trim().replace(/\/$/, '') : null;
+  if (!POWERSCHOOL_URL) {
+    return { success: false, error: "Missing PS_URL in Settings.", updates: [] };
+  }
+
+  const termId = String(settings["Term ID"] || "3503").trim();
+  const endpoint = "/ws/schema/query/com.cathedral.subapp.bellschedule?pagesize=0";
+
+  const options = {
+    method: "POST",
+    headers: {
+      "Authorization": "Bearer " + token,
+      "Content-Type": "application/json",
+      "Accept": "application/json"
+    },
+    payload: JSON.stringify({ "target_term": termId }),
+    muteHttpExceptions: true
+  };
+
+  let responseText;
+  let statusCode;
+  try {
+    const response = UrlFetchApp.fetch(POWERSCHOOL_URL + endpoint, options);
+    statusCode = response.getResponseCode();
+    responseText = response.getContentText();
+  } catch (error) {
+    Logger.log("API Fetch Error in fetchBellScheduleFromAPI: " + error.toString());
+    return { success: false, error: "PowerSchool request failed: " + error.toString(), updates: [] };
+  }
+
+  if (statusCode !== 200) {
+    Logger.log("PowerSchool Bell Schedule API returned status: " + statusCode + ", " + responseText);
+    return {
+      success: false,
+      error: "PowerSchool API returned HTTP " + statusCode + ". Ensure the Cathedral Sub App plugin v2.0.0 (com.cathedral.subapp.bellschedule) is installed and enabled.",
+      updates: []
+    };
+  }
+
+  try {
+    const json = JSON.parse(responseText);
+    const records = json.record || [];
+    const updates = [];
+
+    records.forEach(r => {
+      const rawDate = String(r.calendar_date || r.CALENDAR_DATE || r.date_value || r.DATE_VALUE || "").trim();
+      const stdDate = typeof getStandardizedDateString === "function" ? getStandardizedDateString(rawDate) : rawDate;
+      const color = resolveBellScheduleColorFromPSRecord(r);
+      if (stdDate && color) {
+        updates.push({ date: stdDate, color: color });
+      }
+    });
+
+    return {
+      success: true,
+      updates: updates,
+      rawCount: records.length,
+      termId: termId
+    };
+  } catch (parseError) {
+    Logger.log("Failed to parse Bell Schedule JSON: " + parseError.toString());
+    return { success: false, error: "Failed to parse PowerSchool Bell Schedule JSON: " + parseError.toString(), updates: [] };
+  }
+}
+
+/**
+ * Pulls the Bell Schedule from PowerSchool (`com.cathedral.subapp.bellschedule`)
+ * and upserts the mapped dates into the `Dates` sheet.
+ *
+ * @param {boolean} replaceAll - Whether to replace all existing dates in the `Dates` sheet.
+ * @param {string} [clientEmail] - Active user email when invoked from the Settings UI.
+ */
+function syncBellScheduleFromPowerSchool(replaceAll, clientEmail) {
+  try {
+    if (clientEmail !== undefined) {
+      const ss = getSS();
+      const user = getUserData(ss, clientEmail);
+      assertPermission(user, "Settings");
+    }
+
+    const apiRes = fetchBellScheduleFromAPI();
+    if (!apiRes.success) {
+      return { success: false, error: apiRes.error || "Failed to fetch bell schedule from PowerSchool." };
+    }
+
+    if (!apiRes.updates || apiRes.updates.length === 0) {
+      return {
+        success: false,
+        error: "PowerSchool returned " + (apiRes.rawCount || 0) + " calendar records, but 0 dates mapped to Green/Blue/Gold/Red for Term ID " + (apiRes.termId || "") + "."
+      };
+    }
+
+    const upsertRes = bulkUpsertBellScheduleDates(apiRes.updates, Boolean(replaceAll), clientEmail);
+    if (!upsertRes || !upsertRes.success) {
+      return upsertRes || { success: false, error: "Failed to save synced bell schedule dates." };
+    }
+
+    if (typeof logAuditAction === "function") {
+      logAuditAction(
+        "BELL_SCHEDULE_PS_SYNC",
+        "Dates",
+        (replaceAll ? "Replaced" : "Merged") + " " + upsertRes.updated + " dates from PowerSchool (Term " + apiRes.termId + ").",
+        clientEmail
+      );
+    }
+
+    return {
+      success: true,
+      updated: upsertRes.updated,
+      total: upsertRes.total,
+      rawCount: apiRes.rawCount,
+      termId: apiRes.termId,
+      dateColors: upsertRes.dateColors
+    };
+  } catch (e) {
+    Logger.log("Error in syncBellScheduleFromPowerSchool: " + e.message);
+    return { success: false, error: e.message };
   }
 }
 

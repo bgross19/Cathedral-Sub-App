@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<plugin xmlns="http://plugin.powerschool.pearson.com"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://plugin.powerschool.pearson.com plugin.xsd"
+        name="Cathedral Sub App Integration"
+        version="2.0.0"
+        description="Provides Master Schedule and Bell Schedule (Calendar) PowerQueries for the Cathedral High School Substitute Management System.">
+    <oauth></oauth>
+    <publisher name="Cathedral High School">
+        <contact email="bgross@gocathedral.com"/>
+    </publisher>
+    <access_request>
+        <!-- Master Schedule Tables -->
+        <field table="CC" field="EXPRESSION" access="ViewOnly" />
+        <field table="CC" field="COURSE_NUMBER" access="ViewOnly" />
+        <field table="CC" field="TEACHERID" access="ViewOnly" />
+        <field table="CC" field="SECTIONID" access="ViewOnly" />
+        <field table="CC" field="TERMID" access="ViewOnly" />
+        <field table="COURSES" field="COURSE_NUMBER" access="ViewOnly" />
+        <field table="COURSES" field="COURSE_NAME" access="ViewOnly" />
+        <field table="TEACHERS" field="ID" access="ViewOnly" />
+        <field table="TEACHERS" field="LASTFIRST" access="ViewOnly" />
+        <field table="TEACHERS" field="EMAIL_ADDR" access="ViewOnly" />
+        <field table="SECTIONS" field="ID" access="ViewOnly" />
+        <field table="SECTIONS" field="ROOM" access="ViewOnly" />
+
+        <!-- Bell Schedule & Calendar Tables -->
+        <field table="CALENDAR_DAY" field="DATE_VALUE" access="ViewOnly" />
+        <field table="CALENDAR_DAY" field="INSESSION" access="ViewOnly" />
+        <field table="CALENDAR_DAY" field="CYCLE_DAY_ID" access="ViewOnly" />
+        <field table="CALENDAR_DAY" field="BELL_SCHEDULE_ID" access="ViewOnly" />
+        <field table="CALENDAR_DAY" field="SCHOOLID" access="ViewOnly" />
+        <field table="CALENDAR_DAY" field="NOTE" access="ViewOnly" />
+        <field table="CYCLE_DAY" field="ID" access="ViewOnly" />
+        <field table="CYCLE_DAY" field="DAY_NAME" access="ViewOnly" />
+        <field table="CYCLE_DAY" field="LETTER" access="ViewOnly" />
+        <field table="BELL_SCHEDULE" field="ID" access="ViewOnly" />
+        <field table="BELL_SCHEDULE" field="NAME" access="ViewOnly" />
+        <field table="TERMS" field="ID" access="ViewOnly" />
+        <field table="TERMS" field="SCHOOLID" access="ViewOnly" />
+        <field table="TERMS" field="YEARID" access="ViewOnly" />
+        <field table="TERMS" field="ISYEARREC" access="ViewOnly" />
+        <field table="TERMS" field="FIRSTDAY" access="ViewOnly" />
+        <field table="TERMS" field="LASTDAY" access="ViewOnly" />
+    </access_request>
+</plugin>
