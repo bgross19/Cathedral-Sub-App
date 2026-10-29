@@ -59,6 +59,42 @@ let global_master_schedule_cache = null;
 /**
  * Fetches the Master Schedule from PowerSchool API and formats it into a 2D array.
  */
+/**
+ * Internal helper to fetch raw records from `com.cathedral.subapp.masterschedule` for a target term.
+ */
+function _fetchMasterScheduleRecordsForTerm(POWERSCHOOL_URL, token, targetTerm) {
+  const endpoint = "/ws/schema/query/com.cathedral.subapp.masterschedule?pagesize=0";
+  const options = {
+    method: "POST",
+    headers: {
+      "Authorization": "Bearer " + token,
+      "Content-Type": "application/json",
+      "Accept": "application/json"
+    },
+    payload: JSON.stringify({ "target_term": String(targetTerm) }),
+    muteHttpExceptions: true
+  };
+
+  try {
+    const response = UrlFetchApp.fetch(POWERSCHOOL_URL + endpoint, options);
+    const statusCode = response.getResponseCode();
+    const responseText = response.getContentText();
+    if (statusCode !== 200) {
+      Logger.log("PowerSchool API returned status: " + statusCode + ", " + responseText);
+      return null;
+    }
+    const json = JSON.parse(responseText);
+    return json.record || [];
+  } catch (error) {
+    Logger.log("API Fetch Error in _fetchMasterScheduleRecordsForTerm (" + targetTerm + "): " + error.toString());
+    return null;
+  }
+}
+
+/**
+ * Fetches the Master Schedule from PowerSchool API across Semester 1 & Semester 2
+ * and formats it into a 2D array with each row's TERM preserved.
+ */
 function fetchMasterScheduleFromAPI() {
   const token = getPowerSchoolToken();
   if (!token) {
@@ -74,60 +110,31 @@ function fetchMasterScheduleFromAPI() {
     return [];
   }
 
-  // Need to get dynamic Term ID from Settings
-  const termId = settings["Term ID"] || "3601";
-
-  const endpoint = "/ws/schema/query/com.cathedral.subapp.masterschedule?pagesize=0";
-
-  const payload = {
-    "target_term": String(termId)
-  };
-
-  const options = {
-    method: "POST",
-    headers: {
-      "Authorization": "Bearer " + token,
-      "Content-Type": "application/json",
-      "Accept": "application/json"
-    },
-    payload: JSON.stringify(payload),
-    muteHttpExceptions: true
-  };
-
-  let responseText;
-  let statusCode;
-  try {
-    let url = POWERSCHOOL_URL + endpoint;
-    const response = UrlFetchApp.fetch(url, options);
-    statusCode = response.getResponseCode();
-    responseText = response.getContentText();
-  } catch (error) {
-    Logger.log("API Fetch Error in fetchMasterScheduleFromAPI: " + error.toString());
+  // Primary configured Term ID from Settings (e.g. "3601")
+  const termId = String(settings["Term ID"] || "3601").trim();
+  const primaryRecords = _fetchMasterScheduleRecordsForTerm(POWERSCHOOL_URL, token, termId);
+  if (!primaryRecords) {
     return [];
   }
 
-  if (statusCode !== 200) {
-    Logger.log("PowerSchool API returned status: " + statusCode + ", " + responseText);
-    return [];
-  }
+  // Headers matching expected 2D array structure
+  const scheduleData = [
+    ["LASTFIRST", "EMAIL_ADDR", "PERIOD", "ROOM", "COURSE_NAMES", "TERM", "EMAIL_PERIOD_JOIN"]
+  ];
 
-  try {
-    const json = JSON.parse(responseText);
-    const records = json.record || [];
-
-    // Headers matching expected 2D array structure
-    const scheduleData = [
-      ["LASTFIRST", "EMAIL_ADDR", "PERIOD", "ROOM", "COURSE_NAMES", "TERM", "EMAIL_PERIOD_JOIN"]
-    ];
-
+  const seenRowKeys = {};
+  const appendRecords = function(records, fallbackTerm) {
+    if (!records || !Array.isArray(records)) return;
     records.forEach(r => {
       const email = String(r.email_addr || r.EMAIL_ADDR || "").trim();
-
       let periodRaw = String(r.period || r.PERIOD || "");
       let periodMatch = periodRaw.match(/\d+/);
       let periodClean = periodMatch ? periodMatch[0] : periodRaw.trim();
-
+      const rowTerm = String(r.term_id || r.TERM_ID || fallbackTerm || termId).trim();
       const joinKey = (email && periodClean) ? (email + "-" + periodClean) : "";
+      const dedupeKey = (joinKey + "|" + rowTerm + "|" + (r.room || r.ROOM || "") + "|" + (r.course_names || r.COURSE_NAMES || "")).toLowerCase();
+      if (seenRowKeys[dedupeKey]) return;
+      seenRowKeys[dedupeKey] = true;
 
       scheduleData.push([
         r.lastfirst || r.LASTFIRST || "",
@@ -135,17 +142,35 @@ function fetchMasterScheduleFromAPI() {
         periodClean,
         r.room || r.ROOM || r.room_number || r.ROOM_NUMBER || "",
         r.course_names || r.COURSE_NAMES || r.course_name || r.COURSE_NAME || "",
-        termId,
+        rowTerm,
         joinKey
       ]);
     });
+  };
 
-    return scheduleData;
+  appendRecords(primaryRecords, termId);
 
-  } catch (parseError) {
-    Logger.log("Failed to parse Master Schedule JSON: " + parseError.toString());
-    return [];
+  // If the installed PowerSchool plugin is v2.0.0 (which filters `cc.termid = :target_term`
+  // and does not return `term_id` per row), automatically fetch the sibling semester (e.g. 3603 / 3601)
+  // so both Semester 1 and Semester 2 schedules are cached for date-aware lookups.
+  const hasMultiTermColumn = primaryRecords.some(r => r && (r.term_id !== undefined || r.TERM_ID !== undefined));
+  if (!hasMultiTermColumn && primaryRecords.length > 0) {
+    const termNum = parseInt(termId, 10);
+    if (!isNaN(termNum) && termNum >= 100) {
+      const yearPrefix = Math.floor(termNum / 100);
+      const sem1 = String(yearPrefix * 100 + 1);
+      const sem2 = String(yearPrefix * 100 + 3);
+      const siblingTerms = [sem1, sem2].filter(t => t !== termId);
+      siblingTerms.forEach(sibTerm => {
+        const sibRecords = _fetchMasterScheduleRecordsForTerm(POWERSCHOOL_URL, token, sibTerm);
+        if (sibRecords && sibRecords.length > 0) {
+          appendRecords(sibRecords, sibTerm);
+        }
+      });
+    }
   }
+
+  return scheduleData;
 }
 
 /**
@@ -371,25 +396,123 @@ function fetchBellScheduleFromAPI() {
     const json = JSON.parse(responseText);
     const records = json.record || [];
     const updates = [];
+    const dateBellScheduleNames = {};
 
     records.forEach(r => {
       const rawDate = String(r.calendar_date || r.CALENDAR_DATE || r.date_value || r.DATE_VALUE || "").trim();
       const stdDate = typeof getStandardizedDateString === "function" ? getStandardizedDateString(rawDate) : rawDate;
       const color = resolveBellScheduleColorFromPSRecord(r);
+      const bsName = String(r.bell_schedule_name || r.BELL_SCHEDULE_NAME || "").trim();
       if (stdDate && color) {
         updates.push({ date: stdDate, color: color });
+        if (bsName) {
+          dateBellScheduleNames[stdDate] = bsName;
+        }
       }
     });
 
     return {
       success: true,
       updates: updates,
+      dateBellScheduleNames: dateBellScheduleNames,
       rawCount: records.length,
       termId: termId
     };
   } catch (parseError) {
     Logger.log("Failed to parse Bell Schedule JSON: " + parseError.toString());
     return { success: false, error: "Failed to parse PowerSchool Bell Schedule JSON: " + parseError.toString(), updates: [] };
+  }
+}
+
+/**
+ * Converts PowerSchool BELL_SCHEDULE_ITEMS start/end time (seconds or minutes from midnight)
+ * into a 24-hour "HH:MM" string.
+ */
+function formatPSMinutesOrSecondsToHHMM(rawVal) {
+  if (rawVal === undefined || rawVal === null || String(rawVal).trim() === "") return "";
+  const num = Number(rawVal);
+  if (isNaN(num) || num < 0) return "";
+  // PowerSchool stores BELL_SCHEDULE_ITEMS.START_TIME / END_TIME in seconds from midnight (0..86400)
+  // or minutes (0..1440) depending on view; > 1440 is unambiguously seconds.
+  const totalMinutes = num > 1440 ? Math.round(num / 60) : Math.round(num);
+  if (totalMinutes < 0 || totalMinutes >= 1440) return "";
+  const hh = Math.floor(totalMinutes / 60);
+  const mm = totalMinutes % 60;
+  return (hh < 10 ? "0" + hh : String(hh)) + ":" + (mm < 10 ? "0" + mm : String(mm));
+}
+
+/**
+ * Fetches exact period start/end times per Bell Schedule from PowerSchool
+ * (`com.cathedral.subapp.bellscheduletimes`).
+ */
+function fetchBellScheduleTimesFromAPI() {
+  let token;
+  try {
+    token = getPowerSchoolToken();
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+  if (!token) return { success: false, error: "Missing PowerSchool token." };
+
+  const settings = typeof getSettings === "function" ? getSettings() : {};
+  const rawUrl = settings['PS_URL'];
+  const POWERSCHOOL_URL = rawUrl ? rawUrl.trim().replace(/\/$/, '') : null;
+  if (!POWERSCHOOL_URL) return { success: false, error: "Missing PS_URL." };
+
+  const termId = String(settings["Term ID"] || "3601").trim();
+  const endpoint = "/ws/schema/query/com.cathedral.subapp.bellscheduletimes?pagesize=0";
+
+  const options = {
+    method: "POST",
+    headers: {
+      "Authorization": "Bearer " + token,
+      "Content-Type": "application/json",
+      "Accept": "application/json"
+    },
+    payload: JSON.stringify({ "target_term": termId }),
+    muteHttpExceptions: true
+  };
+
+  try {
+    const response = UrlFetchApp.fetch(POWERSCHOOL_URL + endpoint, options);
+    if (response.getResponseCode() !== 200) {
+      return { success: false, error: "HTTP " + response.getResponseCode() };
+    }
+    const json = JSON.parse(response.getContentText());
+    const records = json.record || [];
+    if (records.length === 0) {
+      return { success: false, error: "No bell schedule time records returned." };
+    }
+
+    const baseMap = JSON.parse(JSON.stringify(typeof DEFAULT_PERIOD_BELL_TIMES !== "undefined" ? DEFAULT_PERIOD_BELL_TIMES : {}));
+    records.forEach(r => {
+      const bsName = String(r.bell_schedule_name || r.BELL_SCHEDULE_NAME || "").trim();
+      const abbr = String(r.period_abbr || r.PERIOD_ABBR || r.period_number || r.PERIOD_NUMBER || "").trim();
+      if (!bsName || !abbr) return;
+
+      const normP = typeof parsePeriod === "function" ? parsePeriod(abbr) : abbr;
+      const startHHMM = formatPSMinutesOrSecondsToHHMM(r.start_time !== undefined ? r.start_time : r.START_TIME);
+      const endHHMM = formatPSMinutesOrSecondsToHHMM(r.end_time !== undefined ? r.end_time : r.END_TIME);
+      if (!normP || !startHHMM || !endHHMM) return;
+
+      if (!baseMap[bsName]) baseMap[bsName] = {};
+      baseMap[bsName][normP] = { start: startHHMM, end: endHHMM };
+      if (normP === "0") baseMap[bsName]["9"] = { start: startHHMM, end: endHHMM };
+      if (normP === "9") baseMap[bsName]["0"] = { start: startHHMM, end: endHHMM };
+
+      // Also update canonical Green / Blue / Gold schedule defaults if this schedule is a regular Green/Blue/Gold schedule
+      const lowerBs = bsName.toLowerCase();
+      ["Green", "Blue", "Gold"].forEach(colorKey => {
+        if (lowerBs === colorKey.toLowerCase() || lowerBs === colorKey.toLowerCase() + " day" || lowerBs === colorKey.toLowerCase() + " regular") {
+          if (!baseMap[colorKey]) baseMap[colorKey] = {};
+          baseMap[colorKey][normP] = { start: startHHMM, end: endHHMM };
+        }
+      });
+    });
+
+    return { success: true, periodBellTimes: baseMap, count: records.length };
+  } catch (e) {
+    return { success: false, error: e.toString() };
   }
 }
 
@@ -423,6 +546,22 @@ function syncBellScheduleFromPowerSchool(replaceAll, clientEmail) {
     const upsertRes = bulkUpsertBellScheduleDates(apiRes.updates, Boolean(replaceAll), clientEmail);
     if (!upsertRes || !upsertRes.success) {
       return upsertRes || { success: false, error: "Failed to save synced bell schedule dates." };
+    }
+
+    // Opportunistically sync exact period bell times if `com.cathedral.subapp.bellscheduletimes` is available
+    try {
+      const timesRes = fetchBellScheduleTimesFromAPI();
+      if (timesRes && timesRes.success && timesRes.periodBellTimes && typeof updateSettings === "function") {
+        const settingsPatch = {
+          "Period Bell Times": JSON.stringify(timesRes.periodBellTimes)
+        };
+        if (apiRes.dateBellScheduleNames && Object.keys(apiRes.dateBellScheduleNames).length > 0) {
+          settingsPatch["Date Bell Schedule Names"] = JSON.stringify(apiRes.dateBellScheduleNames);
+        }
+        updateSettings(settingsPatch, clientEmail);
+      }
+    } catch (timesErr) {
+      Logger.log("Optional bell schedule period times sync skipped: " + timesErr.toString());
     }
 
     if (typeof logAuditAction === "function") {

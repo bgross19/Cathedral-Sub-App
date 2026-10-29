@@ -975,7 +975,7 @@ function runTests() {
       assert(psSyncRes.success === true && psSyncRes.updated === 4 && psSyncRes.total === 4, "Expected PowerSchool bell schedule sync to replace with 4 dates");
       assert(psSyncRes.dateColors["2026-08-24"] === "Green" && psSyncRes.dateColors["2026-09-07"] === "Red", "Expected synced PowerSchool dates to map Green and Labor Day Red");
 
-      // 5. Test Add to Google Calendar URL builder & deferred placeholder preservation
+      // 5. Test Add to Google Calendar URL builder with exact period clock times & deferred placeholder preservation
       var calUrl = buildSubDutyGoogleCalendarUrl({
         teacherName: "Jane Doe",
         date: "Oct 30, 2026",
@@ -986,9 +986,110 @@ function runTests() {
         instructions: "Check board"
       }, "https://app.example.com");
       assert(calUrl.indexOf("https://calendar.google.com/calendar/render?action=TEMPLATE") === 0, "Expected valid Google Calendar template URL");
-      assert(calUrl.indexOf("&dates=20261030/20261031") !== -1, "Expected all-day date range 20261030/20261031");
+      assert(calUrl.indexOf("&dates=20261030T084000/20261030T090500") !== -1, "Expected Green Day Advisory timed range 20261030T084000/20261030T090500");
       assert(calUrl.indexOf("Advisory") !== -1, "Expected period 10 to be formatted as Advisory in Calendar title");
       assert(calUrl.indexOf("{{ROOM_URL|jdoe@gocathedral.com-10}}") !== -1 && calUrl.indexOf("{{COURSE_URL|jdoe@gocathedral.com-10}}") !== -1, "Expected deferred ROOM_URL and COURSE_URL placeholders in Calendar URL");
+
+      // 6. Test PowerSchool period time conversion & date-specific period time ranges
+      assert(formatPSMinutesOrSecondsToHHMM(28200) === "07:50", "Expected 28200 seconds from midnight to convert to 07:50");
+      assert(formatPSMinutesOrSecondsToHHMM(470) === "07:50", "Expected 470 minutes from midnight to convert to 07:50");
+      var blueTimeRange = getPeriodTimeRangeForDate("2026-08-25", "2", { "2026-08-25": "Blue" }, {});
+      assert(blueTimeRange && blueTimeRange.startTime === "09:55" && blueTimeRange.endTime === "11:20", "Expected Blue Day Period 2 to be 09:55 - 11:20");
+      assert(blueTimeRange.startLocalStr === "20260825T095500" && blueTimeRange.endLocalStr === "20260825T112000", "Expected Blue Day Period 2 local strings to match");
+
+      // 7. Test Date-Aware Semester 1 (3601) vs Semester 2 (3603) schedule lookups
+      assert(resolveTermIdForDate("2026-10-15", { "Term ID": "3601" }) === "3601", "Expected Oct 2026 to resolve to Semester 1 (3601)");
+      assert(resolveTermIdForDate("2027-02-10", { "Term ID": "3601" }) === "3603", "Expected Feb 2027 to resolve to Semester 2 (3603)");
+      var multiTermSchedData = [
+        ["TEACHER_EMAIL", "PERIOD", "EMAIL_PERIOD_JOIN", "ROOM", "COURSE_NAMES", "TERM"],
+        ["jdoe@gocathedral.com", "2", "jdoe@gocathedral.com-2", "101", "AP US History S1", "3601"],
+        ["jdoe@gocathedral.com", "2", "jdoe@gocathedral.com-2", "204", "AP Macroeconomics S2", "3603"]
+      ];
+      var schedLookup = buildScheduleLookup(multiTermSchedData, "3601");
+      var sem1Info = lookupTeacherScheduleInfo(schedLookup, "jdoe@gocathedral.com", "2", "2026-10-15", { "Term ID": "3601" });
+      var sem2Info = lookupTeacherScheduleInfo(schedLookup, "jdoe@gocathedral.com", "2", "2027-02-10", { "Term ID": "3601" });
+      assert(sem1Info && sem1Info.room === "101" && sem1Info.course === "AP US History S1", "Expected Oct 2026 lookup to return Semester 1 room 101 and course");
+      assert(sem2Info && sem2Info.room === "204" && sem2Info.course === "AP Macroeconomics S2", "Expected Feb 2027 lookup to return Semester 2 room 204 and course");
+
+      // 8. Test Zero-Click Google Calendar Auto-Sync (Assigned, Modified, Canceled)
+      var origCalendarApp = typeof CalendarApp !== "undefined" ? CalendarApp : undefined;
+      var mockEventsStore = [];
+      global.CalendarApp = {
+        getCalendarById: function(calId) {
+          if (calId !== "sub1@gocathedral.com") return null;
+          return {
+            getEvents: function() {
+              return mockEventsStore.slice();
+            },
+            getEventsForDay: function() {
+              return mockEventsStore.slice();
+            },
+            createEvent: function(title, start, end, opts) {
+              var tags = {};
+              var ev = {
+                title: title,
+                start: start,
+                end: end,
+                location: (opts && opts.location) || "",
+                description: (opts && opts.description) || "",
+                deleted: false,
+                getTag: function(k) { return tags[k] || ""; },
+                setTag: function(k, v) { tags[k] = v; },
+                getDescription: function() { return this.description; },
+                setTitle: function(t) { this.title = t; },
+                setTime: function(s, e) { this.start = s; this.end = e; },
+                setLocation: function(l) { this.location = l; },
+                setDescription: function(d) { this.description = d; },
+                deleteEvent: function() {
+                  this.deleted = true;
+                  var idx = mockEventsStore.indexOf(this);
+                  if (idx !== -1) mockEventsStore.splice(idx, 1);
+                }
+              };
+              mockEventsStore.push(ev);
+              return ev;
+            }
+          };
+        }
+      };
+
+      var createSyncRes = syncSubDutyCalendarEvent("sub1@gocathedral.com", "Assigned", {
+        absenceId: "ABS-999",
+        teacherName: "Jane Doe",
+        teacherEmail: "jdoe@gocathedral.com",
+        date: "Oct 30, 2026",
+        isoDate: "2026-10-30",
+        period: "2",
+        room: "101",
+        course: "AP US History",
+        instructions: "Read Ch. 4"
+      }, { "Auto Sync Sub Calendar": "TRUE", "Term ID": "3601" });
+      assert(createSyncRes.synced === true && createSyncRes.action === "created" && mockEventsStore.length === 1, "Expected Assigned sync to create 1 calendar event");
+      assert(mockEventsStore[0].getTag("subapp_key") === "ABS-999_P2", "Expected created calendar event to have subapp_key tag ABS-999_P2");
+
+      var updateSyncRes = syncSubDutyCalendarEvent("sub1@gocathedral.com", "Modified", {
+        absenceId: "ABS-999",
+        teacherName: "Jane Doe",
+        teacherEmail: "jdoe@gocathedral.com",
+        date: "Oct 30, 2026",
+        isoDate: "2026-10-30",
+        period: "2",
+        room: "204",
+        course: "AP Macroeconomics",
+        instructions: "Updated room"
+      }, { "Auto Sync Sub Calendar": "TRUE", "Term ID": "3601" });
+      assert(updateSyncRes.synced === true && updateSyncRes.action === "updated" && mockEventsStore.length === 1, "Expected Modified sync to update existing calendar event in place");
+      assert(mockEventsStore[0].location.indexOf("Room 204") !== -1, "Expected updated calendar event location to reflect Room 204");
+
+      var cancelSyncRes = syncSubDutyCalendarEvent("sub1@gocathedral.com", "Canceled", {
+        absenceId: "ABS-999",
+        teacherName: "Jane Doe",
+        date: "Oct 30, 2026",
+        isoDate: "2026-10-30",
+        period: "2"
+      }, { "Auto Sync Sub Calendar": "TRUE", "Term ID": "3601" });
+      assert(cancelSyncRes.synced === true && cancelSyncRes.action === "deleted" && mockEventsStore.length === 0, "Expected Canceled sync to delete calendar event");
+      if (origCalendarApp !== undefined) global.CalendarApp = origCalendarApp;
 
       getSettings = origGetSettings;
       if (origUrlFetchApp !== undefined) global.UrlFetchApp = origUrlFetchApp;

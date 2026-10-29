@@ -74,8 +74,31 @@
 
       let userDateColors = {};
       let userTeacherSchedule = [];
-      // Return the schedule to use for pre-selection
-      function getActiveTeacherSchedule() {
+      let userTeacherScheduleByTerm = {};
+
+      function resolveClientTermIdForDate(dateStr) {
+          const settings = window.appSettings || {};
+          const configuredTerm = String(settings["Term ID"] || "3601").trim();
+          const centuryMatch = configuredTerm.match(/^(\d{2})\d{2}$/);
+          const basePrefix = centuryMatch ? centuryMatch[1] : "36";
+          const sem1Term = basePrefix + "01";
+          const sem2Term = basePrefix + "03";
+          if (!dateStr) return configuredTerm;
+
+          const iso = String(dateStr).trim().substring(0, 10);
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return configuredTerm;
+
+          const sem2Start = String(settings["Semester 2 Start Date"] || "").trim();
+          if (/^\d{4}-\d{2}-\d{2}$/.test(sem2Start)) {
+              return iso >= sem2Start ? sem2Term : sem1Term;
+          }
+          const month = parseInt(iso.substring(5, 7), 10);
+          return (month >= 1 && month <= 7) ? sem2Term : sem1Term;
+      }
+
+      // Return the schedule to use for pre-selection (date-aware across Semester 1 / Semester 2)
+      function getActiveTeacherSchedule(dateStr) {
+          const targetTerm = dateStr ? resolveClientTermIdForDate(dateStr) : "";
           const onBehalfSection = document.getElementById('onBehalfSection');
           if (onBehalfSection && !onBehalfSection.classList.contains('hidden')) {
               const onBehalfInput = document.getElementById('onBehalfTeacher');
@@ -83,14 +106,22 @@
                   const selectedName = onBehalfInput.value.trim().toLowerCase();
                   if (selectedName) {
                       const teacher = staffList.find(s => s.name.toLowerCase() === selectedName);
-                      if (teacher && teacher.teacherSchedule) {
-                          return teacher.teacherSchedule;
+                      if (teacher) {
+                          if (targetTerm && teacher.teacherScheduleByTerm && Array.isArray(teacher.teacherScheduleByTerm[targetTerm])) {
+                              return teacher.teacherScheduleByTerm[targetTerm];
+                          }
+                          if (teacher.teacherSchedule) {
+                              return teacher.teacherSchedule;
+                          }
                       }
                       return []; // If not found, return empty schedule
                   } else {
                       return []; // Empty input, return empty schedule
                   }
               }
+          }
+          if (targetTerm && userTeacherScheduleByTerm && Array.isArray(userTeacherScheduleByTerm[targetTerm])) {
+              return userTeacherScheduleByTerm[targetTerm];
           }
           return userTeacherSchedule;
       }
@@ -595,6 +626,7 @@ const data = payload.userData;
             window.appSettings = payload.settings || {};
             userDateColors = payload.dateColors || {};
             userTeacherSchedule = data.teacherSchedule || [];
+            userTeacherScheduleByTerm = data.teacherScheduleByTerm || {};
 
             let lowerRole = data.role.toLowerCase();
 

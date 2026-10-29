@@ -70,6 +70,8 @@ function getSettings(ss) {
     "Sub Availability Window (Days)": "5",
     "Urgency Cutoff Time": "15",
     "Term ID": "3601",
+    "Auto Sync Google Calendar": "true",
+    "Period Bell Times": JSON.stringify(typeof DEFAULT_PERIOD_BELL_TIMES !== "undefined" ? DEFAULT_PERIOD_BELL_TIMES : {}),
     "Green Day Pay Rate": "10",
     "Blue/Gold Day Pay Rate": "20",
     "Special Pay Rates": "[]",

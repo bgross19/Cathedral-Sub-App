@@ -146,7 +146,7 @@ function processEmailQueue() {
     if (needsScheduleLookup) {
       try {
         var scheduleData = getMasterScheduleData();
-        scheduleLookup = buildScheduleLookup(scheduleData);
+        scheduleLookup = buildScheduleLookup(scheduleData, settings["Term ID"] || "3601");
       } catch (err) {
         console.error("Failed to load master schedule for email queue processing: " + err.message);
       }
@@ -156,14 +156,26 @@ function processEmailQueue() {
         statuses.push([data[i][5]]);
     }
 
-    // Helper to replace placeholders using regex
-    var replacePlaceholders = function(text) {
+    // Helper to replace placeholders using regex (supports date-aware semester lookup when isoDate is provided)
+    var replacePlaceholders = function(text, targetIsoDate) {
       if (!text || typeof text !== 'string') return text;
+      var termForDate = (targetIsoDate && typeof resolveTermIdForDate === 'function')
+        ? String(resolveTermIdForDate(targetIsoDate, settings) || "").toLowerCase().trim()
+        : "";
       return text.replace(/\{\{(ROOM|COURSE|ROOM_URL|COURSE_URL)\|([^}]+)\}\}/g, function(match, type, joinKey) {
         var val = "No Class Assigned";
-        if (scheduleLookup && scheduleLookup[joinKey]) {
+        var normKey = String(joinKey || "").toLowerCase().trim();
+        var entry = null;
+        if (scheduleLookup) {
+          if (termForDate && scheduleLookup[normKey + "-" + termForDate]) {
+            entry = scheduleLookup[normKey + "-" + termForDate];
+          } else {
+            entry = scheduleLookup[normKey];
+          }
+        }
+        if (entry) {
            var isRoom = (type === 'ROOM' || type === 'ROOM_URL');
-           val = isRoom ? (scheduleLookup[joinKey].room || val) : (scheduleLookup[joinKey].course || val);
+           val = isRoom ? (entry.room || val) : (entry.course || val);
         }
         if (type === 'ROOM_URL' || type === 'COURSE_URL') {
            return encodeURIComponent(val);
@@ -194,10 +206,28 @@ function processEmailQueue() {
           console.error("Failed to parse options for queued email: " + e.message);
         }
 
+        var calSync = options && options.calendarSync ? options.calendarSync : null;
+        var targetIsoDate = (calSync && calSync.details && calSync.details.isoDate) ? calSync.details.isoDate : "";
+        if (options && options.calendarSync) {
+          delete options.calendarSync;
+        }
+
         if (needsScheduleLookup) {
-          body = replacePlaceholders(String(body));
+          body = replacePlaceholders(String(body), targetIsoDate);
           if (options.htmlBody) {
-            options.htmlBody = replacePlaceholders(String(options.htmlBody));
+            options.htmlBody = replacePlaceholders(String(options.htmlBody), targetIsoDate);
+          }
+          if (calSync && calSync.details) {
+            if (calSync.details.room) calSync.details.room = replacePlaceholders(String(calSync.details.room), targetIsoDate);
+            if (calSync.details.course) calSync.details.course = replacePlaceholders(String(calSync.details.course), targetIsoDate);
+          }
+        }
+
+        if (calSync && calSync.subEmail && calSync.details) {
+          try {
+            syncSubDutyCalendarEvent(calSync.subEmail, calSync.type, calSync.details, settings);
+          } catch (calErr) {
+            console.warn("Auto calendar sync error for " + calSync.subEmail + ": " + calErr.message);
           }
         }
 
@@ -579,15 +609,24 @@ function encodeCalendarParamWithPlaceholders(str) {
 
 /**
  * Builds a Google Calendar template URL for a sub coverage assignment.
+ * Uses exact period start/end clock times (`YYYYMMDDTHHMM00/YYYYMMDDTHHMM00`) when available,
+ * falling back to an all-day event (`YYYYMMDD/YYYYMMDD`) if period times are not applicable.
  */
-function buildSubDutyGoogleCalendarUrl(details, appUrl) {
+function buildSubDutyGoogleCalendarUrl(details, appUrl, optionalSettings) {
   if (!details) return "";
 
   var isoDate = details.isoDate || (typeof getStandardizedDateString === "function" ? getStandardizedDateString(details.date) : "");
-  var startYMD = "";
-  var endYMD = "";
+  var datesParam = "";
+  var timeSummaryLine = "";
 
-  if (isoDate && /^\d{4}-\d{2}-\d{2}$/.test(isoDate)) {
+  var periodRange = (isoDate && details.period && typeof getPeriodTimeRangeForDate === "function")
+    ? getPeriodTimeRangeForDate(isoDate, details.period, null, optionalSettings)
+    : null;
+
+  if (periodRange && periodRange.startLocalStr && periodRange.endLocalStr) {
+    datesParam = "&dates=" + periodRange.startLocalStr + "/" + periodRange.endLocalStr;
+    timeSummaryLine = "Time: " + periodRange.startTime + " - " + periodRange.endTime + (periodRange.dayColor ? " (" + periodRange.dayColor + " Day)" : "");
+  } else if (isoDate && /^\d{4}-\d{2}-\d{2}$/.test(isoDate)) {
     var dParts = isoDate.split("-");
     var yr = parseInt(dParts[0], 10);
     var mo = parseInt(dParts[1], 10) - 1;
@@ -595,8 +634,9 @@ function buildSubDutyGoogleCalendarUrl(details, appUrl) {
     var startObj = new Date(Date.UTC(yr, mo, dy));
     var endObj = new Date(Date.UTC(yr, mo, dy + 1));
     var pad2 = function(n) { return n < 10 ? "0" + n : String(n); };
-    startYMD = String(startObj.getUTCFullYear()) + pad2(startObj.getUTCMonth() + 1) + pad2(startObj.getUTCDate());
-    endYMD = String(endObj.getUTCFullYear()) + pad2(endObj.getUTCMonth() + 1) + pad2(endObj.getUTCDate());
+    var startYMD = String(startObj.getUTCFullYear()) + pad2(startObj.getUTCMonth() + 1) + pad2(startObj.getUTCDate());
+    var endYMD = String(endObj.getUTCFullYear()) + pad2(endObj.getUTCMonth() + 1) + pad2(endObj.getUTCDate());
+    datesParam = "&dates=" + startYMD + "/" + endYMD;
   }
 
   var displayPeriodLabel = details.period ? formatPeriodLabelDisplay(details.period) : "Sub Coverage";
@@ -605,6 +645,7 @@ function buildSubDutyGoogleCalendarUrl(details, appUrl) {
   var descLines = [
     "Teacher to Cover: " + (details.teacherName || ""),
     details.period ? "Period: " + formatPeriodDisplay(details.period) : "",
+    timeSummaryLine,
     details.course ? "Course: " + details.course : "",
     details.room ? "Room: " + details.room : "",
     "Special Instructions: " + (details.instructions ? details.instructions : "None provided"),
@@ -615,10 +656,148 @@ function buildSubDutyGoogleCalendarUrl(details, appUrl) {
 
   var url = "https://calendar.google.com/calendar/render?action=TEMPLATE" +
             "&text=" + encodeCalendarParamWithPlaceholders(title) +
-            (startYMD && endYMD ? "&dates=" + startYMD + "/" + endYMD : "") +
+            datesParam +
             "&location=" + encodeCalendarParamWithPlaceholders(locationStr) +
             "&details=" + encodeCalendarParamWithPlaceholders(descLines);
   return url;
+}
+
+/**
+ * Automatically creates, updates, or deletes a Google Calendar event on a substitute's
+ * calendar when coverage is Assigned, Modified, or Canceled.
+ */
+function syncSubDutyCalendarEvent(subEmail, type, details, optionalSettings) {
+  if (!subEmail || !details) return { synced: false, reason: "Missing subEmail or details" };
+  if (typeof CalendarApp === "undefined" || !CalendarApp) {
+    return { synced: false, reason: "CalendarApp not available" };
+  }
+
+  var settings = optionalSettings || (typeof getSettings === "function" ? getSettings() : {});
+  var autoSyncSetting = String(settings["Auto Sync Google Calendar"] !== undefined ? settings["Auto Sync Google Calendar"] : "true").toLowerCase().trim();
+  if (autoSyncSetting === "false" || autoSyncSetting === "off" || autoSyncSetting === "0") {
+    return { synced: false, reason: "Auto Sync Google Calendar disabled in Settings" };
+  }
+
+  var isoDate = details.isoDate || (typeof getStandardizedDateString === "function" ? getStandardizedDateString(details.date) : "");
+  if (!isoDate || !/^\d{4}-\d{2}-\d{2}$/.test(isoDate)) {
+    return { synced: false, reason: "Invalid or missing isoDate" };
+  }
+
+  var dParts = isoDate.split("-");
+  var yr = parseInt(dParts[0], 10);
+  var mo = parseInt(dParts[1], 10) - 1;
+  var dy = parseInt(dParts[2], 10);
+  var dayStart = new Date(yr, mo, dy, 0, 0, 0);
+  var dayEnd = new Date(yr, mo, dy, 23, 59, 59);
+
+  var normPeriod = details.period !== undefined ? parsePeriod(details.period) : "";
+  var absId = details.id || details.absenceId || "";
+  var tagKey = (absId ? String(absId) : ("date_" + isoDate)) + "_P" + normPeriod;
+  var idMarker = "[SubAppID: " + tagKey + "]";
+
+  var cal = null;
+  var useGuestFallback = false;
+  try {
+    cal = CalendarApp.getCalendarById(subEmail);
+  } catch (e) {
+    cal = null;
+  }
+  if (!cal && typeof CalendarApp.getDefaultCalendar === "function") {
+    try {
+      cal = CalendarApp.getDefaultCalendar();
+      useGuestFallback = true;
+    } catch (e2) {
+      cal = null;
+    }
+  }
+  if (!cal) return { synced: false, reason: "Target calendar not accessible" };
+
+  // Find any existing matching event on that day
+  var existingEvent = null;
+  try {
+    var events = cal.getEvents(dayStart, dayEnd);
+    for (var i = 0; i < events.length; i++) {
+      var ev = events[i];
+      var evTag = (typeof ev.getTag === "function") ? ev.getTag("subapp_key") : "";
+      var evDesc = (typeof ev.getDescription === "function") ? String(ev.getDescription() || "") : "";
+      var evTitle = (typeof ev.getTitle === "function") ? String(ev.getTitle() || "") : "";
+      if (evTag === tagKey || evDesc.indexOf(idMarker) !== -1 ||
+          (!absId && evTitle.indexOf("Sub Coverage: " + formatPeriodLabelDisplay(details.period) + " - " + (details.teacherName || "")) === 0)) {
+        existingEvent = ev;
+        break;
+      }
+    }
+  } catch (findErr) {
+    console.warn("Could not search existing calendar events: " + findErr.message);
+  }
+
+  if (type === "Canceled") {
+    if (existingEvent && typeof existingEvent.deleteEvent === "function") {
+      existingEvent.deleteEvent();
+      return { synced: true, action: "deleted", tagKey: tagKey };
+    }
+    return { synced: false, action: "none_to_delete", tagKey: tagKey };
+  }
+
+  var periodRange = (details.period && typeof getPeriodTimeRangeForDate === "function")
+    ? getPeriodTimeRangeForDate(isoDate, details.period, null, settings)
+    : null;
+
+  var displayPeriodLabel = details.period ? formatPeriodLabelDisplay(details.period) : "Sub Coverage";
+  var hasRealCourse = details.course && details.course !== "No Class Assigned" && details.course.indexOf("{{") === -1;
+  var hasRealRoom = details.room && details.room !== "No Class Assigned" && details.room.indexOf("{{") === -1;
+  var title = "Sub Coverage: " + displayPeriodLabel + " - " + (details.teacherName || "Teacher") +
+              (hasRealCourse ? " (" + details.course + ")" : "");
+  var locationStr = hasRealRoom ? ("Room " + details.room + " - Cathedral High School") : "Cathedral High School";
+  var appUrl = settings["App URL"] || DEFAULT_APP_URL;
+
+  var descLines = [
+    "Teacher to Cover: " + (details.teacherName || ""),
+    details.period ? "Period: " + formatPeriodDisplay(details.period) : "",
+    (periodRange && periodRange.startTime && periodRange.endTime)
+      ? ("Time: " + periodRange.startTime + " - " + periodRange.endTime + (periodRange.dayColor ? " (" + periodRange.dayColor + " Day)" : ""))
+      : "",
+    details.course ? "Course: " + details.course : "",
+    details.room ? "Room: " + details.room : "",
+    "Special Instructions: " + (details.instructions ? details.instructions : "None provided"),
+    details.subPlanUrl ? "Sub Plan: " + details.subPlanUrl : "",
+    "Take Attendance: https://powerschool.cathedral-irish.org/subs/pw.html",
+    appUrl ? "Cathedral Sub App: " + appUrl : "",
+    idMarker
+  ].filter(function(l) { return Boolean(l); }).join("\n");
+
+  if (existingEvent) {
+    if (typeof existingEvent.setTitle === "function") existingEvent.setTitle(title);
+    if (typeof existingEvent.setLocation === "function") existingEvent.setLocation(locationStr);
+    if (typeof existingEvent.setDescription === "function") existingEvent.setDescription(descLines);
+    if (periodRange && periodRange.startDateObj && periodRange.endDateObj && typeof existingEvent.setTime === "function") {
+      existingEvent.setTime(periodRange.startDateObj, periodRange.endDateObj);
+    }
+    if (typeof existingEvent.setTag === "function") existingEvent.setTag("subapp_key", tagKey);
+    return { synced: true, action: "updated", tagKey: tagKey };
+  }
+
+  var eventOptions = {
+    location: locationStr,
+    description: descLines
+  };
+  if (useGuestFallback) {
+    eventOptions.guests = subEmail;
+    eventOptions.sendInvites = false;
+  }
+
+  var createdEvent = null;
+  if (periodRange && periodRange.startDateObj && periodRange.endDateObj && typeof cal.createEvent === "function") {
+    createdEvent = cal.createEvent(title, periodRange.startDateObj, periodRange.endDateObj, eventOptions);
+  } else if (typeof cal.createAllDayEvent === "function") {
+    createdEvent = cal.createAllDayEvent(title, dayStart, eventOptions);
+  }
+
+  if (createdEvent && typeof createdEvent.setTag === "function") {
+    createdEvent.setTag("subapp_key", tagKey);
+  }
+
+  return { synced: Boolean(createdEvent), action: "created", tagKey: tagKey };
 }
 
 /**
@@ -655,7 +834,7 @@ function sendSubNotification(subEmail, type, details) {
                     "</ul>" +
                     "<p><strong>Special Instructions:</strong><br>" + (details.instructions ? details.instructions : "None provided") + "</p>";
 
-  var gcalUrl = buildSubDutyGoogleCalendarUrl(details, appUrl);
+  var gcalUrl = buildSubDutyGoogleCalendarUrl(details, appUrl, settings);
   var calendarText = gcalUrl ? ("\n\nAdd to Google Calendar: " + gcalUrl) : "";
   var calendarHtml = gcalUrl
     ? "<p style='margin: 16px 0;'><a href='" + gcalUrl + "' target='_blank' style='display: inline-block; background-color: #00843D; color: #ffffff; font-weight: bold; text-decoration: none; padding: 10px 18px; border-radius: 6px;'>📅 Add to Google Calendar</a></p>"
@@ -679,7 +858,14 @@ function sendSubNotification(subEmail, type, details) {
   }
 
   try {
-    enqueueEmail(subEmail, subject, body, { htmlBody: htmlBody });
+    enqueueEmail(subEmail, subject, body, {
+      htmlBody: htmlBody,
+      calendarSync: {
+        subEmail: subEmail,
+        type: type,
+        details: details
+      }
+    });
   } catch (e) {
     console.error("Failed to enqueue email to " + subEmail + ": " + e.message);
   }

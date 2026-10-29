@@ -17,29 +17,67 @@ function buildNameLookup(rosterData) {
 
 /**
  * Helper to build a schedule lookup dictionary from Master Schedule data.
+ * Stores both term-naive keys (`email-period`, preferring `preferredTermId` when multiple terms exist)
+ * and term-specific keys (`email-period-term`) for date-aware Semester 1 / Semester 2 lookups.
  */
-function buildScheduleLookup(scheduleData) {
+function buildScheduleLookup(scheduleData, preferredTermId) {
   var scheduleLookup = {};
-  if (scheduleData.length > 0) {
+  if (scheduleData && scheduleData.length > 0) {
     var headers = scheduleData[0];
     var joinIdx = headers.indexOf("EMAIL_PERIOD_JOIN");
     var roomIdx = headers.indexOf("ROOM");
     var courseIdx = headers.indexOf("COURSE_NAMES");
+    var termIdx = headers.indexOf("TERM");
+    var prefTerm = preferredTermId ? String(preferredTermId).trim() : "";
 
     if (joinIdx > -1) {
       for (var s = 1; s < scheduleData.length; s++) {
+        if (!scheduleData[s]) continue;
         var joinKey = String(scheduleData[s][joinIdx]).toLowerCase().trim();
         var room = roomIdx > -1 ? scheduleData[s][roomIdx] : "No Class Assigned";
         var course = courseIdx > -1 ? scheduleData[s][courseIdx] : "No Class Assigned";
-        // Do not overwrite with empty values if we don't have to, but be safe
-        scheduleLookup[joinKey] = {
+        var rowTerm = (termIdx > -1 && scheduleData[s][termIdx] !== undefined) ? String(scheduleData[s][termIdx]).trim() : "";
+        var entry = {
           room: room ? room : "No Class Assigned",
           course: course ? course : "No Class Assigned"
         };
+
+        if (rowTerm) {
+          scheduleLookup[joinKey + "-" + rowTerm.toLowerCase()] = entry;
+        }
+        // Populate default key if not yet set, or if this row matches preferredTermId
+        if (!scheduleLookup[joinKey] || (prefTerm && rowTerm === prefTerm)) {
+          scheduleLookup[joinKey] = entry;
+        }
       }
     }
   }
   return scheduleLookup;
+}
+
+/**
+ * Looks up a teacher's room and course for a given period and date, automatically selecting
+ * Semester 1 (e.g. 3601) vs. Semester 2 (e.g. 3603) when multi-term data is available.
+ */
+function lookupTeacherScheduleInfo(scheduleLookup, email, period, dateStr, optionalSettings) {
+  if (!scheduleLookup || !email || period === undefined || period === null) return null;
+  var joinKey = String(email).toLowerCase().trim() + "-" + getScheduleJoinPeriod(period);
+
+  if (dateStr && typeof resolveTermIdForDate === "function") {
+    var targetTerm = String(resolveTermIdForDate(dateStr, optionalSettings) || "").toLowerCase().trim();
+    if (targetTerm && scheduleLookup[joinKey + "-" + targetTerm]) {
+      return scheduleLookup[joinKey + "-" + targetTerm];
+    }
+    var termNum = parseInt(targetTerm, 10);
+    if (!isNaN(termNum) && termNum >= 100) {
+      var fullYearTerm = String(Math.floor(termNum / 100) * 100);
+      if (scheduleLookup[joinKey + "-" + fullYearTerm]) {
+        return scheduleLookup[joinKey + "-" + fullYearTerm];
+      }
+    }
+  }
+
+  return scheduleLookup[joinKey] || null;
 }
 
 function getInitialPayload(clientEmail, requestedComponents) {
@@ -78,7 +116,8 @@ function getInitialPayload(clientEmail, requestedComponents) {
 
 
     // --- Build lookups ---
-    var scheduleLookup = buildScheduleLookup(scheduleData);
+    var activeTermId = String(settings["Term ID"] || "3601").trim();
+    var scheduleLookup = buildScheduleLookup(scheduleData, activeTermId);
     var nameLookup = buildNameLookup(rosterData);
 
 
@@ -101,33 +140,62 @@ function getInitialPayload(clientEmail, requestedComponents) {
     var userName = String(name).trim().toLowerCase();
     var lowerRole = String(role).toLowerCase();
 
-    // Compute teacherSchedule
+    var sortPeriodList = function(arr) {
+      arr.sort(function(a, b) {
+        var numA = parseInt(a, 10);
+        var numB = parseInt(b, 10);
+        if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+        if (a < b) return -1;
+        if (a > b) return 1;
+        return 0;
+      });
+      return arr;
+    };
+
+    // Compute teacherSchedule (default active term) and teacherScheduleByTerm (all terms)
     var teacherSchedule = [];
+    var teacherScheduleByTerm = {};
     if (scheduleData && scheduleData.length > 0) {
       var headers = scheduleData[0];
       var emailIdx = headers.indexOf("EMAIL_ADDR");
       var periodIdx = headers.indexOf("PERIOD");
+      var termColIdx = headers.indexOf("TERM");
       if (emailIdx > -1 && periodIdx > -1) {
         for (var s = 1; s < scheduleData.length; s++) {
           if (!scheduleData[s] || scheduleData[s].length <= Math.max(emailIdx, periodIdx)) continue;
           if (String(scheduleData[s][emailIdx]).toLowerCase().trim() === targetEmail) {
             var pVal = String(scheduleData[s][periodIdx]).trim();
             var joinP = getScheduleJoinPeriod(pVal);
-            if (joinP && teacherSchedule.indexOf(joinP) === -1) {
-              teacherSchedule.push(joinP);
+            var rowTermVal = (termColIdx > -1 && scheduleData[s][termColIdx] !== undefined) ? String(scheduleData[s][termColIdx]).trim() : activeTermId;
+            if (joinP) {
+              if (rowTermVal) {
+                if (!teacherScheduleByTerm[rowTermVal]) teacherScheduleByTerm[rowTermVal] = [];
+                if (teacherScheduleByTerm[rowTermVal].indexOf(joinP) === -1) {
+                  teacherScheduleByTerm[rowTermVal].push(joinP);
+                }
+              }
+              if ((!rowTermVal || rowTermVal === activeTermId || Math.floor(Number(rowTermVal) / 100) * 100 === Number(rowTermVal)) && teacherSchedule.indexOf(joinP) === -1) {
+                teacherSchedule.push(joinP);
+              }
             }
           }
         }
+        // Fallback if no rows matched activeTermId directly
+        if (teacherSchedule.length === 0) {
+          for (var tk in teacherScheduleByTerm) {
+            for (var ti = 0; ti < teacherScheduleByTerm[tk].length; ti++) {
+              if (teacherSchedule.indexOf(teacherScheduleByTerm[tk][ti]) === -1) {
+                teacherSchedule.push(teacherScheduleByTerm[tk][ti]);
+              }
+            }
+          }
+        }
+        for (var termKey in teacherScheduleByTerm) {
+          sortPeriodList(teacherScheduleByTerm[termKey]);
+        }
       }
     }
-    teacherSchedule.sort(function(a, b) {
-      var numA = parseInt(a, 10);
-      var numB = parseInt(b, 10);
-      if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
-      if (a < b) return -1;
-      if (a > b) return 1;
-      return 0;
-    });
+    sortPeriodList(teacherSchedule);
 
     var appUrl = settings["App URL"] || DEFAULT_APP_URL;
     var urgencyCutoffTime = settings["Urgency Cutoff Time"] || "15";
@@ -162,7 +230,8 @@ function getInitialPayload(clientEmail, requestedComponents) {
       appUrl: String(appUrl),
       urgencyCutoffTime: String(urgencyCutoffTime),
       absenceReasons: String(absenceReasons),
-      teacherSchedule: teacherSchedule
+      teacherSchedule: teacherSchedule,
+      teacherScheduleByTerm: teacherScheduleByTerm
     };
 
 
@@ -279,8 +348,7 @@ function getInitialPayload(clientEmail, requestedComponents) {
             var subColumnIndex = getSubColumnIndex(p) - 1;
             var assignedSub = String(row[subColumnIndex] || "").trim().toLowerCase();
 
-            var joinKey = rowTeacherEmail + "-" + getScheduleJoinPeriod(p);
-            var scheduleInfo = scheduleLookup[joinKey];
+            var scheduleInfo = lookupTeacherScheduleInfo(scheduleLookup, rowTeacherEmail, p, yyyymmdd, settings);
             var roomStr = scheduleInfo && scheduleInfo.room ? String(scheduleInfo.room) : "No Class Assigned";
             var courseStr = scheduleInfo && scheduleInfo.course ? String(scheduleInfo.course) : "No Class Assigned";
 
@@ -372,33 +440,42 @@ function getInitialPayload(clientEmail, requestedComponents) {
       var staffList = [];
       var allSubAvail = getAllSubstituteAvailability();
 
-      // Pre-calculate all staff schedules
+      // Pre-calculate all staff schedules (both active term and by term)
       var allSchedules = {};
+      var allSchedulesByTerm = {};
       if (scheduleData && scheduleData.length > 0) {
         var hdrs = scheduleData[0];
         var emlIdx = hdrs.indexOf("EMAIL_ADDR");
         var prIdx = hdrs.indexOf("PERIOD");
+        var tmIdx = hdrs.indexOf("TERM");
         if (emlIdx > -1 && prIdx > -1) {
           for (var sIdx = 1; sIdx < scheduleData.length; sIdx++) {
+            if (!scheduleData[sIdx]) continue;
             var sEmail = String(scheduleData[sIdx][emlIdx]).toLowerCase().trim();
             let pVal = String(scheduleData[sIdx][prIdx]).trim();
+            var sTerm = (tmIdx > -1 && scheduleData[sIdx][tmIdx] !== undefined) ? String(scheduleData[sIdx][tmIdx]).trim() : activeTermId;
             var jP = getScheduleJoinPeriod(pVal);
             if (jP) {
               if (!allSchedules[sEmail]) allSchedules[sEmail] = [];
-              if (allSchedules[sEmail].indexOf(jP) === -1) {
+              if ((!sTerm || sTerm === activeTermId || Math.floor(Number(sTerm) / 100) * 100 === Number(sTerm)) && allSchedules[sEmail].indexOf(jP) === -1) {
                 allSchedules[sEmail].push(jP);
+              }
+              if (sTerm) {
+                if (!allSchedulesByTerm[sEmail]) allSchedulesByTerm[sEmail] = {};
+                if (!allSchedulesByTerm[sEmail][sTerm]) allSchedulesByTerm[sEmail][sTerm] = [];
+                if (allSchedulesByTerm[sEmail][sTerm].indexOf(jP) === -1) {
+                  allSchedulesByTerm[sEmail][sTerm].push(jP);
+                }
               }
             }
           }
           for (var e in allSchedules) {
-            allSchedules[e].sort(function(a, b) {
-              var numA = parseInt(a, 10);
-              var numB = parseInt(b, 10);
-              if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
-              if (a < b) return -1;
-              if (a > b) return 1;
-              return 0;
-            });
+            sortPeriodList(allSchedules[e]);
+          }
+          for (var em in allSchedulesByTerm) {
+            for (var tm in allSchedulesByTerm[em]) {
+              sortPeriodList(allSchedulesByTerm[em][tm]);
+            }
           }
         }
       }
@@ -428,7 +505,8 @@ function getInitialPayload(clientEmail, requestedComponents) {
              homebase: homebase,
              building: building,
              availability: allSubAvail[staffEmail] || {},
-             teacherSchedule: allSchedules[staffEmail] || []
+             teacherSchedule: allSchedules[staffEmail] || [],
+             teacherScheduleByTerm: allSchedulesByTerm[staffEmail] || {}
           });
         }
       }
@@ -490,8 +568,7 @@ function getInitialPayload(clientEmail, requestedComponents) {
               if (prdsRequested.indexOf(String(prd)) !== -1) {
                 var asgSub = row[getSubColumnIndex(prd) - 1];
                 if (!asgSub || String(asgSub).trim() === "") {
-                  var jKey = rTeacherEmail + "-" + getScheduleJoinPeriod(prd);
-                  var schedInfo = scheduleLookup[jKey];
+                  var schedInfo = lookupTeacherScheduleInfo(scheduleLookup, rTeacherEmail, prd, fDateString, settings);
                   quickCover.push({
                     id: rId,
                     teacherName: String(tName),
@@ -539,7 +616,7 @@ function getInitialPayload(clientEmail, requestedComponents) {
 
             if (!isNaN(pdNum)) {
               var pd = pdNum;
-              var schedKey = adTeacherEmail + "-" + getScheduleJoinPeriod(pd);
+              var adSchedInfo = lookupTeacherScheduleInfo(scheduleLookup, adTeacherEmail, pd, dtFormatted, settings);
               adminData.push({
                 id: String(adRow[0] || ""),
                 originalDate: String(dtStr || ""),
@@ -550,8 +627,8 @@ function getInitialPayload(clientEmail, requestedComponents) {
                 urgency: String(adRow[7] || ""),
                 teacherName: String(adTeacherName || ""),
                 teacherEmail: String(adTeacherEmail || ""),
-                course: scheduleLookup[schedKey] ? String(scheduleLookup[schedKey].course) : "",
-                room: scheduleLookup[schedKey] ? String(scheduleLookup[schedKey].room) : "",
+                course: adSchedInfo ? String(adSchedInfo.course) : "",
+                room: adSchedInfo ? String(adSchedInfo.room) : "",
                 assignedSub: String(adRow[getSubColumnIndex(pd) - 1] || "").trim(),
                 reason: String(adRow[5] || "").trim(),
                 duration: String(adRow[6] || "").trim(),
@@ -630,8 +707,8 @@ function getInitialPayload(clientEmail, requestedComponents) {
           if (p) {
             var hrAssignedSub = hrRow[getSubColumnIndex(p) - 1];
             if (hrAssignedSub && String(hrAssignedSub).trim() !== "") {
-              var hrSchedKey = hrTeacherEmail + "-" + getScheduleJoinPeriod(p);
-              var hrCourseStr = scheduleLookup[hrSchedKey] ? String(scheduleLookup[hrSchedKey].course) : "No Class Assigned";
+              var hrSchedInfo = lookupTeacherScheduleInfo(scheduleLookup, hrTeacherEmail, p, hrDateFormatted, settings);
+              var hrCourseStr = hrSchedInfo ? String(hrSchedInfo.course) : "No Class Assigned";
               assignedSubs.push({ name: String(hrAssignedSub).trim(), period: String(p), course: hrCourseStr });
             }
           }
