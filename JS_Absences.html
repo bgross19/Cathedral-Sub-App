@@ -1018,6 +1018,151 @@
           .assignSubToPeriod(absenceId, period, subName, false, window.activeUserEmail);
       }
 
+      function getCalendarAllDayRangeStrings(dateStr, fallbackDateStr) {
+        let iso = String(dateStr || '').trim();
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(iso) && fallbackDateStr) {
+          const parsed = new Date(fallbackDateStr);
+          if (!isNaN(parsed.getTime())) {
+            const yyyy = parsed.getFullYear();
+            const mm = String(parsed.getMonth() + 1).padStart(2, '0');
+            const dd = String(parsed.getDate()).padStart(2, '0');
+            iso = `${yyyy}-${mm}-${dd}`;
+          }
+        }
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) {
+          return { iso: '', startYMD: '', endYMD: '' };
+        }
+        const [y, m, d] = iso.split('-').map(Number);
+        const startUtc = new Date(Date.UTC(y, m - 1, d));
+        const endUtc = new Date(Date.UTC(y, m - 1, d + 1));
+        const fmt = dt =>
+          String(dt.getUTCFullYear()) +
+          String(dt.getUTCMonth() + 1).padStart(2, '0') +
+          String(dt.getUTCDate()).padStart(2, '0');
+        return { iso, startYMD: fmt(startUtc), endYMD: fmt(endUtc) };
+      }
+
+      function buildSubDutyCalendarEvent(duty) {
+        const range = getCalendarAllDayRangeStrings(duty.formDateString, duty.date);
+        const dayColor = (range.iso && typeof userDateColors === 'object' && userDateColors[range.iso])
+          ? `${userDateColors[range.iso]} Day`
+          : '';
+        const periodLabel = formatPeriodLabel(duty.period);
+        const hasRealCourse = duty.course && duty.course !== 'No Class Assigned';
+        const hasRealRoom = duty.room && duty.room !== 'No Class Assigned';
+
+        const title = `Sub Coverage: ${periodLabel} - ${duty.teacherName}${hasRealCourse ? ' (' + duty.course + ')' : ''}`;
+        const location = hasRealRoom ? `Room ${duty.room} - Cathedral High School` : 'Cathedral High School';
+        const detailsLines = [
+          `Teacher: ${duty.teacherName}${duty.teacherEmail ? ' (' + duty.teacherEmail + ')' : ''}`,
+          `Date: ${duty.date}${dayColor ? ' (' + dayColor + ')' : ''}`,
+          `Period: ${periodLabel}`,
+          `Room: ${duty.room || 'N/A'}`,
+          `Course: ${duty.course || 'N/A'}`,
+          `Special Instructions: ${duty.instructions || 'None provided'}`,
+          duty.subPlanUrl ? `Sub Plan: ${duty.subPlanUrl}` : '',
+          `Take Attendance: https://powerschool.cathedral-irish.org/subs/pw.html`
+        ].filter(Boolean);
+
+        return {
+          title,
+          location,
+          description: detailsLines.join('\n'),
+          startYMD: range.startYMD,
+          endYMD: range.endYMD,
+          uid: `subduty-${duty.id || 'req'}-p${duty.period || '0'}@cathedral-sub-app`
+        };
+      }
+
+      function openGoogleCalendarTemplateUrl(ev) {
+        if (!ev) return;
+        const datesParam = (ev.startYMD && ev.endYMD) ? `&dates=${ev.startYMD}/${ev.endYMD}` : '';
+        const url = `https://calendar.google.com/calendar/render?action=TEMPLATE` +
+          `&text=${encodeURIComponent(ev.title)}` +
+          datesParam +
+          `&location=${encodeURIComponent(ev.location || '')}` +
+          `&details=${encodeURIComponent(ev.description || '')}`;
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }
+
+      function escapeIcsText(str) {
+        return String(str || '')
+          .replace(/\\/g, '\\\\')
+          .replace(/;/g, '\\;')
+          .replace(/,/g, '\\,')
+          .replace(/\r?\n/g, '\\n');
+      }
+
+      function downloadCalendarIcsFile(ev, filename) {
+        if (!ev || !ev.startYMD || !ev.endYMD) {
+          showToast('Unable to determine event date for calendar file.', 'error');
+          return;
+        }
+        const nowUtc = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+        const icsLines = [
+          'BEGIN:VCALENDAR',
+          'VERSION:2.0',
+          'PRODID:-//Cathedral High School//Cathedral Sub App//EN',
+          'CALSCALE:GREGORIAN',
+          'METHOD:PUBLISH',
+          'BEGIN:VEVENT',
+          `UID:${ev.uid || ('event-' + nowUtc + '@cathedral-sub-app')}`,
+          `DTSTAMP:${nowUtc}`,
+          `DTSTART;VALUE=DATE:${ev.startYMD}`,
+          `DTEND;VALUE=DATE:${ev.endYMD}`,
+          `SUMMARY:${escapeIcsText(ev.title)}`,
+          `LOCATION:${escapeIcsText(ev.location)}`,
+          `DESCRIPTION:${escapeIcsText(ev.description)}`,
+          'END:VEVENT',
+          'END:VCALENDAR'
+        ];
+        const blob = new Blob([icsLines.join('\r\n')], { type: 'text/calendar;charset=utf-8' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', filename || 'Sub_Duty.ics');
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      }
+
+      function openSubDutyGoogleCalendar(index) {
+        const duty = mySubDutiesData[index];
+        if (!duty) return;
+        openGoogleCalendarTemplateUrl(buildSubDutyCalendarEvent(duty));
+      }
+
+      function downloadSubDutyIcs(index) {
+        const duty = mySubDutiesData[index];
+        if (!duty) return;
+        const ev = buildSubDutyCalendarEvent(duty);
+        const safeDate = ev.startYMD || 'Date';
+        downloadCalendarIcsFile(ev, `Sub_Duty_${safeDate}_P${duty.period}.ics`);
+      }
+
+      function openMyAbsenceGoogleCalendar(index) {
+        const abs = myAbsencesData[index];
+        if (!abs) return;
+        const range = getCalendarAllDayRangeStrings(abs.formDateString, abs.rawDateString || abs.date);
+        const periodsDisplay = abs.periodsWithSubs || formatPeriodsList(abs.periods);
+        const ev = {
+          title: `Out / Absence (${abs.duration || 'Full Day'}): ${abs.reason || 'Absence'}`,
+          location: 'Cathedral High School',
+          description: [
+            `Date: ${abs.date}`,
+            `Duration: ${abs.duration || 'Full Day'}`,
+            `Reason: ${abs.reason || ''}`,
+            `Periods & Coverage: ${periodsDisplay}`,
+            `Instructions: ${abs.instructions || 'None'}`
+          ].join('\n'),
+          startYMD: range.startYMD,
+          endYMD: range.endYMD,
+          uid: `absence-${abs.id || index}@cathedral-sub-app`
+        };
+        openGoogleCalendarTemplateUrl(ev);
+      }
+
       function renderMySubDuties(duties) {
             mySubDutiesData = duties;
             const container = document.getElementById('mySubDuties');
@@ -1045,7 +1190,13 @@
                        <span class="inline-block ${coursePillClass} text-xs font-bold px-3 py-1 rounded-full border truncate max-w-xs">Course: ${escapeHtml(duty.course)}</span>
                     </div>
                   </div>
-                  <div class="flex items-center gap-2 w-full sm:w-auto" onclick="event.stopPropagation()">
+                  <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto" onclick="event.stopPropagation()">
+                    <button type="button" onclick="openSubDutyGoogleCalendar(${index})" title="Add to Google Calendar" class="bg-white hover:bg-green-50 text-[#00843D] text-sm font-bold py-2 px-3 rounded-lg border border-green-300 transition-colors shadow-sm flex items-center gap-1.5">
+                      <span>📅</span> Add to Calendar
+                    </button>
+                    <button type="button" onclick="downloadSubDutyIcs(${index})" title="Download .ics Calendar File (Outlook / Apple Calendar)" class="bg-white hover:bg-gray-100 text-gray-700 text-sm font-bold py-2 px-2.5 rounded-lg border border-gray-300 transition-colors shadow-sm">
+                      .ics
+                    </button>
                     <button onclick="cancelMySubDutyClient('${escapeJs(duty.id)}', '${escapeJs(duty.period)}')" class="bg-white hover:bg-red-50 text-red-600 text-sm font-bold py-2 px-4 rounded-lg border border-red-200 transition-colors shadow-sm">
                       Cancel
                     </button>
@@ -1097,6 +1248,14 @@
                </p>
              </div>
              ` : ''}
+             <div class="pt-3 border-t flex flex-wrap gap-2">
+               <button type="button" onclick="openSubDutyGoogleCalendar(${index})" class="bg-[#00843D] hover:bg-green-700 text-white text-sm font-bold py-2 px-4 rounded-lg transition-colors shadow-sm flex items-center gap-2">
+                 <span>📅</span> Add to Google Calendar
+               </button>
+               <button type="button" onclick="downloadSubDutyIcs(${index})" class="bg-white hover:bg-gray-100 text-[#002147] text-sm font-bold py-2 px-4 rounded-lg border border-gray-300 transition-colors shadow-sm flex items-center gap-2">
+                 <span>📥</span> Download .ics
+               </button>
+             </div>
           </div>
         `;
 
@@ -1163,7 +1322,10 @@
                     <p class="text-sm text-gray-600 font-semibold">${escapeHtml(abs.reason)}</p>
                     <p class="text-xs text-gray-500 mt-1">Periods: ${escapeHtml(abs.periodsWithSubs || formatPeriodsList(abs.periods))}</p>
                   </div>
-                  <div class="flex gap-2 w-full sm:w-auto" onclick="event.stopPropagation()">
+                  <div class="flex flex-wrap gap-2 w-full sm:w-auto" onclick="event.stopPropagation()">
+                    <button type="button" onclick="openMyAbsenceGoogleCalendar(${index})" title="Add Absence to Google Calendar" class="flex-1 sm:flex-none bg-white hover:bg-green-50 text-[#00843D] text-sm font-bold py-2 px-3 rounded-lg border border-green-300 transition-colors shadow-sm flex items-center justify-center gap-1.5">
+                      <span>📅</span> Calendar
+                    </button>
                     <button onclick="editAbsence(${index})" class="flex-1 sm:flex-none bg-white hover:bg-gray-100 text-gray-700 text-sm font-bold py-2 px-4 rounded-lg border border-gray-300 transition-colors shadow-sm">
                       Edit
                     </button>

@@ -975,6 +975,21 @@ function runTests() {
       assert(psSyncRes.success === true && psSyncRes.updated === 4 && psSyncRes.total === 4, "Expected PowerSchool bell schedule sync to replace with 4 dates");
       assert(psSyncRes.dateColors["2026-08-24"] === "Green" && psSyncRes.dateColors["2026-09-07"] === "Red", "Expected synced PowerSchool dates to map Green and Labor Day Red");
 
+      // 5. Test Add to Google Calendar URL builder & deferred placeholder preservation
+      var calUrl = buildSubDutyGoogleCalendarUrl({
+        teacherName: "Jane Doe",
+        date: "Oct 30, 2026",
+        isoDate: "2026-10-30",
+        period: "10",
+        room: "{{ROOM|jdoe@gocathedral.com-10}}",
+        course: "{{COURSE|jdoe@gocathedral.com-10}}",
+        instructions: "Check board"
+      }, "https://app.example.com");
+      assert(calUrl.indexOf("https://calendar.google.com/calendar/render?action=TEMPLATE") === 0, "Expected valid Google Calendar template URL");
+      assert(calUrl.indexOf("&dates=20261030/20261031") !== -1, "Expected all-day date range 20261030/20261031");
+      assert(calUrl.indexOf("Advisory") !== -1, "Expected period 10 to be formatted as Advisory in Calendar title");
+      assert(calUrl.indexOf("{{ROOM_URL|jdoe@gocathedral.com-10}}") !== -1 && calUrl.indexOf("{{COURSE_URL|jdoe@gocathedral.com-10}}") !== -1, "Expected deferred ROOM_URL and COURSE_URL placeholders in Calendar URL");
+
       getSettings = origGetSettings;
       if (origUrlFetchApp !== undefined) global.UrlFetchApp = origUrlFetchApp;
 

@@ -133,7 +133,9 @@ function processEmailQueue() {
         var body = String(data[i][3]);
         var optionsStr = String(data[i][4]);
         if (body.indexOf("{{ROOM|") !== -1 || body.indexOf("{{COURSE|") !== -1 ||
-            optionsStr.indexOf("{{ROOM|") !== -1 || optionsStr.indexOf("{{COURSE|") !== -1) {
+            body.indexOf("{{ROOM_URL|") !== -1 || body.indexOf("{{COURSE_URL|") !== -1 ||
+            optionsStr.indexOf("{{ROOM|") !== -1 || optionsStr.indexOf("{{COURSE|") !== -1 ||
+            optionsStr.indexOf("{{ROOM_URL|") !== -1 || optionsStr.indexOf("{{COURSE_URL|") !== -1) {
           needsScheduleLookup = true;
           break;
         }
@@ -157,10 +159,14 @@ function processEmailQueue() {
     // Helper to replace placeholders using regex
     var replacePlaceholders = function(text) {
       if (!text || typeof text !== 'string') return text;
-      return text.replace(/\{\{(ROOM|COURSE)\|([^}]+)\}\}/g, function(match, type, joinKey) {
+      return text.replace(/\{\{(ROOM|COURSE|ROOM_URL|COURSE_URL)\|([^}]+)\}\}/g, function(match, type, joinKey) {
         var val = "No Class Assigned";
         if (scheduleLookup && scheduleLookup[joinKey]) {
-           val = type === 'ROOM' ? (scheduleLookup[joinKey].room || val) : (scheduleLookup[joinKey].course || val);
+           var isRoom = (type === 'ROOM' || type === 'ROOM_URL');
+           val = isRoom ? (scheduleLookup[joinKey].room || val) : (scheduleLookup[joinKey].course || val);
+        }
+        if (type === 'ROOM_URL' || type === 'COURSE_URL') {
+           return encodeURIComponent(val);
         }
         return val;
       });
@@ -550,6 +556,72 @@ function sendUrgentCoverageEmail(ss, teacherName, formData, instructions) {
 }
 
 /**
+ * Encodes a string for a URL query parameter while preserving deferred
+ * schedule placeholders ({{ROOM|...}} / {{COURSE|...}}) as URL-encoded
+ * placeholder tokens ({{ROOM_URL|...}} / {{COURSE_URL|...}}) for processEmailQueue.
+ */
+function encodeCalendarParamWithPlaceholders(str) {
+  var raw = String(str || "");
+  var parts = raw.split(/(\{\{(?:ROOM|COURSE)\|[^}]+\}\})/g);
+  var out = "";
+  for (var i = 0; i < parts.length; i++) {
+    var seg = parts[i];
+    if (!seg) continue;
+    var m = seg.match(/^\{\{(ROOM|COURSE)\|([^}]+)\}\}$/);
+    if (m) {
+      out += "{{" + m[1] + "_URL|" + m[2] + "}}";
+    } else {
+      out += encodeURIComponent(seg);
+    }
+  }
+  return out;
+}
+
+/**
+ * Builds a Google Calendar template URL for a sub coverage assignment.
+ */
+function buildSubDutyGoogleCalendarUrl(details, appUrl) {
+  if (!details) return "";
+
+  var isoDate = details.isoDate || (typeof getStandardizedDateString === "function" ? getStandardizedDateString(details.date) : "");
+  var startYMD = "";
+  var endYMD = "";
+
+  if (isoDate && /^\d{4}-\d{2}-\d{2}$/.test(isoDate)) {
+    var dParts = isoDate.split("-");
+    var yr = parseInt(dParts[0], 10);
+    var mo = parseInt(dParts[1], 10) - 1;
+    var dy = parseInt(dParts[2], 10);
+    var startObj = new Date(Date.UTC(yr, mo, dy));
+    var endObj = new Date(Date.UTC(yr, mo, dy + 1));
+    var pad2 = function(n) { return n < 10 ? "0" + n : String(n); };
+    startYMD = String(startObj.getUTCFullYear()) + pad2(startObj.getUTCMonth() + 1) + pad2(startObj.getUTCDate());
+    endYMD = String(endObj.getUTCFullYear()) + pad2(endObj.getUTCMonth() + 1) + pad2(endObj.getUTCDate());
+  }
+
+  var displayPeriodLabel = details.period ? formatPeriodLabelDisplay(details.period) : "Sub Coverage";
+  var title = "Sub Coverage: " + displayPeriodLabel + " - " + (details.teacherName || "Teacher");
+  var locationStr = details.room ? "Room " + details.room + " - Cathedral High School" : "Cathedral High School";
+  var descLines = [
+    "Teacher to Cover: " + (details.teacherName || ""),
+    details.period ? "Period: " + formatPeriodDisplay(details.period) : "",
+    details.course ? "Course: " + details.course : "",
+    details.room ? "Room: " + details.room : "",
+    "Special Instructions: " + (details.instructions ? details.instructions : "None provided"),
+    details.subPlanUrl ? "Sub Plan: " + details.subPlanUrl : "",
+    "Take Attendance: https://powerschool.cathedral-irish.org/subs/pw.html",
+    appUrl ? "Cathedral Sub App: " + appUrl : ""
+  ].filter(function(line) { return Boolean(line); }).join("\n");
+
+  var url = "https://calendar.google.com/calendar/render?action=TEMPLATE" +
+            "&text=" + encodeCalendarParamWithPlaceholders(title) +
+            (startYMD && endYMD ? "&dates=" + startYMD + "/" + endYMD : "") +
+            "&location=" + encodeCalendarParamWithPlaceholders(locationStr) +
+            "&details=" + encodeCalendarParamWithPlaceholders(descLines);
+  return url;
+}
+
+/**
  * Sends a notification email to a substitute.
  */
 function sendSubNotification(subEmail, type, details) {
@@ -583,21 +655,27 @@ function sendSubNotification(subEmail, type, details) {
                     "</ul>" +
                     "<p><strong>Special Instructions:</strong><br>" + (details.instructions ? details.instructions : "None provided") + "</p>";
 
+  var gcalUrl = buildSubDutyGoogleCalendarUrl(details, appUrl);
+  var calendarText = gcalUrl ? ("\n\nAdd to Google Calendar: " + gcalUrl) : "";
+  var calendarHtml = gcalUrl
+    ? "<p style='margin: 16px 0;'><a href='" + gcalUrl + "' target='_blank' style='display: inline-block; background-color: #00843D; color: #ffffff; font-weight: bold; text-decoration: none; padding: 10px 18px; border-radius: 6px;'>📅 Add to Google Calendar</a></p>"
+    : "";
+
   var attendanceText = "\n\nPlease remember to take attendance here: https://powerschool.cathedral-irish.org/subs/pw.html";
   var attendanceHtml = "<p><strong>Please remember to take attendance here: <a href='https://powerschool.cathedral-irish.org/subs/pw.html'>https://powerschool.cathedral-irish.org/subs/pw.html</a></strong></p>";
 
   if (type === 'Assigned') {
     subject = "Coverage Assignment: " + details.date + (details.period ? " " + displayPeriodLabel : "");
-    body = "You have been assigned to cover a class.\n\n" + detailsText + attendanceText + "\n\nPlease check the Cathedral Sub App for more information: " + appUrl;
-    htmlBody = "<p>You have been assigned to cover a class.</p>" + detailsHtml + attendanceHtml + "<p>Please check the <a href='" + appUrl + "'>Cathedral Sub App</a> for more information.</p>";
+    body = "You have been assigned to cover a class.\n\n" + detailsText + calendarText + attendanceText + "\n\nPlease check the Cathedral Sub App for more information: " + appUrl;
+    htmlBody = "<p>You have been assigned to cover a class.</p>" + detailsHtml + calendarHtml + attendanceHtml + "<p>Please check the <a href='" + appUrl + "'>Cathedral Sub App</a> for more information.</p>";
   } else if (type === 'Canceled') {
     subject = "CANCELED - Coverage Assignment: " + details.date + (details.period ? " " + displayPeriodLabel : "");
     body = "Your assigned coverage has been CANCELED. You are no longer needed for this assignment.\n\n" + detailsText + "\n\nGo to the Cathedral Sub App for more information: " + appUrl;
     htmlBody = "<p>Your assigned coverage has been CANCELED. You are no longer needed for this assignment.</p>" + detailsHtml + "<p>Go to the <a href='" + appUrl + "'>Cathedral Sub App</a> for more information.</p>";
   } else if (type === 'Modified') {
     subject = "UPDATED - Coverage Assignment: " + details.date + (details.period ? " " + displayPeriodLabel : "");
-    body = "There has been an update to your assigned coverage.\n\nUpdated Details:\n" + detailsText + attendanceText + "\n\nPlease check the Cathedral Sub App for more information: " + appUrl;
-    htmlBody = "<p>There has been an update to your assigned coverage.</p><h3>Updated Details:</h3>" + detailsHtml + attendanceHtml + "<p>Please check the <a href='" + appUrl + "'>Cathedral Sub App</a> for more information.</p>";
+    body = "There has been an update to your assigned coverage.\n\nUpdated Details:\n" + detailsText + calendarText + attendanceText + "\n\nPlease check the Cathedral Sub App for more information: " + appUrl;
+    htmlBody = "<p>There has been an update to your assigned coverage.</p><h3>Updated Details:</h3>" + detailsHtml + calendarHtml + attendanceHtml + "<p>Please check the <a href='" + appUrl + "'>Cathedral Sub App</a> for more information.</p>";
   }
 
   try {
