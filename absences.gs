@@ -537,6 +537,7 @@ function getAbsenceDetailsLocal(row, period, scheduleLookup, nameLookup) {
   var teacherName = nameLookup[teacherEmail.toLowerCase()] || teacherEmail;
   var dateVal = row[3];
   var formattedDate = dateVal;
+  var isoDate = typeof getStandardizedDateString === "function" ? getStandardizedDateString(dateVal) : "";
   if (dateVal instanceof Date) {
     formattedDate = Utilities.formatDate(dateVal, Session.getScriptTimeZone(), "MMM d, yyyy");
   } else {
@@ -547,7 +548,8 @@ function getAbsenceDetailsLocal(row, period, scheduleLookup, nameLookup) {
       // ignore
     }
   }
-  var instructions = String(row[8]);
+  var instructions = String(row[8] || "");
+  var subPlanUrl = typeof extractSubPlanUrl === "function" ? extractSubPlanUrl(row) : "";
 
   var roomStr = "No Class Assigned";
   var courseStr = "No Class Assigned";
@@ -571,10 +573,12 @@ function getAbsenceDetailsLocal(row, period, scheduleLookup, nameLookup) {
 
     teacherName: teacherName,
     date: formattedDate,
+    isoDate: isoDate,
     period: period,
     room: roomStr,
     course: courseStr,
-    instructions: instructions
+    instructions: instructions,
+    subPlanUrl: subPlanUrl
   };
 }
 

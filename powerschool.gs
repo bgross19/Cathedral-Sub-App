@@ -75,7 +75,7 @@ function fetchMasterScheduleFromAPI() {
   }
 
   // Need to get dynamic Term ID from Settings
-  const termId = settings["Term ID"] || "3503";
+  const termId = settings["Term ID"] || "3601";
 
   const endpoint = "/ws/schema/query/com.cathedral.subapp.masterschedule?pagesize=0";
 
@@ -333,7 +333,7 @@ function fetchBellScheduleFromAPI() {
     return { success: false, error: "Missing PS_URL in Settings.", updates: [] };
   }
 
-  const termId = String(settings["Term ID"] || "3503").trim();
+  const termId = String(settings["Term ID"] || "3601").trim();
   const endpoint = "/ws/schema/query/com.cathedral.subapp.bellschedule?pagesize=0";
 
   const options = {

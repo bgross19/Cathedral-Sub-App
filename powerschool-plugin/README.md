@@ -4,12 +4,12 @@ This directory contains the PowerSchool plugin package that exposes the two Powe
 
 1. **`com.cathedral.subapp.masterschedule`**
    - **Endpoint**: `POST /ws/schema/query/com.cathedral.subapp.masterschedule?pagesize=0`
-   - **Payload**: `{"target_term": "3503"}`
+   - **Payload**: `{"target_term": "3601"}`
    - **Purpose**: Pulls distinct teacher, period, room, and combined co-seated course names for the active term from `CC`, `COURSES`, `TEACHERS`, and `SECTIONS`.
 
 2. **`com.cathedral.subapp.bellschedule`**
    - **Endpoint**: `POST /ws/schema/query/com.cathedral.subapp.bellschedule?pagesize=0`
-   - **Payload**: `{"target_term": "3503"}`
+   - **Payload**: `{"target_term": "3601"}`
    - **Purpose**: Pulls all Monday–Friday calendar days for the full school year (`YEARID = FLOOR(:target_term / 100)`, `ISYEARREC = 1`) from `CALENDAR_DAY`, `TERMS`, `CYCLE_DAY`, and `BELL_SCHEDULE`, mapping each date to `Green`, `Blue`, `Gold`, or `Red` (No School).
 
 ---
