@@ -1684,6 +1684,50 @@
         });
       }
 
+      function syncBellScheduleFromPowerSchoolClient() {
+        const replaceAllEl = document.getElementById('bellScheduleReplaceAllCheckbox');
+        const replaceAll = replaceAllEl ? replaceAllEl.checked : false;
+        const modeDesc = replaceAll
+          ? "replace all existing bell schedule dates with PowerSchool's calendar"
+          : "sync and merge PowerSchool's calendar into the Bell Schedule";
+
+        showConfirm(`Are you sure you want to ${modeDesc}?`, () => {
+          const btn = document.getElementById('btnSyncBellSchedulePS');
+          const origHtml = btn ? btn.innerHTML : '';
+          if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<span>⏳</span> Syncing...';
+          }
+
+          google.script.run
+            .withSuccessHandler(res => {
+              if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = origHtml;
+              }
+              if (res && res.success) {
+                showToast(`Synced ${res.updated} bell schedule date(s) from PowerSchool.`, "success");
+                if (res.dateColors) {
+                  syncGlobalDateColors(res.dateColors);
+                  renderBellScheduleCalendar();
+                } else {
+                  loadBellScheduleSettings();
+                }
+              } else {
+                showToast("PowerSchool Sync Error: " + (res ? res.error : "Unknown error"), "error");
+              }
+            })
+            .withFailureHandler(err => {
+              if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = origHtml;
+              }
+              showToast("Connection Error: " + err.message, "error");
+            })
+            .syncBellScheduleFromPowerSchool(replaceAll, window.activeUserEmail);
+        });
+      }
+
       // === Email Queue Monitor & Operations Logic ===
       function loadEmailQueueStatus() {
         const tbody = document.getElementById('emailQueueTableBody');

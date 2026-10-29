@@ -1,0 +1,7 @@
+**/**
+!*.gs
+!*.html
+!appsscript.json
+powerschool-plugin/**
+AGENTS.md
+README.md
