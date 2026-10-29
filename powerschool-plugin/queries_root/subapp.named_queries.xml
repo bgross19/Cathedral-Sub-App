@@ -5,7 +5,7 @@
         <summary>Cathedral Sub App - Master Schedule</summary>
         <description>Returns distinct teacher/period/room/course combinations (with co-seated courses combined via LISTAGG) for a given PowerSchool term ID.</description>
         <args>
-            <arg name="target_term" required="true" type="primitive" default="3503" description="PowerSchool Term ID (e.g. 3500 or 3503)" />
+            <arg name="target_term" required="true" type="primitive" default="3601" description="PowerSchool Term ID (e.g. 3600 or 3601)" />
         </args>
         <columns>
             <column column="TEACHERS.LASTFIRST" description="Teacher Last, First Name">lastfirst</column>
@@ -59,7 +59,7 @@
         <summary>Cathedral Sub App - Bell Schedule &amp; Calendar Days</summary>
         <description>Returns all weekday calendar days (Monday-Friday) for the school year corresponding to target_term, including in-session flag, cycle day name/letter, bell schedule name, and day note.</description>
         <args>
-            <arg name="target_term" required="true" type="primitive" default="3503" description="PowerSchool Term ID (e.g. 3500 or 3503) used to derive the 2-digit Year ID" />
+            <arg name="target_term" required="true" type="primitive" default="3601" description="PowerSchool Term ID (e.g. 3600 or 3601) used to derive the 2-digit Year ID" />
         </args>
         <columns>
             <column column="CALENDAR_DAY.DATE_VALUE" description="Calendar Date formatted as YYYY-MM-DD">calendar_date</column>

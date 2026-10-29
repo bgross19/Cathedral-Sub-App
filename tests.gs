@@ -944,7 +944,7 @@ function runTests() {
           "PS_URL": "https://ps.gocathedral.com",
           "PS_CLIENT_ID": "test-id",
           "PS_CLIENT_SECRET": "test-secret",
-          "Term ID": "3503"
+          "Term ID": "3601"
         };
       };
       global.UrlFetchApp = {

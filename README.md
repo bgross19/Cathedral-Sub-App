@@ -40,7 +40,7 @@ The application requires live Master Schedule data from PowerSchool.
     *   `PS_CLIENT_ID`: Your PowerSchool Client ID.
     *   `PS_CLIENT_SECRET`: Your PowerSchool Client Secret.
     *   `PS_URL`: The base URL of your PowerSchool instance (e.g., `https://powerschool.yourschool.edu`).
-    *   `Term ID`: The current academic term ID (e.g., `3503`).
+    *   `Term ID`: The current academic term ID (e.g., `3601`).
 
 ### 3. Initial Configuration
 To start using the app, you need to populate the initial data:
