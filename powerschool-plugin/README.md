@@ -38,9 +38,9 @@ powerschool-plugin/
 2. Navigate to **System** (or **Setup**) > **System Settings** > **Plugin Management Configuration**.
 3. - **If installing for the first time**:
      - Click **Install**, select `Cathedral-Sub-App-PowerSchool-Plugin.zip`, and click **Install**.
-     - Check the **Enable/Disable** box next to **Cathedral Sub App Integration** and confirm the data access permissions.
+     - Check the **Enable/Disable** box next to **Sub Coverage App API** and confirm the data access permissions.
    - **If updating an existing plugin**:
-     - Click on your existing plugin name, click **Update**, upload `Cathedral-Sub-App-PowerSchool-Plugin.zip`, and approve the table access permissions.
+     - Click on **Sub Coverage App API**, click **Update**, upload `Cathedral-Sub-App-PowerSchool-Plugin.zip`, and approve the table access permissions.
 4. Click **Data Provider Configuration** on the plugin page to verify or copy the **Client ID** and **Client Secret** configured in your Sub App **Settings > General Settings** (`PS_URL`, `PS_CLIENT_ID`, `PS_CLIENT_SECRET`).
 
 ---
