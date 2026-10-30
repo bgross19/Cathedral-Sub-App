@@ -56,8 +56,9 @@
              checkSpecialReason();
              document.getElementById('adminDeleteBtn').classList.add('hidden');
 
-             // Uncheck all periods
+             // Uncheck all periods and clear time hints
              document.querySelectorAll('.period-cb').forEach(cb => cb.checked = false);
+             renderPeriodCheckboxTimeHints(document.getElementById('singleDatePeriodsBlock'), '.period-cb', '');
 
              if (isOnBehalf) {
                document.getElementById('onBehalfSection').classList.remove('hidden');
@@ -214,6 +215,27 @@
           document.querySelectorAll("#singleDatePeriodsBlock .period-cb").forEach(cb => {
               cb.checked = finalPeriods.includes(cb.value);
           });
+          renderPeriodCheckboxTimeHints(document.getElementById("singleDatePeriodsBlock"), ".period-cb", dateStr);
+      }
+
+      function renderPeriodCheckboxTimeHints(containerEl, cbSelector, dateStr) {
+          if (!containerEl) return;
+          containerEl.querySelectorAll(cbSelector).forEach(cb => {
+              const label = cb.closest("label");
+              if (!label) return;
+              let hintEl = label.querySelector(".period-time-hint");
+              const tr = dateStr ? getClientPeriodTimeRange(dateStr, cb.value) : null;
+              if (tr && tr.displayRange) {
+                  if (!hintEl) {
+                      hintEl = document.createElement("span");
+                      hintEl.className = "period-time-hint text-[10px] text-gray-500 font-normal ml-0.5";
+                      label.appendChild(hintEl);
+                  }
+                  hintEl.innerText = `(${tr.displayRange})`;
+              } else if (hintEl) {
+                  hintEl.remove();
+              }
+          });
       }
 
       function updatePeriodsForMultiDateBlock(dateStr, duration, blockId, badgeId) {
@@ -262,6 +284,7 @@
               blockContainer.querySelectorAll(".multi-period-cb").forEach(cb => {
                   cb.checked = finalPeriods.includes(cb.value);
               });
+              renderPeriodCheckboxTimeHints(blockContainer, ".multi-period-cb", dateStr);
           }
       }
 
@@ -347,13 +370,10 @@
         });
 
         // 2. Build Header
+        const todayDateRef = (records[0] && (records[0].formDateString || records[0].date)) || new Date().toISOString().slice(0, 10);
         let headerHtml = `<th class="p-3 border border-gray-300 min-w-[200px] sticky left-0 z-20 bg-gray-50 shadow-[1px_0_0_0_#d1d5db]">Teacher Name</th>`;
         sortedActivePeriods.forEach(p => {
-            if (String(p) === '10') {
-                headerHtml += `<th class="p-3 border border-gray-300 text-center w-64">Advisory</th>`;
-            } else {
-                headerHtml += `<th class="p-3 border border-gray-300 text-center w-64">${formatPeriodLabel(p)}</th>`;
-            }
+            headerHtml += `<th class="p-3 border border-gray-300 text-center w-64">${formatPeriodLabel(p, todayDateRef)}</th>`;
         });
         thead.innerHTML = headerHtml;
 
@@ -440,7 +460,7 @@
                     <p class="text-sm text-gray-600 font-semibold">${escapeHtml(req.teacherName)}</p>
 
                     <div class="mt-2 flex flex-col sm:flex-row flex-wrap gap-2 items-start sm:items-center">
-                       <span class="inline-block bg-orange-100 text-orange-800 text-xs font-bold px-3 py-1 rounded-full border border-orange-200">${formatPeriodLabel(req.period)}</span>
+                       <span class="inline-block bg-orange-100 text-orange-800 text-xs font-bold px-3 py-1 rounded-full border border-orange-200">${formatPeriodLabel(req.period, req.formDateString || req.date)}</span>
                        <span class="inline-block ${roomPillClass} text-xs font-bold px-3 py-1 rounded-full border">Room: ${escapeHtml(req.room)}</span>
                        <span class="inline-block ${coursePillClass} text-xs font-bold px-3 py-1 rounded-full border truncate max-w-xs">Course: ${escapeHtml(req.course)}</span>
                     </div>
@@ -719,7 +739,7 @@
                     <p class="text-sm text-gray-600 font-semibold">${escapeHtml(req.teacherName)}</p>
 
                     <div class="mt-2 flex flex-col sm:flex-row flex-wrap gap-2 items-start sm:items-center">
-                       <span class="inline-block bg-orange-100 text-orange-800 text-xs font-bold px-3 py-1 rounded-full border border-orange-200">${formatPeriodLabel(req.period)}</span>
+                       <span class="inline-block bg-orange-100 text-orange-800 text-xs font-bold px-3 py-1 rounded-full border border-orange-200">${formatPeriodLabel(req.period, req.formDateString || req.date)}</span>
                        <span class="inline-block ${roomPillClass} text-xs font-bold px-3 py-1 rounded-full border">Room: ${escapeHtml(req.room)}</span>
                        <span class="inline-block ${coursePillClass} text-xs font-bold px-3 py-1 rounded-full border truncate max-w-xs">Course: ${escapeHtml(req.course)}</span>
                     </div>
@@ -862,7 +882,7 @@
                 <div><span class="font-bold text-gray-700">Teacher:</span> ${escapeHtml(req.teacherName)}</div>
                 <div><span class="font-bold text-gray-700">Email:</span> <a href="mailto:${escapeHtml(req.teacherEmail)}" class="text-blue-600 hover:underline">${escapeHtml(req.teacherEmail)}</a></div>
                 <div><span class="font-bold text-gray-700">Date:</span> ${escapeHtml(req.date)}</div>
-                <div><span class="font-bold text-gray-700">Period:</span> ${formatPeriodValue(req.period)}</div>
+                <div><span class="font-bold text-gray-700">Period:</span> ${formatPeriodValue(req.period, req.formDateString || req.date)}</div>
                 <div><span class="font-bold text-gray-700">Room:</span> ${escapeHtml(req.room)}</div>
                 <div><span class="font-bold text-gray-700">Course:</span> ${escapeHtml(req.course)}</div>
              </div>
@@ -1016,84 +1036,6 @@
             }
           })
           .assignSubToPeriod(absenceId, period, subName, false, window.activeUserEmail);
-      }
-
-      const CLIENT_DEFAULT_PERIOD_BELL_TIMES = {
-        Green: {
-          "9":  { start: "07:00", end: "07:45" },
-          "0":  { start: "07:00", end: "07:45" },
-          "1":  { start: "07:50", end: "08:35" },
-          "10": { start: "08:40", end: "09:05" },
-          "2":  { start: "09:10", end: "09:50" },
-          "3":  { start: "09:55", end: "10:35" },
-          "4":  { start: "10:40", end: "11:20" },
-          "5":  { start: "11:25", end: "12:05" },
-          "6":  { start: "12:10", end: "12:50" },
-          "7":  { start: "12:55", end: "13:35" },
-          "8":  { start: "13:40", end: "14:20" }
-        },
-        Blue: {
-          "9":  { start: "07:00", end: "07:45" },
-          "0":  { start: "07:00", end: "07:45" },
-          "1":  { start: "07:50", end: "09:15" },
-          "10": { start: "09:20", end: "09:50" },
-          "2":  { start: "09:55", end: "11:20" },
-          "3":  { start: "11:25", end: "12:50" },
-          "4":  { start: "12:55", end: "14:20" },
-          "5":  { start: "07:50", end: "09:15" },
-          "6":  { start: "09:55", end: "11:20" },
-          "7":  { start: "11:25", end: "12:50" },
-          "8":  { start: "12:55", end: "14:20" }
-        },
-        Gold: {
-          "9":  { start: "07:00", end: "07:45" },
-          "0":  { start: "07:00", end: "07:45" },
-          "5":  { start: "07:50", end: "09:15" },
-          "10": { start: "09:20", end: "09:50" },
-          "6":  { start: "09:55", end: "11:20" },
-          "7":  { start: "11:25", end: "12:50" },
-          "8":  { start: "12:55", end: "14:20" },
-          "1":  { start: "07:50", end: "09:15" },
-          "2":  { start: "09:55", end: "11:20" },
-          "3":  { start: "11:25", end: "12:50" },
-          "4":  { start: "12:55", end: "14:20" }
-        }
-      };
-
-      function getClientPeriodTimeRange(isoDate, period) {
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(String(isoDate || ''))) return null;
-        const pKey = String(period || '').trim();
-        if (!pKey) return null;
-
-        const dayColorRaw = (typeof userDateColors === 'object' && userDateColors && userDateColors[isoDate])
-          ? String(userDateColors[isoDate]).trim()
-          : 'Green';
-        const dayColor = (dayColorRaw === 'Blue' || dayColorRaw === 'Gold' || dayColorRaw === 'Green')
-          ? dayColorRaw
-          : 'Green';
-
-        let timesMap = CLIENT_DEFAULT_PERIOD_BELL_TIMES;
-        const rawBellTimes = window.appSettings && window.appSettings['Period Bell Times'];
-        if (rawBellTimes) {
-          try {
-            const parsed = typeof rawBellTimes === 'string' ? JSON.parse(rawBellTimes) : rawBellTimes;
-            if (parsed && typeof parsed === 'object') {
-              timesMap = Object.assign({}, CLIENT_DEFAULT_PERIOD_BELL_TIMES, parsed);
-            }
-          } catch (e) {}
-        }
-
-        const colorMap = timesMap[dayColor] || CLIENT_DEFAULT_PERIOD_BELL_TIMES[dayColor] || CLIENT_DEFAULT_PERIOD_BELL_TIMES.Green;
-        const slot = colorMap[pKey] || (pKey === '0' ? colorMap['9'] : null) || CLIENT_DEFAULT_PERIOD_BELL_TIMES.Green[pKey];
-        if (!slot || !slot.start || !slot.end) return null;
-
-        const ymd = isoDate.replace(/-/g, '');
-        return {
-          startTime: slot.start,
-          endTime: slot.end,
-          startLocalStr: `${ymd}T${slot.start.replace(':', '')}00`,
-          endLocalStr: `${ymd}T${slot.end.replace(':', '')}00`
-        };
       }
 
       function getCalendarAllDayRangeStrings(dateStr, fallbackDateStr) {
@@ -1276,7 +1218,7 @@
                     <p class="text-sm text-gray-600 font-semibold">${escapeHtml(duty.teacherName)}</p>
 
                     <div class="mt-2 flex flex-col gap-1 items-start">
-                       <span class="inline-block bg-orange-100 text-orange-800 text-xs font-bold px-3 py-1 rounded-full border border-orange-200">${formatPeriodLabel(duty.period)}</span>
+                       <span class="inline-block bg-orange-100 text-orange-800 text-xs font-bold px-3 py-1 rounded-full border border-orange-200">${formatPeriodLabel(duty.period, duty.formDateString || duty.date)}</span>
                        <span class="inline-block ${roomPillClass} text-xs font-bold px-3 py-1 rounded-full border">Room: ${escapeHtml(duty.room)}</span>
                        <span class="inline-block ${coursePillClass} text-xs font-bold px-3 py-1 rounded-full border truncate max-w-xs">Course: ${escapeHtml(duty.course)}</span>
                     </div>
@@ -1320,7 +1262,7 @@
                 <div><span class="font-bold text-gray-700">Teacher:</span> ${escapeHtml(req.teacherName)}</div>
                 <div><span class="font-bold text-gray-700">Email:</span> <a href="mailto:${escapeHtml(req.teacherEmail)}" class="text-blue-600 hover:underline">${escapeHtml(req.teacherEmail)}</a></div>
                 <div><span class="font-bold text-gray-700">Date:</span> ${escapeHtml(req.date)}</div>
-                <div><span class="font-bold text-gray-700">Period:</span> ${formatPeriodValue(req.period)}</div>
+                <div><span class="font-bold text-gray-700">Period:</span> ${formatPeriodValue(req.period, req.formDateString || req.date)}</div>
                 <div><span class="font-bold text-gray-700">Room:</span> ${escapeHtml(req.room)}</div>
                 <div><span class="font-bold text-gray-700">Course:</span> ${escapeHtml(req.course)}</div>
              </div>
@@ -1411,7 +1353,7 @@
                        <span class="text-[10px] font-bold uppercase tracking-wider opacity-60 bg-white px-2 py-0.5 rounded border border-gray-300">${escapeHtml(abs.urgency)}</span>
                     </div>
                     <p class="text-sm text-gray-600 font-semibold">${escapeHtml(abs.reason)}</p>
-                    <p class="text-xs text-gray-500 mt-1">Periods: ${escapeHtml(abs.periodsWithSubs || formatPeriodsList(abs.periods))}</p>
+                    <p class="text-xs text-gray-500 mt-1">Periods: ${escapeHtml(formatPeriodsWithSubsAndTimes(abs))}</p>
                   </div>
                   <div class="flex flex-wrap gap-2 w-full sm:w-auto" onclick="event.stopPropagation()">
                     <button type="button" onclick="openMyAbsenceGoogleCalendar(${index})" title="Add Absence to Google Calendar" class="flex-1 sm:flex-none bg-white hover:bg-green-50 text-[#00843D] text-sm font-bold py-2 px-3 rounded-lg border border-green-300 transition-colors shadow-sm flex items-center justify-center gap-1.5">
@@ -1733,7 +1675,7 @@
                           const ratingStars = '★'.repeat(fb.rating) + '☆'.repeat(5 - fb.rating);
                           feedbackHtml += `
                             <div class="mb-2">
-                               <p class="text-xs font-bold text-gray-700">${formatPeriodLabel(fb.period)} - ${escapeHtml(fb.subName)}</p>
+                               <p class="text-xs font-bold text-gray-700">${formatPeriodLabel(fb.period, abs.formDateString || abs.date)} - ${escapeHtml(fb.subName)}</p>
                                <p class="text-xs text-yellow-500">${ratingStars}</p>
                                <p class="text-xs text-gray-500 italic mt-0.5">${escapeHtml(fb.note) || "No notes provided"}</p>
                             </div>
@@ -1754,7 +1696,7 @@
                          <span class="text-[10px] font-bold uppercase tracking-wider opacity-60 bg-white px-2 py-0.5 rounded border border-gray-300">${escapeHtml(abs.urgency)}</span>
                       </div>
                       <p class="text-sm text-gray-500 font-semibold">${escapeHtml(abs.reason)}</p>
-                      <p class="text-xs text-gray-400 mt-1">Periods: ${escapeHtml(abs.periodsWithSubs || formatPeriodsList(abs.periods))}</p>
+                      <p class="text-xs text-gray-400 mt-1">Periods: ${escapeHtml(formatPeriodsWithSubsAndTimes(abs))}</p>
                     </div>
                   </div>
                   ${feedbackHtml}
@@ -1810,7 +1752,7 @@
                 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 border rounded-xl shadow-sm ${bgClass} gap-4 opacity-75">
                   <div>
                     <div class="flex items-center gap-2">
-                       <p class="font-bold ${textClass} text-lg">${escapeHtml(job.date)} - ${formatPeriodLabel(job.period)}</p>
+                       <p class="font-bold ${textClass} text-lg">${escapeHtml(job.date)} - ${formatPeriodLabel(job.period, job.formDateString || job.date)}</p>
                     </div>
                     <p class="text-sm text-gray-500 font-semibold">${escapeHtml(job.teacherName)}</p>
                     <p class="text-xs text-gray-400 mt-1">Room: ${escapeHtml(job.room)} | Course: ${escapeHtml(job.course)}</p>

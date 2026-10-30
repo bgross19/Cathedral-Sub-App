@@ -813,8 +813,12 @@ function sendSubNotification(subEmail, type, details) {
   var settings = getSettings();
   var appUrl = settings["App URL"] || DEFAULT_APP_URL;
 
-  var displayPeriod = details.period ? formatPeriodDisplay(details.period) : "";
-  var displayPeriodLabel = details.period ? formatPeriodLabelDisplay(details.period) : "";
+  var pTimeObj = (details.period && (details.isoDate || details.date) && typeof getPeriodTimeRangeForDate === "function")
+    ? getPeriodTimeRangeForDate(details.isoDate || details.date, details.period, null, settings)
+    : null;
+  var pTimeSuffix = (pTimeObj && pTimeObj.displayRange) ? (" (" + pTimeObj.displayRange + ")") : "";
+  var displayPeriod = details.period ? (formatPeriodDisplay(details.period) + pTimeSuffix) : "";
+  var displayPeriodLabel = details.period ? (formatPeriodLabelDisplay(details.period) + pTimeSuffix) : "";
 
   var detailsText = "Date: " + details.date + "\n";
   if (details.period) detailsText += "Period: " + displayPeriod + "\n";

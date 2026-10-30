@@ -145,9 +145,10 @@
         const sortedActivePeriods = Array.from(activePeriods).sort((a, b) => a - b);
 
         // 2. Build Header
+        const glanceDateRO = (records[0] && (records[0].formDateString || records[0].date)) || (document.getElementById('atAGlanceDate') && document.getElementById('atAGlanceDate').value) || '';
         let headerHtml = `<th class="p-3 border border-gray-300 min-w-[200px] sticky left-0 z-20 bg-gray-50 shadow-[1px_0_0_0_#d1d5db]">Teacher Name</th>`;
         sortedActivePeriods.forEach(p => {
-            headerHtml += `<th class="p-3 border border-gray-300 text-center w-32">${formatPeriodLabel(p)}</th>`;
+            headerHtml += `<th class="p-3 border border-gray-300 text-center w-32">${formatPeriodLabel(p, glanceDateRO)}</th>`;
         });
         thead.innerHTML = headerHtml;
 
@@ -229,9 +230,10 @@
         const sortedActivePeriods = Array.from(activePeriods).sort((a, b) => a - b);
 
         // 2. Build Header
+        const glanceDateRW = (records[0] && (records[0].formDateString || records[0].date)) || (document.getElementById('atAGlanceDate') && document.getElementById('atAGlanceDate').value) || '';
         let headerHtml = `<th class="p-3 border border-gray-300 min-w-[200px] sticky left-0 z-20 bg-gray-50 shadow-[1px_0_0_0_#d1d5db]">Teacher Name</th>`;
         sortedActivePeriods.forEach(p => {
-            headerHtml += `<th class="p-3 border border-gray-300 text-center w-64">${formatPeriodLabel(p)}</th>`;
+            headerHtml += `<th class="p-3 border border-gray-300 text-center w-64">${formatPeriodLabel(p, glanceDateRW)}</th>`;
         });
         thead.innerHTML = headerHtml;
 
@@ -513,7 +515,7 @@
                     <div class="flex justify-between items-start mb-2">
                         <div>
                             <div class="font-bold text-[#002147]"><a href="mailto:${escapeHtml(req.teacherEmail)}" class="hover:underline text-blue-600" onclick="event.stopPropagation()">${escapeHtml(req.teacherName)}</a></div>
-                            <div class="text-sm text-gray-500">${escapeHtml(req.date)} &bull; <span class="font-bold text-gray-700">${formatPeriodLabel(req.period)}</span></div>
+                            <div class="text-sm text-gray-500">${escapeHtml(req.date)} &bull; <span class="font-bold text-gray-700">${formatPeriodLabel(req.period, req.formDateString || req.date)}</span></div>
                         </div>
                     </div>
                     <div class="grid grid-cols-2 gap-2 text-sm text-gray-600 mb-2">
@@ -532,7 +534,7 @@
                 <!-- Desktop Table View -->
                 <td class="p-3 text-sm text-gray-800 font-medium hidden sm:table-cell"><a href="mailto:${escapeHtml(req.teacherEmail)}" class="hover:underline text-blue-600" onclick="event.stopPropagation()">${escapeHtml(req.teacherName)}</a></td>
                 <td class="p-3 text-sm text-gray-600 hidden sm:table-cell">${escapeHtml(req.date)}</td>
-                <td class="p-3 text-sm font-bold text-gray-700 hidden sm:table-cell">${formatPeriodLabel(req.period)}</td>
+                <td class="p-3 text-sm font-bold text-gray-700 hidden sm:table-cell">${formatPeriodLabel(req.period, req.formDateString || req.date)}</td>
                 <td class="p-3 text-sm text-gray-600 hidden sm:table-cell">${courseHtml}</td>
                 <td class="p-3 text-sm text-gray-600 hidden sm:table-cell">${roomHtml}</td>
                 <td class="p-3 text-sm hidden sm:table-cell" onclick="event.stopPropagation()">${subHtmlDesktop}</td>
@@ -580,7 +582,7 @@
                         <div><span class="font-semibold">Reason:</span> ${escapeHtml(req.reason)}</div>
                         <div><span class="font-semibold">Duration:</span> ${escapeHtml(req.duration)}</div>
                     </div>
-                    <div class="text-sm text-gray-600"><span class="font-semibold">Periods:</span> ${escapeHtml(formatPeriodsList(req.periodsString))}</div>
+                    <div class="text-sm text-gray-600"><span class="font-semibold">Periods:</span> ${escapeHtml(formatPeriodsList(req.periodsString, req.formDateString || req.date))}</div>
                 </td>
 
                 <!-- Desktop Table View -->
@@ -588,7 +590,7 @@
                 <td class="p-3 text-sm text-gray-600 hidden sm:table-cell">${escapeHtml(req.date)}</td>
                 <td class="p-3 text-sm text-gray-600 hidden sm:table-cell">${escapeHtml(req.reason)}</td>
                 <td class="p-3 text-sm text-gray-600 hidden sm:table-cell">${escapeHtml(req.duration)}</td>
-                <td class="p-3 text-sm text-gray-600 font-bold hidden sm:table-cell">${escapeHtml(formatPeriodsList(req.periodsString))}</td>
+                <td class="p-3 text-sm text-gray-600 font-bold hidden sm:table-cell">${escapeHtml(formatPeriodsList(req.periodsString, req.formDateString || req.date))}</td>
               </tr>
             `;
           });
@@ -613,7 +615,7 @@
                 <div><span class="font-bold text-gray-700">Teacher:</span> ${escapeHtml(req.teacherName)}</div>
                 <div><span class="font-bold text-gray-700">Email:</span> <a href="mailto:${escapeHtml(req.teacherEmail)}" class="text-blue-600 hover:underline">${escapeHtml(req.teacherEmail)}</a></div>
                 <div><span class="font-bold text-gray-700">Date:</span> ${escapeHtml(req.date)}</div>
-                <div><span class="font-bold text-gray-700">Period:</span> ${formatPeriodValue(req.period)}</div>
+                <div><span class="font-bold text-gray-700">Period:</span> ${formatPeriodValue(req.period, req.formDateString || req.date)}</div>
                 <div><span class="font-bold text-gray-700">Room:</span> ${escapeHtml(req.room)}</div>
                 <div><span class="font-bold text-gray-700">Course:</span> ${escapeHtml(req.course)}</div>
              </div>
@@ -1038,10 +1040,11 @@ function renderSuggestSubModal(suggestions) {
     });
 
     // Build thead
+    const suggestDateRef = (activeRequests[0] && (activeRequests[0].formDateString || activeRequests[0].date)) || '';
     headerHtml += `<tr>`;
     headerHtml += `<th class="p-3 text-sm font-bold text-gray-700 sticky left-0 bg-gray-50 z-10 border-r border-gray-200">Teacher</th>`;
     periods.forEach(p => {
-        headerHtml += `<th class="p-3 text-sm font-bold text-gray-700 min-w-[200px]">${formatPeriodLabel(p)}</th>`;
+        headerHtml += `<th class="p-3 text-sm font-bold text-gray-700 min-w-[200px]">${formatPeriodLabel(p, suggestDateRef)}</th>`;
     });
     headerHtml += `</tr>`;
     thead.innerHTML = headerHtml;
