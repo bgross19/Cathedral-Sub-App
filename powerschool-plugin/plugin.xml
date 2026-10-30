@@ -43,7 +43,7 @@
         <field table="BELL_SCHEDULE_ITEMS" field="END_TIME" access="ViewOnly" />
         <field table="PERIOD" field="ID" access="ViewOnly" />
         <field table="PERIOD" field="SCHOOLID" access="ViewOnly" />
-        <field table="PERIOD" field="YEARID" access="ViewOnly" />
+        <field table="PERIOD" field="YEAR_ID" access="ViewOnly" />
         <field table="PERIOD" field="PERIOD_NUMBER" access="ViewOnly" />
         <field table="PERIOD" field="ABBREVIATION" access="ViewOnly" />
         <field table="PERIOD" field="NAME" access="ViewOnly" />
