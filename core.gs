@@ -572,9 +572,15 @@ function getPeriodTimeRangeForDate(dateStr, period, optionalDateColors, optional
   var startDateObj = new Date(yr, mo - 1, dy, sh, sm, 0);
   var endDateObj = new Date(yr, mo - 1, dy, eh, em, 0);
 
+  var fmt12 = function(h, m) {
+    var h12 = h === 0 ? 12 : (h > 12 ? h - 12 : h);
+    return String(h12) + ":" + pad2(m);
+  };
+
   return {
     startTime: pad2(sh) + ":" + pad2(sm),
     endTime: pad2(eh) + ":" + pad2(em),
+    displayRange: fmt12(sh, sm) + "-" + fmt12(eh, em),
     startLocalStr: startLocalStr,
     endLocalStr: endLocalStr,
     startDateObj: startDateObj,

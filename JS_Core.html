@@ -342,19 +342,158 @@
           .replace(/'/g, '&#39;');
       }
 
-      function formatPeriodLabel(period) {
-        const p = String(period).trim().toLowerCase();
-        if (p === '10' || p === 'advisory' || p === 'a') return 'Advisory';
-        return `Period ${escapeHtml(period)}`;
+      const CLIENT_DEFAULT_PERIOD_BELL_TIMES = {
+        Green: {
+          "9":  { start: "07:00", end: "07:45" },
+          "0":  { start: "07:00", end: "07:45" },
+          "1":  { start: "07:50", end: "08:35" },
+          "10": { start: "08:40", end: "09:05" },
+          "2":  { start: "09:10", end: "09:50" },
+          "3":  { start: "09:55", end: "10:35" },
+          "4":  { start: "10:40", end: "11:20" },
+          "5":  { start: "11:25", end: "12:05" },
+          "6":  { start: "12:10", end: "12:50" },
+          "7":  { start: "12:55", end: "13:35" },
+          "8":  { start: "13:40", end: "14:20" }
+        },
+        Blue: {
+          "9":  { start: "07:00", end: "07:45" },
+          "0":  { start: "07:00", end: "07:45" },
+          "1":  { start: "07:50", end: "09:15" },
+          "10": { start: "09:20", end: "09:50" },
+          "2":  { start: "09:55", end: "11:20" },
+          "3":  { start: "11:25", end: "12:50" },
+          "4":  { start: "12:55", end: "14:20" },
+          "5":  { start: "07:50", end: "09:15" },
+          "6":  { start: "09:55", end: "11:20" },
+          "7":  { start: "11:25", end: "12:50" },
+          "8":  { start: "12:55", end: "14:20" }
+        },
+        Gold: {
+          "9":  { start: "07:00", end: "07:45" },
+          "0":  { start: "07:00", end: "07:45" },
+          "5":  { start: "07:50", end: "09:15" },
+          "10": { start: "09:20", end: "09:50" },
+          "6":  { start: "09:55", end: "11:20" },
+          "7":  { start: "11:25", end: "12:50" },
+          "8":  { start: "12:55", end: "14:20" },
+          "1":  { start: "07:50", end: "09:15" },
+          "2":  { start: "09:55", end: "11:20" },
+          "3":  { start: "11:25", end: "12:50" },
+          "4":  { start: "12:55", end: "14:20" }
+        }
+      };
+
+      function normalizeClientIsoDate(dateStr) {
+        if (!dateStr) return '';
+        const raw = String(dateStr).trim();
+        if (/^\d{4}-\d{2}-\d{2}/.test(raw)) {
+          return raw.substring(0, 10);
+        }
+        const parsed = new Date(raw);
+        if (!isNaN(parsed.getTime())) {
+          const yyyy = parsed.getFullYear();
+          const mm = String(parsed.getMonth() + 1).padStart(2, '0');
+          const dd = String(parsed.getDate()).padStart(2, '0');
+          return `${yyyy}-${mm}-${dd}`;
+        }
+        return '';
       }
 
-      function formatPeriodValue(period) {
-        const p = String(period).trim().toLowerCase();
-        if (p === '10' || p === 'advisory' || p === 'a') return 'Advisory';
-        return escapeHtml(period);
+      function formatClock12h(hhmm) {
+        const m = String(hhmm || '').trim().match(/^(\d{1,2}):(\d{2})$/);
+        if (!m) return String(hhmm || '');
+        let hr = parseInt(m[1], 10);
+        const min = m[2];
+        if (hr === 0) hr = 12;
+        else if (hr > 12) hr -= 12;
+        return `${hr}:${min}`;
       }
 
-      function formatPeriodsList(periodsStr) {
+      function getClientPeriodTimeRange(dateStr, period) {
+        const isoDate = normalizeClientIsoDate(dateStr);
+        if (!isoDate) return null;
+        const pRaw = String(period !== undefined && period !== null ? period : '').trim().toLowerCase();
+        if (!pRaw) return null;
+        const pKey = (pRaw === 'advisory' || pRaw === 'adv' || pRaw === 'a') ? '10' : pRaw;
+
+        const colorDict = (typeof userDateColors === 'object' && userDateColors && Object.keys(userDateColors).length > 0)
+          ? userDateColors
+          : (typeof globalDateColors === 'object' && globalDateColors ? globalDateColors : {});
+        const dayColorRaw = colorDict[isoDate] ? String(colorDict[isoDate]).trim() : 'Green';
+        const dayColor = (dayColorRaw === 'Blue' || dayColorRaw === 'Gold' || dayColorRaw === 'Green')
+          ? dayColorRaw
+          : 'Green';
+
+        let timesMap = CLIENT_DEFAULT_PERIOD_BELL_TIMES;
+        const rawBellTimes = window.appSettings && window.appSettings['Period Bell Times'];
+        if (rawBellTimes) {
+          try {
+            const parsed = typeof rawBellTimes === 'string' ? JSON.parse(rawBellTimes) : rawBellTimes;
+            if (parsed && typeof parsed === 'object') {
+              timesMap = Object.assign({}, CLIENT_DEFAULT_PERIOD_BELL_TIMES, parsed);
+            }
+          } catch (e) {}
+        }
+
+        let specificScheduleName = '';
+        const rawDateScheduleNames = window.appSettings && window.appSettings['Date Bell Schedule Names'];
+        if (rawDateScheduleNames) {
+          try {
+            const parsedNames = typeof rawDateScheduleNames === 'string' ? JSON.parse(rawDateScheduleNames) : rawDateScheduleNames;
+            if (parsedNames && parsedNames[isoDate]) {
+              specificScheduleName = String(parsedNames[isoDate]).trim();
+            }
+          } catch (e2) {}
+        }
+
+        const scheduleBucket = (specificScheduleName && timesMap[specificScheduleName])
+          ? timesMap[specificScheduleName]
+          : (timesMap[dayColor] || CLIENT_DEFAULT_PERIOD_BELL_TIMES[dayColor] || CLIENT_DEFAULT_PERIOD_BELL_TIMES.Green);
+
+        const slot = scheduleBucket[pKey]
+          || (pKey === '0' ? scheduleBucket['9'] : null)
+          || (pKey === '9' ? scheduleBucket['0'] : null)
+          || (timesMap[dayColor] && timesMap[dayColor][pKey])
+          || CLIENT_DEFAULT_PERIOD_BELL_TIMES.Green[pKey];
+        if (!slot || !slot.start || !slot.end) return null;
+
+        const ymd = isoDate.replace(/-/g, '');
+        const displayRange = `${formatClock12h(slot.start)}-${formatClock12h(slot.end)}`;
+        return {
+          startTime: slot.start,
+          endTime: slot.end,
+          displayRange: displayRange,
+          startLocalStr: `${ymd}T${slot.start.replace(':', '')}00`,
+          endLocalStr: `${ymd}T${slot.end.replace(':', '')}00`
+        };
+      }
+
+      function formatPeriodLabel(period, dateStr) {
+        const p = String(period).trim().toLowerCase();
+        const baseLabel = (p === '10' || p === 'advisory' || p === 'a') ? 'Advisory' : `Period ${escapeHtml(period)}`;
+        if (dateStr) {
+          const tr = getClientPeriodTimeRange(dateStr, period);
+          if (tr && tr.displayRange) {
+            return `${baseLabel} (${escapeHtml(tr.displayRange)})`;
+          }
+        }
+        return baseLabel;
+      }
+
+      function formatPeriodValue(period, dateStr) {
+        const p = String(period).trim().toLowerCase();
+        const baseVal = (p === '10' || p === 'advisory' || p === 'a') ? 'Advisory' : escapeHtml(period);
+        if (dateStr) {
+          const tr = getClientPeriodTimeRange(dateStr, period);
+          if (tr && tr.displayRange) {
+            return `${baseVal} (${escapeHtml(tr.displayRange)})`;
+          }
+        }
+        return baseVal;
+      }
+
+      function formatPeriodsList(periodsStr, dateStr) {
         if (!periodsStr) return '';
         return String(periodsStr)
           .split(',')
@@ -362,7 +501,34 @@
           .filter(p => p !== '')
           .map(p => {
             const lower = p.toLowerCase();
-            return (lower === '10' || lower === 'advisory' || lower === 'a') ? 'Advisory' : p;
+            const label = (lower === '10' || lower === 'advisory' || lower === 'a') ? 'Advisory' : p;
+            if (dateStr) {
+              const tr = getClientPeriodTimeRange(dateStr, p);
+              if (tr && tr.displayRange) {
+                return `${label} (${tr.displayRange})`;
+              }
+            }
+            return label;
+          })
+          .join(', ');
+      }
+
+      function formatPeriodsWithSubsAndTimes(abs) {
+        if (!abs) return '';
+        const dateStr = abs.formDateString || abs.rawDateString || abs.date || '';
+        if (!abs.periodsWithSubs) {
+          return formatPeriodsList(abs.periods, dateStr);
+        }
+        return String(abs.periodsWithSubs)
+          .split(',')
+          .map(part => {
+            const trimmed = part.trim();
+            const m = trimmed.match(/^(Advisory|\d+)\s*(\(.*\))$/i);
+            if (!m) return trimmed;
+            const pToken = m[1];
+            const subSuffix = m[2];
+            const tr = dateStr ? getClientPeriodTimeRange(dateStr, pToken) : null;
+            return tr && tr.displayRange ? `${pToken} [${tr.displayRange}] ${subSuffix}` : trimmed;
           })
           .join(', ');
       }
@@ -615,18 +781,18 @@ const data = payload.userData;
                document.getElementById('absReason').innerHTML = `<option value="Personal" data-hr-required="false" data-principal-required="false">Personal</option>`;
             }
 
-            // Render common parts
-            renderMyAbsences(payload.myAbsences);
-            renderMyPastAbsences(payload.myPastAbsences);
-            renderMySubDuties(payload.mySubDuties);
-            renderMyPastSubDuties(payload.myPastSubDuties || []);
-            renderTodaysAbsences(payload.todaysAbsences);
-
             globalDateColors = payload.dateColors || {};
             window.appSettings = payload.settings || {};
             userDateColors = payload.dateColors || {};
             userTeacherSchedule = data.teacherSchedule || [];
             userTeacherScheduleByTerm = data.teacherScheduleByTerm || {};
+
+            // Render common parts (after dateColors and appSettings are initialized so period times resolve)
+            renderMyAbsences(payload.myAbsences);
+            renderMyPastAbsences(payload.myPastAbsences);
+            renderMySubDuties(payload.mySubDuties);
+            renderMyPastSubDuties(payload.myPastSubDuties || []);
+            renderTodaysAbsences(payload.todaysAbsences);
 
             let lowerRole = data.role.toLowerCase();
 

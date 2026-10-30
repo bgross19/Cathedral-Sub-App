@@ -537,7 +537,7 @@
                             <tr class="hover:bg-gray-100 transition-colors">
                                 <td class="py-2 pr-2 whitespace-nowrap">${escapeHtml(d.date)}</td>
                                 <td class="py-2 pr-2 truncate max-w-[150px]" title="${escapeHtml(d.teacher)}">${escapeHtml(d.teacher)}</td>
-                                <td class="py-2 pr-2">Per ${escapeHtml(d.period)}: ${escapeHtml(d.course)}</td>
+                                <td class="py-2 pr-2">${formatPeriodLabel(d.period, d.date)}: ${escapeHtml(d.course)}</td>
                                 <td class="py-2 pr-2 whitespace-nowrap">
                                     <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${
                                         d.payType === 'Duty' ? 'bg-gray-200 text-gray-700' :
