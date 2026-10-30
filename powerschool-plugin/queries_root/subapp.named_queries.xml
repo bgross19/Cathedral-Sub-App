@@ -124,7 +124,7 @@
                 ON bs.id = bsi.bell_schedule_id
             JOIN period p
                 ON p.id = bsi.period_id
-            WHERE p.yearid = FLOOR(TO_NUMBER(:target_term) / 100)
+            WHERE p.year_id = FLOOR(TO_NUMBER(:target_term) / 100)
             ORDER BY bs.name ASC, bsi.start_time ASC
         ]]></sql>
     </query>
