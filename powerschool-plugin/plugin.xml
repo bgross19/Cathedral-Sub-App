@@ -2,7 +2,7 @@
 <plugin xmlns="http://plugin.powerschool.pearson.com"
         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
         xsi:schemaLocation="http://plugin.powerschool.pearson.com plugin.xsd"
-        name="Cathedral Sub App Integration"
+        name="Sub Coverage App API"
         version="2.1.0"
         description="Provides Master Schedule (multi-term), Bell Schedule (Calendar), and Period Bell Times PowerQueries for the Cathedral High School Substitute Management System.">
     <oauth></oauth>
