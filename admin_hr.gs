@@ -183,7 +183,7 @@ function getRosterDataCached(ss) {
     var rRow = rawRosterData[rIdx];
     if (!rRow) continue;
     if (rIdx === 0 || (rRow[0] && String(rRow[0]).trim() !== "") || (rRow[1] && String(rRow[1]).trim() !== "")) {
-      rosterData.push(rRow.slice(0, 10));
+      rosterData.push(rRow.slice(0, 12));
     }
   }
 

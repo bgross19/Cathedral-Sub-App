@@ -98,13 +98,67 @@ function getInitialPayload(clientEmail, requestedComponents) {
     // 1. Fetch required sheets (using cached roster data)
     var rosterData = getRosterDataCached(ss);
     var settings = getSettings(ss);
+    var activeTermId = String(settings["Term ID"] || "3601").trim();
+
+    var sortPeriodList = function(arr) {
+      arr.sort(function(a, b) {
+        var numA = parseInt(a, 10);
+        var numB = parseInt(b, 10);
+        if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+        if (a < b) return -1;
+        if (a > b) return 1;
+        return 0;
+      });
+      return arr;
+    };
+
+    // Check if Staff Roster has pre-computed TEACHING_PERIODS (Col K / index 10) or SCHEDULE_BY_TERM (Col L / index 11)
+    var rosterHasPrecomputedSchedules = false;
+    var rosterSchedulesByEmail = {};
+    var rosterSchedulesByTermByEmail = {};
+    if (rosterData && rosterData.length > 0) {
+      var rHeaders = rosterData[0] || [];
+      if (String(rHeaders[10] || "").trim().toUpperCase() === "TEACHING_PERIODS" || String(rHeaders[11] || "").trim().toUpperCase() === "SCHEDULE_BY_TERM") {
+        rosterHasPrecomputedSchedules = true;
+      }
+      for (var rIdx = 1; rIdx < rosterData.length; rIdx++) {
+        var rRow = rosterData[rIdx];
+        if (!rRow || rRow.length < 2) continue;
+        var rEmail = String(rRow[1] || "").toLowerCase().trim();
+        if (!rEmail) continue;
+        var rawTeachingPeriods = rRow.length > 10 ? String(rRow[10] || "").trim() : "";
+        var rawScheduleByTerm = rRow.length > 11 ? String(rRow[11] || "").trim() : "";
+        if (rawTeachingPeriods || rawScheduleByTerm) {
+          rosterHasPrecomputedSchedules = true;
+          var byTermMap = {};
+          if (rawScheduleByTerm && rawScheduleByTerm.indexOf("{") === 0) {
+            try {
+              var parsedMap = JSON.parse(rawScheduleByTerm);
+              if (parsedMap && typeof parsedMap === "object") {
+                byTermMap = parsedMap;
+              }
+            } catch (e) {}
+          }
+          rosterSchedulesByTermByEmail[rEmail] = byTermMap;
+
+          // Resolve active-term schedule first from byTermMap[activeTermId], falling back to TEACHING_PERIODS column
+          var activeList = [];
+          if (byTermMap[activeTermId] && Array.isArray(byTermMap[activeTermId])) {
+            activeList = byTermMap[activeTermId].slice();
+          } else if (rawTeachingPeriods) {
+            activeList = rawTeachingPeriods.split(",").map(function(p) { return getScheduleJoinPeriod(p.trim()); }).filter(function(p) { return p !== ""; });
+          }
+          rosterSchedulesByEmail[rEmail] = sortPeriodList(activeList);
+        }
+      }
+    }
 
     var needAbsenceData = wantAll || want("myAbsences") || want("myPastAbsences") || want("mySubDuties") || want("myPastSubDuties") || want("todaysAbsences") || want("quickCover") || want("adminData") || want("hrData");
     var v2Compat = (needAbsenceData && typeof readV2AbsenceDataCompat === "function") ? readV2AbsenceDataCompat(ss) : null;
     var mainSheet = (needAbsenceData && !v2Compat) ? getSheetOrThrow(ss, "Absence Requests") : null;
     var absenceData = v2Compat ? v2Compat.absenceData : (mainSheet ? mainSheet.getDataRange().getValues() : []);
 
-    var needScheduleData = wantAll || want("userData") || want("staffList") || (!v2Compat && (want("mySubDuties") || want("myPastSubDuties") || want("todaysAbsences") || want("quickCover") || want("adminData") || want("hrData")));
+    var needScheduleData = (!rosterHasPrecomputedSchedules && (wantAll || want("userData") || want("staffList"))) || (!v2Compat && (want("mySubDuties") || want("myPastSubDuties") || want("todaysAbsences") || want("quickCover") || want("adminData") || want("hrData")));
     var scheduleData = needScheduleData ? getMasterScheduleData() : [];
 
     var needPayPeriods = want("hrData");
@@ -117,7 +171,6 @@ function getInitialPayload(clientEmail, requestedComponents) {
 
 
     // --- Build lookups ---
-    var activeTermId = String(settings["Term ID"] || "3601").trim();
     var scheduleLookup = buildScheduleLookup(scheduleData, activeTermId);
     if (v2Compat && v2Compat.snapshottedScheduleLookup) {
       for (var snapKey in v2Compat.snapshottedScheduleLookup) {
@@ -148,22 +201,10 @@ function getInitialPayload(clientEmail, requestedComponents) {
     var userName = String(name).trim().toLowerCase();
     var lowerRole = String(role).toLowerCase();
 
-    var sortPeriodList = function(arr) {
-      arr.sort(function(a, b) {
-        var numA = parseInt(a, 10);
-        var numB = parseInt(b, 10);
-        if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
-        if (a < b) return -1;
-        if (a > b) return 1;
-        return 0;
-      });
-      return arr;
-    };
-
     // Compute teacherSchedule (default active term) and teacherScheduleByTerm (all terms)
-    var teacherSchedule = [];
-    var teacherScheduleByTerm = {};
-    if (scheduleData && scheduleData.length > 0) {
+    var teacherSchedule = rosterSchedulesByEmail[targetEmail] ? rosterSchedulesByEmail[targetEmail].slice() : [];
+    var teacherScheduleByTerm = rosterSchedulesByTermByEmail[targetEmail] ? rosterSchedulesByTermByEmail[targetEmail] : {};
+    if (!rosterHasPrecomputedSchedules && scheduleData && scheduleData.length > 0) {
       var headers = scheduleData[0];
       var emailIdx = headers.indexOf("EMAIL_ADDR");
       var periodIdx = headers.indexOf("PERIOD");
@@ -562,10 +603,10 @@ function getInitialPayload(clientEmail, requestedComponents) {
       var staffList = [];
       var allSubAvail = getAllSubstituteAvailability();
 
-      // Pre-calculate all staff schedules (both active term and by term)
-      var allSchedules = {};
-      var allSchedulesByTerm = {};
-      if (scheduleData && scheduleData.length > 0) {
+      // Pre-calculate all staff schedules (using Staff Roster pre-computed schedules when available, or Master Schedule fallback)
+      var allSchedules = rosterHasPrecomputedSchedules ? rosterSchedulesByEmail : {};
+      var allSchedulesByTerm = rosterHasPrecomputedSchedules ? rosterSchedulesByTermByEmail : {};
+      if (!rosterHasPrecomputedSchedules && scheduleData && scheduleData.length > 0) {
         var hdrs = scheduleData[0];
         var emlIdx = hdrs.indexOf("EMAIL_ADDR");
         var prIdx = hdrs.indexOf("PERIOD");

@@ -1268,6 +1268,47 @@ function runTests() {
       var rehydratedSched = _readMasterScheduleFromScriptCache(mockChunkCache);
       assert(rehydratedSched && rehydratedSched.length === 1201 && rehydratedSched[1200][1] === "teacher1199@gocathedral.com", "Expected multi-chunk Master Schedule to rehydrate all 1201 rows intact");
 
+      // Test 12: syncMasterScheduleToStaffRoster automatically writes TEACHING_PERIODS (Col K) and SCHEDULE_BY_TERM (Col L)
+      var mockSyncRosterRows = [
+        ["LASTFIRST", "EMAIL_ADDR", "Role", "DUTY", "DEPARTMENT", "HOMEBASE", "BUILDING", "ID", "TEACHERNUMBER", "CHS_CELL_PHONE"],
+        ["Barth, Adam", "abarth@gocathedral.com", "Teacher", "", "Science", "4304", "Kelly Hall", "3566", "90250", ""]
+      ];
+      var writtenKLBlock = null;
+      var appendedNewTeacherRows = null;
+      var mockSyncSS = {
+        getSheetByName: function(name) {
+          if (name === "Staff Roster") {
+            return {
+              getDataRange: function() { return { getValues: function() { return mockSyncRosterRows; } }; },
+              getLastRow: function() { return mockSyncRosterRows.length; },
+              getRange: function(r, c, numR, numC) {
+                return {
+                  setValues: function(vals) {
+                    if (c === 11) writtenKLBlock = vals;
+                    if (c === 1 && r > 1) appendedNewTeacherRows = vals;
+                  }
+                };
+              }
+            };
+          }
+          return null;
+        }
+      };
+      var sampleSyncSchedData = [
+        ["LASTFIRST", "EMAIL_ADDR", "PERIOD", "ROOM", "COURSE_NAMES", "TERM", "EMAIL_PERIOD_JOIN"],
+        ["Barth, Adam", "abarth@gocathedral.com", "3", "4304", "BIOLOGY", "3601", "abarth@gocathedral.com-3"],
+        ["Barth, Adam", "abarth@gocathedral.com", "5", "4304", "BIOLOGY", "3601", "abarth@gocathedral.com-5"],
+        ["Barth, Adam", "abarth@gocathedral.com", "2", "4304", "BIOLOGY S2", "3603", "abarth@gocathedral.com-2"],
+        ["New, Teacher", "newteacher@gocathedral.com", "1", "1101", "ART", "3601", "newteacher@gocathedral.com-1"],
+        ["New, Teacher", "newteacher@gocathedral.com", "4", "1101", "ART S2", "3603", "newteacher@gocathedral.com-4"]
+      ];
+      syncMasterScheduleToStaffRoster(sampleSyncSchedData, mockSyncSS);
+      assert(writtenKLBlock && writtenKLBlock.length === 2, "Expected K:L block to be written for header + 1 existing roster row");
+      assert(writtenKLBlock[0][0] === "TEACHING_PERIODS" && writtenKLBlock[0][1] === "SCHEDULE_BY_TERM", "Expected K1:L1 headers to be TEACHING_PERIODS and SCHEDULE_BY_TERM");
+      assert(writtenKLBlock[1][0] === "3, 5", "Expected active term (3601) TEACHING_PERIODS for Adam Barth to be '3, 5'");
+      assert(writtenKLBlock[1][1] === '{"3601":["3","5"],"3603":["2"]}', "Expected SCHEDULE_BY_TERM JSON to store both Semester 1 (3601) and Semester 2 (3603) periods");
+      assert(appendedNewTeacherRows && appendedNewTeacherRows.length === 1 && appendedNewTeacherRows[0][10] === "1" && appendedNewTeacherRows[0][11] === '{"3601":["1"],"3603":["4"]}', "Expected newly discovered teacher to be appended with Col K and Col L populated");
+
       getSettings = origGetSettings;
       if (origUrlFetchApp !== undefined) global.UrlFetchApp = origUrlFetchApp;
 

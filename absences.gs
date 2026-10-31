@@ -1096,8 +1096,7 @@ function assignSubToPeriod(absenceId, period, subName, forceOverride, clientEmai
                  }
              }
            } else {
-             // For teachers/others, check master schedule for the date's semester term
-             var scheduleData = getMasterScheduleData();
+             // For teachers/others, check pre-computed schedule on Staff Roster first, falling back to Master Schedule Cache
              var teacherSchedule = [];
              var targetTermForDate = (typeof resolveTermIdForDate === "function")
                ? String(resolveTermIdForDate(targetDateStr, settingsForPerm) || "").trim()
@@ -1105,25 +1104,56 @@ function assignSubToPeriod(absenceId, period, subName, forceOverride, clientEmai
              var fullYearTermForDate = (!isNaN(parseInt(targetTermForDate, 10)) && parseInt(targetTermForDate, 10) >= 100)
                ? String(Math.floor(parseInt(targetTermForDate, 10) / 100) * 100)
                : "";
-             if (scheduleData && scheduleData.length > 0) {
-               var headers = scheduleData[0];
-               var emailIdx = headers.indexOf("EMAIL_ADDR");
-               var periodIdx = headers.indexOf("PERIOD");
-               var termColIdx = headers.indexOf("TERM");
-               if (emailIdx > -1 && periodIdx > -1) {
-                 for (var s = 1; s < scheduleData.length; s++) {
-                   if (!scheduleData[s] || scheduleData[s].length <= Math.max(emailIdx, periodIdx)) continue;
-                   if (String(scheduleData[s][emailIdx]).toLowerCase().trim() === newSubEmail) {
-                     var rowTermVal = (termColIdx > -1 && scheduleData[s][termColIdx] !== undefined)
-                       ? String(scheduleData[s][termColIdx]).trim()
-                       : "";
-                     if (rowTermVal && targetTermForDate && rowTermVal !== targetTermForDate && rowTermVal !== fullYearTermForDate) {
-                       continue;
+
+             var foundRosterSchedule = false;
+             for (var rSchedIdx = 1; rSchedIdx < rosterData.length; rSchedIdx++) {
+               if (rosterData[rSchedIdx] && String(rosterData[rSchedIdx][1] || "").toLowerCase().trim() === newSubEmail) {
+                 var rawSchedByTerm = rosterData[rSchedIdx].length > 11 ? String(rosterData[rSchedIdx][11] || "").trim() : "";
+                 var rawTeachingPds = rosterData[rSchedIdx].length > 10 ? String(rosterData[rSchedIdx][10] || "").trim() : "";
+                 if (rawSchedByTerm && rawSchedByTerm.indexOf("{") === 0) {
+                   try {
+                     var parsedTermMap = JSON.parse(rawSchedByTerm);
+                     if (parsedTermMap && typeof parsedTermMap === "object") {
+                       foundRosterSchedule = true;
+                       var termPeriods = (targetTermForDate && parsedTermMap[targetTermForDate])
+                         ? parsedTermMap[targetTermForDate]
+                         : (fullYearTermForDate && parsedTermMap[fullYearTermForDate] ? parsedTermMap[fullYearTermForDate] : []);
+                       if (Array.isArray(termPeriods)) {
+                         teacherSchedule = termPeriods.map(function(tp) { return getScheduleJoinPeriod(tp); });
+                       }
                      }
-                     var pVal = String(scheduleData[s][periodIdx]).trim();
-                     var joinP = getScheduleJoinPeriod(pVal);
-                     if (teacherSchedule.indexOf(joinP) === -1) {
-                       teacherSchedule.push(joinP);
+                   } catch (e) {}
+                 }
+                 if (!foundRosterSchedule && rawTeachingPds) {
+                   foundRosterSchedule = true;
+                   teacherSchedule = rawTeachingPds.split(",").map(function(tp) { return getScheduleJoinPeriod(tp.trim()); }).filter(function(tp) { return tp !== ""; });
+                 }
+                 break;
+               }
+             }
+
+             if (!foundRosterSchedule) {
+               var scheduleData = getMasterScheduleData();
+               if (scheduleData && scheduleData.length > 0) {
+                 var headers = scheduleData[0];
+                 var emailIdx = headers.indexOf("EMAIL_ADDR");
+                 var periodIdx = headers.indexOf("PERIOD");
+                 var termColIdx = headers.indexOf("TERM");
+                 if (emailIdx > -1 && periodIdx > -1) {
+                   for (var s = 1; s < scheduleData.length; s++) {
+                     if (!scheduleData[s] || scheduleData[s].length <= Math.max(emailIdx, periodIdx)) continue;
+                     if (String(scheduleData[s][emailIdx]).toLowerCase().trim() === newSubEmail) {
+                       var rowTermVal = (termColIdx > -1 && scheduleData[s][termColIdx] !== undefined)
+                         ? String(scheduleData[s][termColIdx]).trim()
+                         : "";
+                       if (rowTermVal && targetTermForDate && rowTermVal !== targetTermForDate && rowTermVal !== fullYearTermForDate) {
+                         continue;
+                       }
+                       var pVal = String(scheduleData[s][periodIdx]).trim();
+                       var joinP = getScheduleJoinPeriod(pVal);
+                       if (teacherSchedule.indexOf(joinP) === -1) {
+                         teacherSchedule.push(joinP);
+                       }
                      }
                    }
                  }

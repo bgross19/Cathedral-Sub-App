@@ -642,8 +642,10 @@ function syncBellScheduleFromPowerSchool(replaceAll, clientEmail) {
 }
 
 /**
- * Synchronizes the Master Schedule teachers to the Staff Roster.
- * Adds any missing teachers with default role "Teacher" and blank duty.
+ * Synchronizes the Master Schedule teachers and their teaching periods (`TEACHING_PERIODS` in Col K
+ * and `SCHEDULE_BY_TERM` JSON in Col L) to the Staff Roster.
+ * Automatically updates teaching periods whenever the Master Schedule refreshes (e.g. overnight or across semesters)
+ * and adds any missing teachers with default role "Teacher" and blank duty.
  */
 function syncMasterScheduleToStaffRoster(scheduleData, ss) {
   if (!scheduleData || scheduleData.length <= 1) return;
@@ -654,33 +656,115 @@ function syncMasterScheduleToStaffRoster(scheduleData, ss) {
   const rosterData = rosterSheet.getDataRange().getValues();
   const existingEmails = {};
 
-  // Roster format: Name, Email, Role, Duty
+  const settings = (typeof getSettings === "function") ? getSettings(ss) : {};
+  const activeTermId = String(settings["Term ID"] || "3601").trim();
+
+  const sortPeriods = function(arr) {
+    arr.sort(function(a, b) {
+      const numA = parseInt(a, 10);
+      const numB = parseInt(b, 10);
+      if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+      if (a < b) return -1;
+      if (a > b) return 1;
+      return 0;
+    });
+    return arr;
+  };
+
+  // Roster format: Name (0), Email (1), Role (2), Duty (3), Dept (4), Homebase (5), Building (6), ID (7), TeacherNum (8), Phone (9), TEACHING_PERIODS (10), SCHEDULE_BY_TERM (11)
   for (let i = 1; i < rosterData.length; i++) {
-    const email = String(rosterData[i][1]).toLowerCase().trim();
+    if (!rosterData[i]) continue;
+    const email = String(rosterData[i][1] || "").toLowerCase().trim();
     if (email) {
-      existingEmails[email] = true;
+      existingEmails[email] = i;
     }
   }
 
   const newTeachers = {};
+  const allSchedules = {};
+  const allSchedulesByTerm = {};
+
   const headers = scheduleData[0];
   const nameIdx = headers.indexOf("LASTFIRST");
   const emailIdx = headers.indexOf("EMAIL_ADDR");
+  const periodIdx = headers.indexOf("PERIOD");
+  const termIdx = headers.indexOf("TERM");
 
   if (nameIdx === -1 || emailIdx === -1) return;
 
   for (let s = 1; s < scheduleData.length; s++) {
     const row = scheduleData[s];
-    const teacherName = String(row[nameIdx]).trim();
-    // Maintain the exact casing for the email in the sheet, but lower-case for comparison
-    const rawEmail = String(row[emailIdx]).trim();
+    if (!row) continue;
+    const teacherName = String(row[nameIdx] || "").trim();
+    const rawEmail = String(row[emailIdx] || "").trim();
     const teacherEmail = rawEmail.toLowerCase();
+    if (!teacherEmail) continue;
 
-    if (teacherEmail && teacherName && !existingEmails[teacherEmail] && !newTeachers[teacherEmail]) {
+    if (teacherName && existingEmails[teacherEmail] === undefined && !newTeachers[teacherEmail]) {
       newTeachers[teacherEmail] = {
         name: teacherName,
         email: rawEmail
       };
+    }
+
+    if (periodIdx !== -1 && row[periodIdx] !== undefined) {
+      const pVal = String(row[periodIdx] || "").trim();
+      const joinP = (typeof getScheduleJoinPeriod === "function") ? getScheduleJoinPeriod(pVal) : pVal;
+      const rowTerm = (termIdx !== -1 && row[termIdx] !== undefined && String(row[termIdx]).trim() !== "")
+        ? String(row[termIdx]).trim()
+        : activeTermId;
+      if (joinP) {
+        if (!allSchedules[teacherEmail]) allSchedules[teacherEmail] = [];
+        if ((!rowTerm || rowTerm === activeTermId || Math.floor(Number(rowTerm) / 100) * 100 === Number(rowTerm)) && allSchedules[teacherEmail].indexOf(joinP) === -1) {
+          allSchedules[teacherEmail].push(joinP);
+        }
+        if (rowTerm) {
+          if (!allSchedulesByTerm[teacherEmail]) allSchedulesByTerm[teacherEmail] = {};
+          if (!allSchedulesByTerm[teacherEmail][rowTerm]) allSchedulesByTerm[teacherEmail][rowTerm] = [];
+          if (allSchedulesByTerm[teacherEmail][rowTerm].indexOf(joinP) === -1) {
+            allSchedulesByTerm[teacherEmail][rowTerm].push(joinP);
+          }
+        }
+      }
+    }
+  }
+
+  for (const emailKey in allSchedulesByTerm) {
+    if (!allSchedules[emailKey] || allSchedules[emailKey].length === 0) {
+      allSchedules[emailKey] = [];
+      for (const tk in allSchedulesByTerm[emailKey]) {
+        for (let ti = 0; ti < allSchedulesByTerm[emailKey][tk].length; ti++) {
+          const pItem = allSchedulesByTerm[emailKey][tk][ti];
+          if (allSchedules[emailKey].indexOf(pItem) === -1) {
+            allSchedules[emailKey].push(pItem);
+          }
+        }
+      }
+    }
+    for (const termKey in allSchedulesByTerm[emailKey]) {
+      sortPeriods(allSchedulesByTerm[emailKey][termKey]);
+    }
+  }
+  for (const emailKey in allSchedules) {
+    sortPeriods(allSchedules[emailKey]);
+  }
+
+  // Update Col K (11: TEACHING_PERIODS) and Col L (12: SCHEDULE_BY_TERM) for all existing roster rows
+  if (rosterData.length > 0) {
+    const klBlock = [["TEACHING_PERIODS", "SCHEDULE_BY_TERM"]];
+    for (let r = 1; r < rosterData.length; r++) {
+      const rEmail = rosterData[r] ? String(rosterData[r][1] || "").toLowerCase().trim() : "";
+      const pList = (rEmail && allSchedules[rEmail]) ? allSchedules[rEmail] : [];
+      const byTerm = (rEmail && allSchedulesByTerm[rEmail]) ? allSchedulesByTerm[rEmail] : {};
+      klBlock.push([
+        pList.length > 0 ? pList.join(", ") : "",
+        Object.keys(byTerm).length > 0 ? JSON.stringify(byTerm) : ""
+      ]);
+    }
+    try {
+      rosterSheet.getRange(1, 11, klBlock.length, 2).setValues(klBlock);
+    } catch (klErr) {
+      Logger.log("Could not update Staff Roster K:L schedule columns: " + klErr.message);
     }
   }
 
@@ -689,14 +773,29 @@ function syncMasterScheduleToStaffRoster(scheduleData, ss) {
   let addedCount = 0;
   for (const key in newTeachers) {
     const teacher = newTeachers[key];
-    newRows.push([teacher.name, teacher.email, "Teacher", ""]);
+    const pList = allSchedules[key] || [];
+    const byTerm = allSchedulesByTerm[key] || {};
+    newRows.push([
+      teacher.name,
+      teacher.email,
+      "Teacher",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      pList.length > 0 ? pList.join(", ") : "",
+      Object.keys(byTerm).length > 0 ? JSON.stringify(byTerm) : ""
+    ]);
     addedNames.push(teacher.name + " <" + teacher.email + ">");
     addedCount++;
   }
 
   if (newRows.length > 0) {
     const startRow = rosterSheet.getLastRow() + 1;
-    rosterSheet.getRange(startRow, 1, newRows.length, 4).setValues(newRows);
+    rosterSheet.getRange(startRow, 1, newRows.length, 12).setValues(newRows);
     Logger.log("Successfully synced " + addedCount + " new teachers to Staff Roster.");
 
     try {
@@ -706,15 +805,15 @@ function syncMasterScheduleToStaffRoster(scheduleData, ss) {
     } catch (e) {
       Logger.log("Failed to log audit action for staff sync: " + e.message);
     }
+  }
 
-    // Invalidate roster cache
-    try {
-      if (typeof clearRosterCache === 'function') {
-        clearRosterCache();
-      }
-    } catch (e) {
-      /* ignored */
+  // Always invalidate roster cache after syncing schedules or new teachers
+  try {
+    if (typeof clearRosterCache === 'function') {
+      clearRosterCache();
     }
+  } catch (e) {
+    /* ignored */
   }
 }
 
