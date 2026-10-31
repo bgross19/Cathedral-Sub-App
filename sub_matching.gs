@@ -348,10 +348,11 @@ function getSuggestedSubs(dateStr, clientEmail) {
 }
 
 function fetchAbsenceRequestsForDate(ss, dateStr) {
-  var reqSheet = getSheetOrThrow(ss, "Absence Requests");
-  if (!reqSheet) return [];
+  var v2Compat = (typeof readV2AbsenceDataCompat === "function") ? readV2AbsenceDataCompat(ss) : null;
+  var reqSheet = !v2Compat ? getSheetOrThrow(ss, "Absence Requests") : null;
+  if (!v2Compat && !reqSheet) return [];
 
-  var data = reqSheet.getDataRange().getValues();
+  var data = v2Compat ? v2Compat.absenceData : reqSheet.getDataRange().getValues();
   var requests = [];
   var headers = data[0] || [];
   var colMap = {};
@@ -496,6 +497,7 @@ function batchAssignSubs(assignments, clientEmail) {
     var errors = [];
     var notifications = [];
     var hasChanges = false;
+    var modifiedRows = [];
 
     // Scan sheet for matching requests
     for (i = 1; i < data.length; i++) {
@@ -510,6 +512,7 @@ function batchAssignSubs(assignments, clientEmail) {
 
        var periodsRequested = String(row[idxPeriod] || "").split(",").map(function(p) { return parsePeriod(p); });
        var periodsToAssign = assignmentMap[reqId];
+       var rowChanged = false;
 
        for (var targetPeriod in periodsToAssign) {
           if (!Object.prototype.hasOwnProperty.call(periodsToAssign, targetPeriod)) continue;
@@ -558,6 +561,7 @@ function batchAssignSubs(assignments, clientEmail) {
           // Update only the specific period's substitute column (0-based index is subColIdx - 1)
           data[i][subColIdx - 1] = finalSubName;
           hasChanges = true;
+          rowChanged = true;
 
           if (!isNoSubNeeded && finalSubName && subEmail && prevSubClean.toLowerCase() !== finalSubName.toLowerCase()) {
              var details = getAbsenceDetailsLocal(row, targetPeriod, null, nameLookup);
@@ -572,11 +576,17 @@ function batchAssignSubs(assignments, clientEmail) {
 
           successCount++;
        }
+       if (rowChanged) {
+          modifiedRows.push(data[i]);
+       }
     }
 
     // Apply all updates at once with a single setValues call
     if (hasChanges && data.length > 0) {
         reqSheet.getRange(1, 1, data.length, data[0].length).setValues(data);
+        if (typeof syncV2SheetsForAbsenceRows === "function" && modifiedRows.length > 0) {
+            syncV2SheetsForAbsenceRows(ss, modifiedRows, null, rosterData, null, settings);
+        }
     }
 
     // Log audit

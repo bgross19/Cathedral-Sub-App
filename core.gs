@@ -111,8 +111,575 @@ function extractSubFeedbackRaw(row) {
 }
 
 const APP_VERSION = "1.0.0";
+const SPREADSHEET_ID = "1PaHptRCCSweEeRpYsuY1nDBTGD9DcGtGte84B96wc3A";
 const DEFAULT_APP_URL = "https://script.google.com/a/macros/gocathedral.com/s/AKfycbwKZrBo4R-9O97aVNCjOHk9PddWCb6XNKviDS1lj4nNc49khl3T9OL8pGUDa7E1XE0/exec";
 const MASKED_SECRET_VALUE = "••••••••";
+
+const V2_ABSENCES_HEADERS = [
+  "Absence ID",
+  "Created At",
+  "Date",
+  "Teacher Email",
+  "Teacher Name",
+  "Duration",
+  "Reason",
+  "Urgency",
+  "Status",
+  "HR Docs Provided",
+  "Submitted By",
+  "Sub Plan URL",
+  "Instructions"
+];
+
+const V2_ASSIGNMENTS_HEADERS = [
+  "Assignment ID",
+  "Absence ID",
+  "Date",
+  "Period",
+  "Teacher Email",
+  "Teacher Name",
+  "Course Name",
+  "Room",
+  "Status",
+  "Sub Email",
+  "Sub Name",
+  "Pay Type",
+  "Pay Amount",
+  "Feedback Rating",
+  "Feedback Note"
+];
+
+/**
+ * Checks whether the normalized v2 absence tables (`Absences` + `Coverage_Assignments`) exist
+ * and have been initialized on the given spreadsheet.
+ */
+function hasV2AbsenceSheets(ss) {
+  if (!ss || typeof ss.getSheetByName !== "function") return false;
+  var absSheet = ss.getSheetByName("Absences");
+  var asgSheet = ss.getSheetByName("Coverage_Assignments");
+  return Boolean(absSheet && asgSheet);
+}
+
+/**
+ * Ensures the `Absences` and `Coverage_Assignments` sheets exist with headers.
+ */
+function ensureV2AbsenceSheets(ss) {
+  if (!ss) return null;
+  var absSheet = ss.getSheetByName("Absences");
+  if (!absSheet && typeof ss.insertSheet === "function") {
+    absSheet = ss.insertSheet("Absences");
+    absSheet.getRange(1, 1, 1, V2_ABSENCES_HEADERS.length).setValues([V2_ABSENCES_HEADERS]);
+    absSheet.getRange(1, 1, 1, V2_ABSENCES_HEADERS.length).setFontWeight("bold");
+  }
+  var asgSheet = ss.getSheetByName("Coverage_Assignments");
+  if (!asgSheet && typeof ss.insertSheet === "function") {
+    asgSheet = ss.insertSheet("Coverage_Assignments");
+    asgSheet.getRange(1, 1, 1, V2_ASSIGNMENTS_HEADERS.length).setValues([V2_ASSIGNMENTS_HEADERS]);
+    asgSheet.getRange(1, 1, 1, V2_ASSIGNMENTS_HEADERS.length).setFontWeight("bold");
+  }
+  return { absSheet: absSheet, asgSheet: asgSheet };
+}
+
+/**
+ * Builds lookup maps from Staff Roster data for v2 normalization.
+ */
+function buildV2RosterLookups(rosterData) {
+  var emailToName = {};
+  var nameToEmail = {};
+  var nameToDuty = {};
+  var nameToRole = {};
+  if (rosterData && Array.isArray(rosterData)) {
+    for (var i = 1; i < rosterData.length; i++) {
+      var r = rosterData[i];
+      if (!r || r.length < 2) continue;
+      var name = String(r[0] || "").trim();
+      var email = String(r[1] || "").trim().toLowerCase();
+      var role = String(r[2] || "").trim();
+      var duty = String(r[3] || "").trim();
+      if (email && name) {
+        emailToName[email] = name;
+        nameToEmail[name.toLowerCase()] = email;
+      }
+      if (name) {
+        nameToDuty[name.toLowerCase()] = duty;
+        nameToRole[name.toLowerCase()] = role;
+      }
+    }
+  }
+  return {
+    emailToName: emailToName,
+    nameToEmail: nameToEmail,
+    nameToDuty: nameToDuty,
+    nameToRole: nameToRole
+  };
+}
+
+/**
+ * Converts a single 22-column legacy `Absence Requests` row into one 13-column `Absences` row
+ * and N 15-column `Coverage_Assignments` rows.
+ */
+function convertLegacyAbsenceRowToV2(row, rosterLookups, scheduleLookup, dateColors, settings) {
+  if (!row || !row[0]) return null;
+  var rLookups = rosterLookups || { emailToName: {}, nameToEmail: {}, nameToDuty: {}, nameToRole: {} };
+  var dColors = dateColors || {};
+  var cfg = settings || {};
+
+  var absenceId = String(row[0]).trim();
+  var createdAt = row[1] || "";
+  var teacherEmail = String(row[2] || "").trim().toLowerCase();
+  var teacherName = rLookups.emailToName[teacherEmail] || String(row[2] || "").trim();
+  var rawDate = row[3];
+  var isoDate = getStandardizedDateString(rawDate) || String(rawDate || "").trim();
+  if (isoDate.indexOf(",") !== -1) {
+    isoDate = isoDate.split(",")[0].trim();
+  }
+
+  var rawPeriods = String(row[4] || "").trim();
+  var reason = String(row[5] || "").trim();
+  var duration = String(row[6] || "Full Day").trim();
+  var urgency = String(row[7] || "Standard (Advanced Notice)").trim();
+  var rawInstructions = String(row[8] || "").trim();
+  var status = String(row[19] || "Active").trim() || "Active";
+  var subPlanUrl = extractSubPlanUrl(row);
+  var feedbackRaw = extractSubFeedbackRaw(row);
+
+  var hrDocsProvided = "FALSE";
+  var cleanInstructions = rawInstructions;
+  if (cleanInstructions.indexOf("[HR Docs Provided]") !== -1) {
+    hrDocsProvided = "TRUE";
+    cleanInstructions = cleanInstructions.replace(/(\[HR Docs Provided\]\s*)+/g, "").trim();
+  }
+
+  var submittedBy = teacherEmail;
+  var subMatch = cleanInstructions.match(/\(Submitted by ([^)]+)\)/i);
+  if (subMatch && subMatch[1]) {
+    submittedBy = subMatch[1].trim();
+  }
+
+  var v2AbsenceRow = [
+    absenceId,
+    createdAt,
+    isoDate,
+    teacherEmail,
+    teacherName,
+    duration,
+    reason,
+    urgency,
+    status,
+    hrDocsProvided,
+    submittedBy,
+    subPlanUrl,
+    cleanInstructions
+  ];
+
+  var feedbackByPeriod = {};
+  if (feedbackRaw && feedbackRaw.indexOf("[") === 0) {
+    try {
+      var fbArr = JSON.parse(feedbackRaw);
+      if (Array.isArray(fbArr)) {
+        for (var f = 0; f < fbArr.length; f++) {
+          var fbItem = fbArr[f];
+          if (fbItem && fbItem.period !== undefined) {
+            var fbPKey = parsePeriod(fbItem.period);
+            feedbackByPeriod[fbPKey] = {
+              rating: fbItem.rating !== undefined && fbItem.rating !== null ? String(fbItem.rating) : "",
+              note: String(fbItem.note || "")
+            };
+          }
+        }
+      }
+    } catch (e) {}
+  }
+
+  var specialRatesMap = {};
+  try {
+    var specialArr = JSON.parse(cfg["Special Pay Rates"] || "[]");
+    if (Array.isArray(specialArr)) {
+      for (var sp = 0; sp < specialArr.length; sp++) {
+        if (specialArr[sp] && specialArr[sp].date) {
+          specialRatesMap[String(specialArr[sp].date).trim()] = parseFloat(specialArr[sp].rate || 0);
+        }
+      }
+    }
+  } catch (e) {}
+
+  var greenRate = parseFloat(cfg["Green Day Pay Rate"] || "10") || 10;
+  var blueGoldRate = parseFloat(cfg["Blue/Gold Day Pay Rate"] || "20") || 20;
+
+  var periodTokens = rawPeriods
+    .split(",")
+    .map(function(s) { return s.trim(); })
+    .filter(function(s) { return s !== "" && s.toLowerCase() !== "none"; });
+
+  var seenPeriods = {};
+  var v2AssignmentRows = [];
+
+  for (var pIdx = 0; pIdx < periodTokens.length; pIdx++) {
+    var pKey = parsePeriod(periodTokens[pIdx]);
+    if (!pKey || seenPeriods[pKey]) continue;
+    seenPeriods[pKey] = true;
+
+    var subColOneBased = getSubColumnIndex(pKey);
+    var assignedSubRaw = (subColOneBased > 0 && subColOneBased - 1 < row.length)
+      ? String(row[subColOneBased - 1] || "").trim()
+      : "";
+
+    var schedInfo = (typeof lookupTeacherScheduleInfo === "function" && scheduleLookup)
+      ? lookupTeacherScheduleInfo(scheduleLookup, teacherEmail, pKey, isoDate, cfg)
+      : null;
+    var courseStr = (schedInfo && schedInfo.course) ? String(schedInfo.course) : "No Class Assigned";
+    var roomStr = (schedInfo && schedInfo.room) ? String(schedInfo.room) : "No Class Assigned";
+
+    var assignStatus = "Unfilled";
+    var subEmail = "";
+    var subName = "";
+    var payType = "";
+    var payAmount = "";
+
+    if (status.toLowerCase() === "canceled" || status.toLowerCase() === "cancelled") {
+      assignStatus = "Canceled";
+      subName = assignedSubRaw;
+      if (subName && subName.toLowerCase() !== "no sub needed") {
+        subEmail = rLookups.nameToEmail[subName.toLowerCase()] || "";
+      }
+    } else if (assignedSubRaw.toLowerCase() === "no sub needed") {
+      assignStatus = "No Sub Needed";
+      subName = "No Sub Needed";
+    } else if (assignedSubRaw !== "") {
+      assignStatus = "Assigned";
+      subName = assignedSubRaw;
+      subEmail = rLookups.nameToEmail[subName.toLowerCase()] || "";
+
+      var subRole = String(rLookups.nameToRole[subName.toLowerCase()] || "").toLowerCase();
+      var dutyStr = rLookups.nameToDuty[subName.toLowerCase()] || "";
+      var dutyArr = dutyStr ? dutyStr.split(",").map(function(d) { return parsePeriod(d); }) : [];
+      var isDuty = dutyArr.indexOf(pKey) !== -1;
+
+      if (subRole.indexOf("substitute") !== -1) {
+        payType = "External Sub";
+        payAmount = "0";
+      } else if (isDuty) {
+        payType = "Duty";
+        payAmount = "0";
+      } else if (specialRatesMap[isoDate] !== undefined) {
+        payType = "Special";
+        payAmount = String(specialRatesMap[isoDate]);
+      } else {
+        var dayColor = dColors[isoDate] || "Green";
+        payType = dayColor;
+        payAmount = (String(dayColor).toLowerCase() === "blue" || String(dayColor).toLowerCase() === "gold")
+          ? String(blueGoldRate)
+          : String(greenRate);
+      }
+    }
+
+    var fb = feedbackByPeriod[pKey] || { rating: "", note: "" };
+
+    v2AssignmentRows.push([
+      absenceId + "_P" + pKey,
+      absenceId,
+      isoDate,
+      "'" + pKey,
+      teacherEmail,
+      teacherName,
+      courseStr,
+      roomStr,
+      assignStatus,
+      subEmail,
+      subName,
+      payType,
+      payAmount,
+      fb.rating,
+      fb.note
+    ]);
+  }
+
+  return {
+    absenceRow: v2AbsenceRow,
+    assignmentRows: v2AssignmentRows
+  };
+}
+
+/**
+ * Synchronizes one or more legacy `Absence Requests` rows into the v2 `Absences` and `Coverage_Assignments` sheets.
+ * Safe no-op if the v2 sheets are not present on `ss`.
+ */
+function syncV2SheetsForAbsenceRows(ss, legacyRows, optionalScheduleLookup, optionalRosterData, optionalDateColors, optionalSettings) {
+  try {
+    if (!hasV2AbsenceSheets(ss) || !legacyRows || legacyRows.length === 0) return false;
+    var absSheet = ss.getSheetByName("Absences");
+    var asgSheet = ss.getSheetByName("Coverage_Assignments");
+    if (!absSheet || !asgSheet) return false;
+
+    var rosterData = optionalRosterData || (typeof getRosterDataCached === "function" ? getRosterDataCached(ss) : []);
+    var settings = optionalSettings || (typeof getSettings === "function" ? getSettings(ss) : {});
+    var dateColors = optionalDateColors || (typeof getDateColorsCached === "function" ? getDateColorsCached(ss) : {});
+    var scheduleLookup = optionalScheduleLookup;
+    if (!scheduleLookup && typeof getMasterScheduleData === "function" && typeof buildScheduleLookup === "function") {
+      var schedData = getMasterScheduleData();
+      var activeTerm = String(settings["Term ID"] || "3601").trim();
+      scheduleLookup = buildScheduleLookup(schedData, activeTerm);
+    }
+
+    var rosterLookups = buildV2RosterLookups(rosterData);
+
+    var targetIds = {};
+    var convertedById = {};
+    for (var i = 0; i < legacyRows.length; i++) {
+      var conv = convertLegacyAbsenceRowToV2(legacyRows[i], rosterLookups, scheduleLookup, dateColors, settings);
+      if (conv && conv.absenceRow && conv.absenceRow[0]) {
+        var idKey = String(conv.absenceRow[0]);
+        targetIds[idKey] = true;
+        convertedById[idKey] = conv;
+      }
+    }
+
+    var existingAbs = absSheet.getDataRange().getValues();
+    if (!existingAbs || existingAbs.length === 0) {
+      existingAbs = [V2_ABSENCES_HEADERS];
+    }
+    var updatedAbs = [existingAbs[0]];
+    var seenAbsIds = {};
+    for (var a = 1; a < existingAbs.length; a++) {
+      if (!existingAbs[a] || !existingAbs[a][0]) continue;
+      var rowAbsId = String(existingAbs[a][0]);
+      if (targetIds[rowAbsId]) {
+        if (!seenAbsIds[rowAbsId]) {
+          updatedAbs.push(convertedById[rowAbsId].absenceRow);
+          seenAbsIds[rowAbsId] = true;
+        }
+      } else {
+        updatedAbs.push(existingAbs[a]);
+      }
+    }
+    for (var newId in convertedById) {
+      if (Object.prototype.hasOwnProperty.call(convertedById, newId) && !seenAbsIds[newId]) {
+        updatedAbs.push(convertedById[newId].absenceRow);
+      }
+    }
+
+    var existingAsg = asgSheet.getDataRange().getValues();
+    if (!existingAsg || existingAsg.length === 0) {
+      existingAsg = [V2_ASSIGNMENTS_HEADERS];
+    }
+    var updatedAsg = [existingAsg[0]];
+    for (var g = 1; g < existingAsg.length; g++) {
+      if (!existingAsg[g] || !existingAsg[g][0]) continue;
+      var parentAbsId = String(existingAsg[g][1] || "");
+      if (!targetIds[parentAbsId]) {
+        updatedAsg.push(existingAsg[g]);
+      }
+    }
+    for (var cId in convertedById) {
+      if (Object.prototype.hasOwnProperty.call(convertedById, cId)) {
+        var asgRows = convertedById[cId].assignmentRows;
+        for (var k = 0; k < asgRows.length; k++) {
+          updatedAsg.push(asgRows[k]);
+        }
+      }
+    }
+
+    if (typeof absSheet.clearContents === "function") absSheet.clearContents();
+    absSheet.getRange(1, 1, updatedAbs.length, V2_ABSENCES_HEADERS.length).setValues(updatedAbs);
+
+    if (typeof asgSheet.clearContents === "function") asgSheet.clearContents();
+    asgSheet.getRange(1, 1, updatedAsg.length, V2_ASSIGNMENTS_HEADERS.length).setValues(updatedAsg);
+    return true;
+  } catch (e) {
+    console.warn("syncV2SheetsForAbsenceRows warning: " + e.message);
+    return false;
+  }
+}
+
+/**
+ * Rebuilds the entire `Absences` and `Coverage_Assignments` sheets from the full `Absence Requests` table.
+ */
+function rebuildAllV2AbsenceSheets(ss) {
+  ss = ss || getSS();
+  var mainSheet = ss.getSheetByName("Absence Requests");
+  if (!mainSheet) return { success: false, error: "Absence Requests sheet not found." };
+
+  var sheets = ensureV2AbsenceSheets(ss);
+  var absSheet = sheets.absSheet;
+  var asgSheet = sheets.asgSheet;
+
+  var legacyData = mainSheet.getDataRange().getValues();
+  var rosterData = typeof getRosterDataCached === "function" ? getRosterDataCached(ss) : [];
+  var settings = typeof getSettings === "function" ? getSettings(ss) : {};
+  var dateColors = typeof getDateColorsCached === "function" ? getDateColorsCached(ss) : {};
+  var schedData = typeof getMasterScheduleData === "function" ? getMasterScheduleData() : [];
+  var activeTerm = String(settings["Term ID"] || "3601").trim();
+  var scheduleLookup = typeof buildScheduleLookup === "function" ? buildScheduleLookup(schedData, activeTerm) : {};
+  var rosterLookups = buildV2RosterLookups(rosterData);
+
+  var v2AbsRows = [V2_ABSENCES_HEADERS];
+  var v2AsgRows = [V2_ASSIGNMENTS_HEADERS];
+
+  for (var i = 1; i < legacyData.length; i++) {
+    if (!legacyData[i] || !legacyData[i][0]) continue;
+    var conv = convertLegacyAbsenceRowToV2(legacyData[i], rosterLookups, scheduleLookup, dateColors, settings);
+    if (conv) {
+      v2AbsRows.push(conv.absenceRow);
+      for (var j = 0; j < conv.assignmentRows.length; j++) {
+        v2AsgRows.push(conv.assignmentRows[j]);
+      }
+    }
+  }
+
+  if (typeof absSheet.clearContents === "function") absSheet.clearContents();
+  absSheet.getRange(1, 1, v2AbsRows.length, V2_ABSENCES_HEADERS.length).setValues(v2AbsRows);
+
+  if (typeof asgSheet.clearContents === "function") asgSheet.clearContents();
+  asgSheet.getRange(1, 1, v2AsgRows.length, V2_ASSIGNMENTS_HEADERS.length).setValues(v2AsgRows);
+
+  return {
+    success: true,
+    absencesCount: v2AbsRows.length - 1,
+    assignmentsCount: v2AsgRows.length - 1
+  };
+}
+
+/**
+ * Reads the normalized v2 `Absences` and `Coverage_Assignments` sheets and returns:
+ * - `absenceData`: reconstructed 22-column virtual rows compatible with all existing payload/digest/export logic
+ * - `snapshottedScheduleLookup`: pre-joined `{ room, course }` map built directly from `Coverage_Assignments`
+ *   so `getInitialPayload()` does not need to read `Master Schedule Cache` for every absence row.
+ */
+function readV2AbsenceDataCompat(ss) {
+  if (!hasV2AbsenceSheets(ss)) return null;
+  var absSheet = ss.getSheetByName("Absences");
+  var asgSheet = ss.getSheetByName("Coverage_Assignments");
+  if (!absSheet || !asgSheet) return null;
+
+  var absValues = absSheet.getDataRange().getValues();
+  var asgValues = asgSheet.getDataRange().getValues();
+  if (!absValues || absValues.length <= 1) return null;
+
+  var assignmentsByAbsenceId = {};
+  var snapshottedScheduleLookup = {};
+
+  for (var g = 1; g < asgValues.length; g++) {
+    var gRow = asgValues[g];
+    if (!gRow || !gRow[1]) continue;
+    var parentId = String(gRow[1]).trim();
+    if (!assignmentsByAbsenceId[parentId]) {
+      assignmentsByAbsenceId[parentId] = [];
+    }
+    assignmentsByAbsenceId[parentId].push(gRow);
+
+    var gEmail = String(gRow[4] || "").toLowerCase().trim();
+    var gPeriod = parsePeriod(String(gRow[3] || "").replace(/^'/, ""));
+    var gCourse = String(gRow[6] || "").trim();
+    var gRoom = String(gRow[7] || "").trim();
+    var gDate = getStandardizedDateString(gRow[2]) || String(gRow[2] || "").trim();
+    if (gEmail && gPeriod && (gCourse || gRoom)) {
+      var joinKey = gEmail + "-" + getScheduleJoinPeriod(gPeriod);
+      var entry = {
+        room: gRoom || "No Class Assigned",
+        course: gCourse || "No Class Assigned"
+      };
+      snapshottedScheduleLookup[joinKey] = entry;
+      if (gDate && typeof resolveTermIdForDate === "function") {
+        var termForDate = String(resolveTermIdForDate(gDate) || "").toLowerCase().trim();
+        if (termForDate) {
+          snapshottedScheduleLookup[joinKey + "-" + termForDate] = entry;
+        }
+      }
+    }
+  }
+
+  var compatRows = [[
+    "ID", "Timestamp", "Email", "Date", "Periods", "Reason", "Duration",
+    "Urgency", "Instructions", "Period 1 Sub", "Period 2 Sub", "Period 3 Sub",
+    "Period 4 Sub", "Period 5 Sub", "Period 6 Sub", "Period 7 Sub", "Period 8 Sub",
+    "Period 0 Sub", "Advisory Sub", "Status", "Sub Plan URL", "Sub Feedback"
+  ]];
+
+  for (var a = 1; a < absValues.length; a++) {
+    var aRow = absValues[a];
+    if (!aRow || !aRow[0]) continue;
+
+    var absId = String(aRow[0]).trim();
+    var createdAt = aRow[1];
+    var dateVal = aRow[2];
+    var teacherEmail = String(aRow[3] || "").trim();
+    var duration = String(aRow[5] || "").trim();
+    var reason = String(aRow[6] || "").trim();
+    var urgency = String(aRow[7] || "").trim();
+    var status = String(aRow[8] || "Active").trim();
+    var hrDocs = String(aRow[9] || "").toLowerCase().trim() === "true";
+    var subPlanUrl = String(aRow[11] || "").trim();
+    var instructions = String(aRow[12] || "").trim();
+    if (hrDocs && instructions.indexOf("[HR Docs Provided]") === -1) {
+      instructions = ("[HR Docs Provided] " + instructions).trim();
+    }
+
+    var childAsgs = assignmentsByAbsenceId[absId] || [];
+    var periodsList = [];
+    var subCols = ["", "", "", "", "", "", "", "", "", ""]; // indices 0..9 -> cols 10..19
+    var feedbackArr = [];
+
+    for (var c = 0; c < childAsgs.length; c++) {
+      var cRow = childAsgs[c];
+      var pClean = parsePeriod(String(cRow[3] || "").replace(/^'/, ""));
+      if (!pClean) continue;
+      periodsList.push(pClean);
+
+      var subColOneBased = getSubColumnIndex(pClean);
+      var subNameVal = String(cRow[10] || "").trim();
+      var asgStatus = String(cRow[8] || "").trim();
+      if (asgStatus === "No Sub Needed" && !subNameVal) {
+        subNameVal = "No Sub Needed";
+      }
+      if (subColOneBased >= 10 && subColOneBased <= 19) {
+        subCols[subColOneBased - 10] = subNameVal;
+      }
+
+      var fbRating = cRow[13];
+      var fbNote = String(cRow[14] || "").trim();
+      if ((fbRating !== undefined && fbRating !== null && String(fbRating).trim() !== "") || fbNote !== "") {
+        feedbackArr.push({
+          subName: subNameVal,
+          period: pClean,
+          rating: parseInt(fbRating, 10) || 0,
+          note: fbNote
+        });
+      }
+    }
+
+    compatRows.push([
+      absId,
+      createdAt,
+      teacherEmail,
+      dateVal,
+      periodsList.join(", "),
+      reason,
+      duration,
+      urgency,
+      instructions,
+      subCols[0],
+      subCols[1],
+      subCols[2],
+      subCols[3],
+      subCols[4],
+      subCols[5],
+      subCols[6],
+      subCols[7],
+      subCols[8],
+      subCols[9],
+      status,
+      subPlanUrl,
+      JSON.stringify(feedbackArr)
+    ]);
+  }
+
+  return {
+    absenceData: compatRows,
+    snapshottedScheduleLookup: snapshottedScheduleLookup,
+    rawAbsences: absValues,
+    rawAssignments: asgValues
+  };
+}
 
 /**
  * Returns a copy of settings safe to send to client payloads.

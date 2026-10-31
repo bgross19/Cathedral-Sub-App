@@ -788,6 +788,9 @@ function archiveAbsenceRequests(cutoffDateStr, clientEmail) {
 
       mainSheet.clearContents();
       mainSheet.getRange(1, 1, rowsToKeep.length, rowsToKeep[0].length).setValues(rowsToKeep);
+      if (typeof hasV2AbsenceSheets === "function" && hasV2AbsenceSheets(ss) && typeof rebuildAllV2AbsenceSheets === "function") {
+        rebuildAllV2AbsenceSheets(ss);
+      }
 
       logAuditAction("ARCHIVE_DATA", "N/A", "Archived " + rowsToArchive.length + " absence requests older than " + cutoffDateStr, clientEmail);
     }

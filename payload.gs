@@ -100,14 +100,15 @@ function getInitialPayload(clientEmail, requestedComponents) {
     var settings = getSettings(ss);
 
     var needAbsenceData = wantAll || want("myAbsences") || want("myPastAbsences") || want("mySubDuties") || want("myPastSubDuties") || want("todaysAbsences") || want("quickCover") || want("adminData") || want("hrData");
-    var mainSheet = needAbsenceData ? getSheetOrThrow(ss, "Absence Requests") : null;
-    var absenceData = mainSheet ? mainSheet.getDataRange().getValues() : [];
+    var v2Compat = (needAbsenceData && typeof readV2AbsenceDataCompat === "function") ? readV2AbsenceDataCompat(ss) : null;
+    var mainSheet = (needAbsenceData && !v2Compat) ? getSheetOrThrow(ss, "Absence Requests") : null;
+    var absenceData = v2Compat ? v2Compat.absenceData : (mainSheet ? mainSheet.getDataRange().getValues() : []);
 
-    var needScheduleData = wantAll || want("userData") || want("mySubDuties") || want("myPastSubDuties") || want("todaysAbsences") || want("staffList") || want("quickCover") || want("adminData") || want("hrData");
+    var needScheduleData = wantAll || want("userData") || want("staffList") || (!v2Compat && (want("mySubDuties") || want("myPastSubDuties") || want("todaysAbsences") || want("quickCover") || want("adminData") || want("hrData")));
     var scheduleData = needScheduleData ? getMasterScheduleData() : [];
 
     var needPayPeriods = want("hrData");
-    var payPeriodsSheet = needPayPeriods ? ss.getSheetByName("PayPeriods") : null;
+    var payPeriodsSheet = needPayPeriods ? (ss.getSheetByName("PayPeriods") || ss.getSheetByName("Payperiods")) : null;
     var payPeriodsData = payPeriodsSheet ? payPeriodsSheet.getDataRange().getValues() : [];
 
     var needDates = want("dateColors") || want("hrData");
@@ -118,6 +119,13 @@ function getInitialPayload(clientEmail, requestedComponents) {
     // --- Build lookups ---
     var activeTermId = String(settings["Term ID"] || "3601").trim();
     var scheduleLookup = buildScheduleLookup(scheduleData, activeTermId);
+    if (v2Compat && v2Compat.snapshottedScheduleLookup) {
+      for (var snapKey in v2Compat.snapshottedScheduleLookup) {
+        if (Object.prototype.hasOwnProperty.call(v2Compat.snapshottedScheduleLookup, snapKey) && !scheduleLookup[snapKey]) {
+          scheduleLookup[snapKey] = v2Compat.snapshottedScheduleLookup[snapKey];
+        }
+      }
+    }
     var nameLookup = buildNameLookup(rosterData);
 
 

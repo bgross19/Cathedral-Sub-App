@@ -115,4 +115,47 @@ function setupDatabase() {
   ];
   payrollSheet.getRange(1, 1, 1, payrollHeaders.length).setValues([payrollHeaders]);
   payrollSheet.getRange(1, 1, 1, payrollHeaders.length).setFontWeight("bold");
+
+  // 11. Absences Sheet (v2 Normalized Parent Table)
+  var v2AbsencesSheet = ss.getSheetByName("Absences");
+  if (!v2AbsencesSheet) {
+    v2AbsencesSheet = ss.insertSheet("Absences");
+  }
+  v2AbsencesSheet.getRange(1, 1, 1, V2_ABSENCES_HEADERS.length).setValues([V2_ABSENCES_HEADERS]);
+  v2AbsencesSheet.getRange(1, 1, 1, V2_ABSENCES_HEADERS.length).setFontWeight("bold");
+
+  // 12. Coverage_Assignments Sheet (v2 Normalized Child Table)
+  var v2AssignmentsSheet = ss.getSheetByName("Coverage_Assignments");
+  if (!v2AssignmentsSheet) {
+    v2AssignmentsSheet = ss.insertSheet("Coverage_Assignments");
+  }
+  v2AssignmentsSheet.getRange(1, 1, 1, V2_ASSIGNMENTS_HEADERS.length).setValues([V2_ASSIGNMENTS_HEADERS]);
+  v2AssignmentsSheet.getRange(1, 1, 1, V2_ASSIGNMENTS_HEADERS.length).setFontWeight("bold");
+}
+
+/**
+ * Admin migration helper that backfills or re-syncs the normalized v2 `Absences`
+ * and `Coverage_Assignments` tables from the legacy `Absence Requests` sheet.
+ */
+function migrateAbsenceRequestsToV2(clientEmail) {
+  try {
+    var ss = getSS();
+    if (clientEmail !== undefined) {
+      var user = getUserData(ss, clientEmail);
+      assertRole(user, "admin");
+    }
+    var result = rebuildAllV2AbsenceSheets(ss);
+    if (result && result.success) {
+      logAuditAction(
+        "V2_SCHEMA_MIGRATED",
+        "Absences,Coverage_Assignments",
+        "Synced " + result.absencesCount + " absences and " + result.assignmentsCount + " coverage assignments",
+        clientEmail
+      );
+    }
+    return result;
+  } catch (err) {
+    notifyAdminOfError("migrateAbsenceRequestsToV2", err);
+    return { success: false, error: err.message };
+  }
 }
