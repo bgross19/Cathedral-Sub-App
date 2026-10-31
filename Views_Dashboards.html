@@ -285,8 +285,8 @@
                  <button type="button" id="bellBrush-Gold" onclick="setBellScheduleBrush('Gold')" class="bell-brush-btn px-3 py-1 rounded-full text-xs font-bold border border-yellow-300 bg-yellow-100 text-yellow-800 hover:bg-yellow-200 transition-colors">
                    Gold Day
                  </button>
-                 <button type="button" id="bellBrush-Red" onclick="setBellScheduleBrush('Red')" class="bell-brush-btn px-3 py-1 rounded-full text-xs font-bold border border-red-300 bg-red-100 text-red-800 hover:bg-red-200 transition-colors">
-                   Red / No School
+                 <button type="button" id="bellBrush-NoSchool" onclick="setBellScheduleBrush('No School')" class="bell-brush-btn px-3 py-1 rounded-full text-xs font-bold border border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors">
+                   No School
                  </button>
                  <button type="button" id="bellBrush-Clear" onclick="setBellScheduleBrush('')" class="bell-brush-btn px-3 py-1 rounded-full text-xs font-bold border border-gray-300 bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors">
                    ✕ Clear
@@ -317,7 +317,7 @@
         <!-- CSV Upload for Bell Schedule -->
         <div class="p-4 bg-gray-50 rounded-lg border border-gray-200">
            <h4 class="text-md font-bold text-[#002147] mb-2">CSV Upload (Bulk Update/Create Bell Schedule)</h4>
-           <p class="text-xs text-gray-600 mb-3">Upload a 2-column CSV or paste rows with <code class="bg-white px-1 py-0.5 rounded border">Date, Color</code> (accepts <code class="bg-white px-1 py-0.5 rounded border">YYYY-MM-DD</code> or <code class="bg-white px-1 py-0.5 rounded border">M/D/YYYY</code>, and colors <code class="bg-white px-1 py-0.5 rounded border">Green</code>, <code class="bg-white px-1 py-0.5 rounded border">Blue</code>, <code class="bg-white px-1 py-0.5 rounded border">Gold</code>, or <code class="bg-white px-1 py-0.5 rounded border">Red</code>).</p>
+           <p class="text-xs text-gray-600 mb-3">Upload a 2-column CSV or paste rows with <code class="bg-white px-1 py-0.5 rounded border">Date, Schedule/Color</code> (accepts <code class="bg-white px-1 py-0.5 rounded border">YYYY-MM-DD</code> or <code class="bg-white px-1 py-0.5 rounded border">M/D/YYYY</code>, and values <code class="bg-white px-1 py-0.5 rounded border">Green</code>, <code class="bg-white px-1 py-0.5 rounded border">Blue</code>, <code class="bg-white px-1 py-0.5 rounded border">Gold</code>, <code class="bg-white px-1 py-0.5 rounded border">No School</code>, or a custom Bell Schedule name like <code class="bg-white px-1 py-0.5 rounded border">FINALS 1-2</code>).</p>
            <div class="flex flex-col gap-3">
                <div>
                  <label class="block text-sm text-gray-600 mb-1">Select a .csv file...</label>
