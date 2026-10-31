@@ -803,6 +803,118 @@ function archiveAbsenceRequests(cutoffDateStr, clientEmail) {
   }
 }
 
+/**
+ * Parses a single CSV line into an array of unquoted cell strings.
+ */
+function _parsePayrollCsvLine(line) {
+  var result = [];
+  var current = "";
+  var inQuotes = false;
+  var s = String(line || "");
+  for (var i = 0; i < s.length; i++) {
+    var ch = s.charAt(i);
+    if (ch === '"') {
+      if (inQuotes && i + 1 < s.length && s.charAt(i + 1) === '"') {
+        current += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (ch === ',' && !inQuotes) {
+      result.push(current.trim());
+      current = "";
+    } else {
+      current += ch;
+    }
+  }
+  result.push(current.trim());
+  return result;
+}
+
+/**
+ * Appends a pay period approval (or re-approval) snapshot to the "Payroll" sheet.
+ * Creates the "Payroll" sheet with headers if it does not exist yet.
+ */
+function _appendPayrollSheetSnapshot(ss, periodNumber, rangeString, csvString, approvedBy) {
+  var payrollHeaders = [
+    "Pay Period",
+    "Date Range",
+    "Teacher Name",
+    "Duties",
+    "Extras",
+    "Extra (Pay)",
+    "Totals",
+    "Approved By",
+    "Approved At"
+  ];
+
+  var payrollSheet = ss.getSheetByName("Payroll");
+  if (!payrollSheet) {
+    payrollSheet = ss.insertSheet("Payroll");
+    payrollSheet.getRange(1, 1, 1, payrollHeaders.length).setValues([payrollHeaders]);
+    payrollSheet.getRange(1, 1, 1, payrollHeaders.length).setFontWeight("bold");
+  } else if (payrollSheet.getLastRow() === 0) {
+    payrollSheet.getRange(1, 1, 1, payrollHeaders.length).setValues([payrollHeaders]);
+    payrollSheet.getRange(1, 1, 1, payrollHeaders.length).setFontWeight("bold");
+  }
+
+  var tz = (typeof Session !== "undefined" && Session.getScriptTimeZone) ? Session.getScriptTimeZone() : "America/Indiana/Indianapolis";
+  var approvedAtStr = Utilities.formatDate(new Date(), tz, "yyyy-MM-dd HH:mm:ss");
+  var actorLabel = String(approvedBy || "Admin").trim();
+  var periodStr = String(periodNumber !== undefined && periodNumber !== null ? periodNumber : "").trim();
+  var rangeStr = String(rangeString || "").trim();
+
+  var lines = String(csvString || "").split(/\r?\n/).filter(function(l) {
+    return String(l || "").trim() !== "";
+  });
+
+  var rowsToAppend = [];
+  for (var i = 0; i < lines.length; i++) {
+    var cols = _parsePayrollCsvLine(lines[i]);
+    if (cols.length === 0) continue;
+    // Skip header row
+    if (i === 0 && (cols[0].toLowerCase() === "teacher name" || cols[0].toLowerCase() === "name")) {
+      continue;
+    }
+    var teacherName = cols[0] || "";
+    if (!teacherName) continue;
+    var duties = cols.length > 1 ? cols[1] : "0";
+    var extras = cols.length > 2 ? cols[2] : "0";
+    var extraPay = cols.length > 3 ? cols[3] : "$0.00";
+    var totals = cols.length > 4 ? cols[4] : "0";
+
+    rowsToAppend.push([
+      periodStr,
+      rangeStr,
+      teacherName,
+      duties,
+      extras,
+      extraPay,
+      totals,
+      actorLabel,
+      approvedAtStr
+    ]);
+  }
+
+  if (rowsToAppend.length === 0) {
+    rowsToAppend.push([
+      periodStr,
+      rangeStr,
+      "No Paid Sub Coverages",
+      "0",
+      "0",
+      "$0.00",
+      "0",
+      actorLabel,
+      approvedAtStr
+    ]);
+  }
+
+  var startRow = payrollSheet.getLastRow() + 1;
+  payrollSheet.getRange(startRow, 1, rowsToAppend.length, payrollHeaders.length).setValues(rowsToAppend);
+  return rowsToAppend.length;
+}
+
 function approvePayPeriod(periodNumber, rangeString, csvString, clientEmail) {
   var lock = LockService.getScriptLock();
   try {
@@ -820,10 +932,12 @@ function approvePayPeriod(periodNumber, rangeString, csvString, clientEmail) {
     var payPeriodsSheet = getSheetOrThrow(ss, "PayPeriods");
     var payPeriodsData = payPeriodsSheet.getDataRange().getValues();
     var rowIndex = -1;
+    var wasAlreadyApproved = false;
 
     for (var i = 1; i < payPeriodsData.length; i++) {
       if (String(payPeriodsData[i][0]).trim() === String(periodNumber).trim()) {
         rowIndex = i + 1; // 1-based index
+        wasAlreadyApproved = String(payPeriodsData[i][3] || "").toLowerCase().trim() === "true";
         break;
       }
     }
@@ -835,16 +949,24 @@ function approvePayPeriod(periodNumber, rangeString, csvString, clientEmail) {
     // Set approved to true in the 4th column
     payPeriodsSheet.getRange(rowIndex, 4).setValue(true);
 
+    // Write snapshot rows to the Payroll sheet on every approval or re-approval
+    var actorName = (user && user.name) ? user.name : (clientEmail || "Admin");
+    var writtenRows = _appendPayrollSheetSnapshot(ss, periodNumber, rangeString, csvString, actorName);
+
+    var actionWord = wasAlreadyApproved ? "re-approved" : "approved";
+    var auditAction = wasAlreadyApproved ? "PAY_PERIOD_REAPPROVED" : "PAY_PERIOD_APPROVED";
+    logAuditAction(auditAction, "Period " + periodNumber, actorName + " " + actionWord + " pay period " + periodNumber + " (" + writtenRows + " payroll row(s) recorded)", clientEmail);
+
     // Get emails
     var hrEmails = getEmailsByRole(ss, "hr");
     var subCoordinatorEmails = getEmailsByRole(ss, "sub coordinator");
 
     if (hrEmails.length === 0 && subCoordinatorEmails.length === 0) {
-       return { success: true, message: "Pay period approved, but no HR or Sub Coordinator emails found to notify." };
+       return { success: true, reapproved: wasAlreadyApproved, rowsWritten: writtenRows, message: "Pay period " + actionWord + " and written to Payroll sheet, but no HR or Sub Coordinator emails found to notify." };
     }
 
-    var subject = "Pay Period " + periodNumber + " with the date range approved";
-    var body = user.name + " has approved the payroll for the subs for Pay Period " + periodNumber + " (" + rangeString + "). Please reach out with any questions.";
+    var subject = "Pay Period " + periodNumber + " with the date range " + actionWord;
+    var body = actorName + " has " + actionWord + " the payroll for the subs for Pay Period " + periodNumber + " (" + rangeString + "). The summary has been recorded to the Payroll sheet. Please reach out with any questions.";
 
     var blob = Utilities.newBlob(csvString, MimeType.CSV, "Pay_Period_" + periodNumber + ".csv");
 
@@ -861,9 +983,7 @@ function approvePayPeriod(periodNumber, rangeString, csvString, clientEmail) {
 
     sendEmailHelper(toEmail, subject, body, options);
 
-    logAuditAction("PAY_PERIOD_APPROVED", "Period " + periodNumber, user.name + " approved pay period " + periodNumber, clientEmail);
-
-    return { success: true };
+    return { success: true, reapproved: wasAlreadyApproved, rowsWritten: writtenRows };
   } catch (err) {
     notifyAdminOfError("approvePayPeriod", err);
     return { success: false, error: err.message };

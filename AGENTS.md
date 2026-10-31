@@ -5,7 +5,7 @@
   1. Create a descriptive branch from `main` before committing changes (e.g., `feat/<topic>` or `fix/<topic>`).
   2. Push the branch to `origin` (`git push -u origin <branch-name>`).
   3. Open a Pull Request against `main` using `gh pr create` with a clear summary of changes and verification steps so there is a permanent record on GitHub.
-  4. Push the updated `.gs` and `.html` files directly to Google Apps Script and update the live Web App deployment by running `/Users/bgross/.gemini/antigravity/scratch/.tools/bin/push-gas --deploy "<summary>"`.
+  4. Push the updated `.gs` and `.html` files to Google Apps Script `@HEAD` (`/dev` test environment) by running `/Users/bgross/.gemini/antigravity/scratch/.tools/bin/push-gas` (without `--deploy`) so the user can test on `/dev` before changes go live on `/exec`. Only run `/Users/bgross/.gemini/antigravity/scratch/.tools/bin/push-gas --deploy "<summary>"` when the user confirms `/dev` is ready to go live.
 - **Local Tooling Paths**:
   - `git`: `/Users/bgross/.gemini/antigravity/scratch/.tools/env/bin/git`
   - `gh`: `/Users/bgross/.gemini/antigravity/scratch/.tools/env/bin/gh`

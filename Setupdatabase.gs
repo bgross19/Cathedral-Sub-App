@@ -104,4 +104,15 @@ function setupDatabase() {
   var emailQueueHeaders = ["Timestamp", "To", "Subject", "Body", "Options", "Status"];
   emailQueueSheet.getRange(1, 1, 1, emailQueueHeaders.length).setValues([emailQueueHeaders]);
   emailQueueSheet.getRange(1, 1, 1, emailQueueHeaders.length).setFontWeight("bold");
+
+  // 10. Payroll Sheet (Snapshots written when Pay Periods are approved or re-approved)
+  var payrollSheet = ss.getSheetByName("Payroll");
+  if (!payrollSheet) {
+    payrollSheet = ss.insertSheet("Payroll");
+  }
+  var payrollHeaders = [
+    "Pay Period", "Date Range", "Teacher Name", "Duties", "Extras", "Extra (Pay)", "Totals", "Approved By", "Approved At"
+  ];
+  payrollSheet.getRange(1, 1, 1, payrollHeaders.length).setValues([payrollHeaders]);
+  payrollSheet.getRange(1, 1, 1, payrollHeaders.length).setFontWeight("bold");
 }

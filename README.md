@@ -11,11 +11,9 @@ Before you begin, ensure you have the following:
 ## Installation & Deployment Instructions
 1.  **Create a New Google Sheet:** Create a new, blank Google Sheet. This will act as the database for the application.
 2.  **Open Apps Script Editor:** In the Google Sheet, go to `Extensions` > `Apps Script`.
-3.  **Copy Source Code:** Copy the contents of the `.gs` and `.html` files from this repository into the Apps Script editor. Specifically:
-    *   `Code.gs` -> `Code.gs`
-    *   `Setupdatabase.gs` -> `Setupdatabase.gs`
-    *   `powerschool.gs` -> `powerschool.gs`
-    *   `Index.html` -> `Index.html`
+3.  **Push or Copy Source Code:** Push the `.gs` and `.html` files using `clasp` (or copy them into the Apps Script editor):
+    *   **Backend (`.gs`):** `core.gs`, `Setupdatabase.gs`, `powerschool.gs`, `absences.gs`, `sub_matching.gs`, `payload.gs`, `notifications.gs`, `admin_hr.gs`, `tests.gs`
+    *   **Frontend (`.html`):** `Index.html`, `Views_Dashboards.html`, `Views_Modals.html`, `JS_Core.html`, `JS_Absences.html`, `JS_Admin.html`, `JS_HR.html`, `JS_Settings.html`
 4.  **Deploy as Web App:**
     *   Click on the `Deploy` button in the top right corner and select `New deployment`.
     *   Select `Web app` as the type.
@@ -55,19 +53,23 @@ To optimize performance, the app caches the PowerSchool Master Schedule.
 
 ### 5. Email Queue Trigger
 To enable the application to process and send automated email notifications in the background:
-1. Open `code.gs` in the editor.
+1. Open `notifications.gs` in the editor.
 2. Select the `setupEmailQueueTrigger` function.
-3. Click the **Run** button to create a time-driven trigger that processes the 'Email Queue' sheet every minute.
+3. Click the **Run** button to create a time-driven trigger that processes the `Email Queue` sheet every minute.
 
 ### 6. Principal's Digest Trigger
 To enable the application to send automated weekly summaries to principals:
-1. Open `code.gs` in the editor.
+1. Open `notifications.gs` in the editor.
 2. Select the `setupPrincipalsDigestTrigger` function.
 3. Click the **Run** button to create a time-driven trigger that runs every Friday around 12 PM.
 
 ## Architecture & Code Structure
-The application is structured into the following key files:
-*   **`Index.html`**: The frontend UI of the web application. It handles routing, rendering dashboards, modals, and user interactions using vanilla JavaScript and Tailwind CSS.
-*   **`code.gs`**: The main backend logic. It contains functions for handling absence requests, assigning subs, fetching payload data, validating permissions, and processing email notifications.
-*   **`powerschool.gs`**: Handles all interactions with the PowerSchool API, including OAuth authentication, querying the Master Schedule via PowerQuery, and caching the results.
-*   **`Setupdatabase.gs`**: A one-time utility script used to initialize the Google Sheet with the required tabs (Absence Requests, Staff Roster, etc.) and default headers.
+The application is modularized into focused backend `.gs` files and frontend `.html` partials:
+*   **`core.gs`**: Web App entry (`doGet`, `include`), sheet/settings caching, RBAC, `CacheService` chunking, date/color normalizers, and period bell time helpers.
+*   **`Setupdatabase.gs`**: Initializes the Google Sheet database tabs (`Absence Requests`, `Staff Roster`, `SubstituteAvailability`, `Dates`, `PayPeriods`, `Payroll`, `Settings`, `Email Queue`, `Audit Log`).
+*   **`powerschool.gs`** & **`powerschool-plugin/`**: Handles OAuth 2.0 authentication and PowerQuery sync (`com.cathedral.subapp.masterschedule`, `com.cathedral.subapp.bellschedule`, `com.cathedral.subapp.bellscheduletimes`) with date-aware Semester 1/2 (`3601`/`3603`) schedules.
+*   **`absences.gs`**, **`sub_matching.gs`**, **`payload.gs`**: Absence request lifecycle, `LockService` concurrency, smart sub suggestions (`getSuggestedSubs`), and batched UI payloads.
+*   **`notifications.gs`**: Transactional emails, `Email Queue` background delivery, `.ics` exports, and zero-click `CalendarApp` sub duty event sync (`syncSubDutyCalendarEvent`).
+*   **`admin_hr.gs`**: Settings CRUD, Staff Roster management, Pay Period approval & `Payroll` sheet snapshot logging, Bell Schedule management, and historical data archiving.
+*   **`tests.gs`**: Built-in unit & integration test suite (`runAllUnitTests`).
+*   **`Index.html`**, **`Views_*.html`**, **`JS_*.html`**: Responsive Tailwind CSS views, modals, and client-side controllers.

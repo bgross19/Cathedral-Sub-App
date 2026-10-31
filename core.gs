@@ -428,6 +428,51 @@ function getAppVersion(clientEmail) {
 }
 
 /**
+ * Normalizes any Date object or date string ("YYYY-MM-DD", "M/D/YYYY", "MMM d, yyyy", etc.)
+ * into a standardized "YYYY-MM-DD" string.
+ */
+function getStandardizedDateString(dateRaw) {
+  if (!dateRaw) return "";
+  if (dateRaw instanceof Date) {
+    if (isNaN(dateRaw.getTime())) return "";
+    return Utilities.formatDate(dateRaw, Session.getScriptTimeZone(), "yyyy-MM-dd");
+  }
+  var s = String(dateRaw).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+
+  // Support M/D/YYYY or M-D-YYYY
+  var parts = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if (parts) {
+    var mm = parts[1].length < 2 ? "0" + parts[1] : parts[1];
+    var dd = parts[2].length < 2 ? "0" + parts[2] : parts[2];
+    return parts[3] + "-" + mm + "-" + dd;
+  }
+
+  try {
+    var parsed = new Date(s);
+    if (!isNaN(parsed.getTime())) {
+      return Utilities.formatDate(parsed, Session.getScriptTimeZone(), "yyyy-MM-dd");
+    }
+  } catch (e) {}
+  return "";
+}
+
+/**
+ * Normalizes a bell schedule color / day type string to "Green", "Blue", "Gold", "Red", or "".
+ */
+function normalizeBellScheduleColor(colorRaw) {
+  if (!colorRaw) return "";
+  var c = String(colorRaw).trim().toLowerCase();
+  if (c === "none" || c === "clear" || c === "unset" || c === "") return "";
+  if (c === "green" || c === "green day" || c === "g") return "Green";
+  if (c === "blue" || c === "blue day" || c === "b") return "Blue";
+  if (c === "gold" || c === "gold day" || c === "y") return "Gold";
+  if (c === "red" || c === "red day" || c === "no school" || c === "holiday" || c === "r") return "Red";
+  var rawTrim = String(colorRaw).trim();
+  return rawTrim.charAt(0).toUpperCase() + rawTrim.slice(1);
+}
+
+/**
  * Default period start/end clock times (24-hour HH:MM) by day type / bell schedule.
  * Synced automatically from PowerSchool `com.cathedral.subapp.bellscheduletimes` when available,
  * or customizable via Settings["Period Bell Times"].

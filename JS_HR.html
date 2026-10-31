@@ -190,12 +190,12 @@
           } else if (hrPayPeriods[val]) {
               const isApproved = hrPayPeriods[val].approved === true || hrPayPeriods[val].approved === 'TRUE' || String(hrPayPeriods[val].approved).toLowerCase() === 'true';
               if (isApproved) {
-                  btn.disabled = true;
-                  btn.title = "This pay period is already approved";
-                  btn.innerHTML = `<span>✅</span> Approved`;
+                  btn.disabled = false;
+                  btn.title = "This pay period is approved. Click to re-approve, append a new snapshot to the Payroll sheet, and email HR.";
+                  btn.innerHTML = `<span>🔄</span> Re-approve Pay Period`;
               } else {
                   btn.disabled = false;
-                  btn.title = "Click to approve this pay period";
+                  btn.title = "Click to approve this pay period, record to the Payroll sheet, and email HR.";
                   btn.innerHTML = `<span>✅</span> Approve Pay Period`;
               }
           }
@@ -207,32 +207,38 @@
           if (val === "custom" || !hrPayPeriods[val]) return;
 
           const selectedPP = hrPayPeriods[val];
+          const isAlreadyApproved = selectedPP.approved === true || selectedPP.approved === 'TRUE' || String(selectedPP.approved).toLowerCase() === 'true';
+          const actionLabel = isAlreadyApproved ? 're-approve' : 'approve';
 
-          showConfirm(`Are you sure you want to approve Pay Period ${escapeHtml(selectedPP.periodNumber)} (${escapeHtml(selectedPP.startDate)} to ${escapeHtml(selectedPP.endDate)})? This will email the current CSV data to HR and Sub Coordinators.`, () => {
+          showConfirm(`Are you sure you want to ${actionLabel} Pay Period ${escapeHtml(selectedPP.periodNumber)} (${escapeHtml(selectedPP.startDate)} to ${escapeHtml(selectedPP.endDate)})? This will append the current Sub Coverages payroll summary to the Payroll sheet and email HR and Sub Coordinators.`, () => {
               const btn = document.getElementById('btnApprovePayPeriod');
               btn.disabled = true;
-              btn.innerHTML = `<span>⏳</span> Approving...`;
+              btn.innerHTML = `<span>⏳</span> ${isAlreadyApproved ? 'Re-approving...' : 'Approving...'}`;
 
-              // Force filter to ON to exclude unpaid subs from export, then restore
+              // Temporarily switch to 'subs' view and force Hide Unpaid ON so we always export the paid Sub Coverages table
+              const originalView = hrCurrentView;
               const unpaidToggle = document.getElementById('hrFilterUnpaidToggle');
               const originalToggleState = unpaidToggle ? unpaidToggle.checked : false;
+              hrCurrentView = 'subs';
               if (unpaidToggle) {
                   unpaidToggle.checked = true;
-                  applyHRFilters();
               }
+              applyHRFilters();
 
               const csvString = generateCSVString('hrDashboardTable');
               const rangeString = `${selectedPP.startDate} to ${selectedPP.endDate}`;
 
+              hrCurrentView = originalView;
               if (unpaidToggle) {
                   unpaidToggle.checked = originalToggleState;
-                  applyHRFilters();
               }
+              applyHRFilters();
 
               google.script.run
                   .withSuccessHandler(res => {
                       if (res && res.success) {
-                          showToast(`Pay Period ${selectedPP.periodNumber} approved successfully!`, "success");
+                          const doneWord = res.reapproved ? 're-approved' : 'approved';
+                          showToast(`Pay Period ${selectedPP.periodNumber} ${doneWord} and written to Payroll sheet!`, "success");
                           // Update local state
                           hrPayPeriods[val].approved = true;
 
@@ -286,7 +292,7 @@
                     // Initialize all expected reasons
                     expectedReasons.forEach(r => aggregated[teacher][r] = 0);
                 }
-                let hours = (req.duration === 'Half Day' ? 4 : 8);
+                let hours = (req.duration && String(req.duration).startsWith('Half Day') ? 4 : 8);
 
                 let reason = req.reason ? req.reason.trim() : "Other";
                 let matchedReason = null;
