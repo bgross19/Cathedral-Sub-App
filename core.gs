@@ -690,7 +690,7 @@ function sanitizeSettingsForClient(settings, includeAdminFields) {
   var safe = {};
   if (!settings) return safe;
   var sensitiveKeys = { "PS_CLIENT_SECRET": true, "PS_CLIENT_ID": true, "PS_URL": true };
-  var serverOnlyPublicKeys = { "Date Bell Schedule Names": true, "Period Bell Times": true };
+  var serverOnlyPublicKeys = { "Date Bell Schedule Names": true };
   for (var k in settings) {
     if (!Object.prototype.hasOwnProperty.call(settings, k)) continue;
     if (!includeAdminFields && (sensitiveKeys[k] || serverOnlyPublicKeys[k])) continue;

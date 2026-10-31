@@ -73,6 +73,7 @@
       }
 
       let userDateColors = {};
+      let userDateBellScheduleNames = {};
       let userTeacherSchedule = [];
       let userTeacherScheduleByTerm = {};
 
@@ -437,8 +438,11 @@
         }
 
         let specificScheduleName = '';
+        if (typeof userDateBellScheduleNames === 'object' && userDateBellScheduleNames && userDateBellScheduleNames[isoDate]) {
+          specificScheduleName = String(userDateBellScheduleNames[isoDate]).trim();
+        }
         const rawDateScheduleNames = window.appSettings && window.appSettings['Date Bell Schedule Names'];
-        if (rawDateScheduleNames) {
+        if (!specificScheduleName && rawDateScheduleNames) {
           try {
             const parsedNames = typeof rawDateScheduleNames === 'string' ? JSON.parse(rawDateScheduleNames) : rawDateScheduleNames;
             if (parsedNames && parsedNames[isoDate]) {
@@ -465,8 +469,227 @@
           endTime: slot.end,
           displayRange: displayRange,
           startLocalStr: `${ymd}T${slot.start.replace(':', '')}00`,
-          endLocalStr: `${ymd}T${slot.end.replace(':', '')}00`
+          endLocalStr: `${ymd}T${slot.end.replace(':', '')}00`,
+          scheduleName: specificScheduleName || dayColor,
+          dayColor: dayColorRaw
         };
+      }
+
+      // === Interactive "Today's Bell Schedule" Pill & Dropdown ===
+      let currentBellDropdownDateObj = new Date();
+      let _bellDropdownOutsideClickBound = false;
+
+      function _dateObjToIso(d) {
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd}`;
+      }
+
+      function _getInitialBellScheduleSchoolDate() {
+        const d = new Date();
+        d.setHours(12, 0, 0, 0);
+        const dow = d.getDay();
+        if (dow === 6) d.setDate(d.getDate() + 2); // Saturday -> Monday
+        else if (dow === 0) d.setDate(d.getDate() + 1); // Sunday -> Monday
+        return d;
+      }
+
+      function _getColorPillClass(color) {
+        const c = String(color || '').toLowerCase();
+        if (c === 'green') return 'bg-green-100 text-green-800 border-green-300';
+        if (c === 'blue') return 'bg-blue-100 text-blue-800 border-blue-300';
+        if (c === 'gold') return 'bg-yellow-100 text-yellow-800 border-yellow-300';
+        if (c === 'red') return 'bg-red-100 text-red-800 border-red-300';
+        return 'bg-gray-100 text-gray-700 border-gray-300';
+      }
+
+      function initTodayBellScheduleWidget() {
+        const dateEl = document.getElementById('todayBellSchedulePillDate');
+        const badgeEl = document.getElementById('todayBellSchedulePillBadge');
+        if (!dateEl || !badgeEl) return;
+
+        const todayObj = new Date();
+        todayObj.setHours(12, 0, 0, 0);
+        const todayIso = _dateObjToIso(todayObj);
+        const schoolDayObj = _getInitialBellScheduleSchoolDate();
+        const schoolDayIso = _dateObjToIso(schoolDayObj);
+        currentBellDropdownDateObj = new Date(schoolDayObj.getTime());
+
+        const colorDict = (typeof userDateColors === 'object' && userDateColors && Object.keys(userDateColors).length > 0)
+          ? userDateColors
+          : (typeof globalDateColors === 'object' && globalDateColors ? globalDateColors : {});
+
+        const isWeekendToday = (todayObj.getDay() === 0 || todayObj.getDay() === 6);
+        const refDateObj = isWeekendToday ? schoolDayObj : todayObj;
+        const refIso = isWeekendToday ? schoolDayIso : todayIso;
+        const rawColor = colorDict[refIso] || 'Red';
+        const schedName = (userDateBellScheduleNames && userDateBellScheduleNames[refIso]) ? userDateBellScheduleNames[refIso] : '';
+
+        const shortDayStr = refDateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+        dateEl.innerText = isWeekendToday ? `Next (${shortDayStr})` : `Today (${shortDayStr})`;
+
+        const displayColorLabel = rawColor === 'Red' ? 'No School' : `${rawColor} Day`;
+        badgeEl.innerText = schedName && rawColor !== 'Red' ? `${displayColorLabel} • ${schedName}` : displayColorLabel;
+        badgeEl.className = `text-xs font-bold px-2.5 py-0.5 rounded-full border ${_getColorPillClass(rawColor)}`;
+
+        renderBellScheduleDropdownForDate(refIso, refDateObj);
+
+        if (!_bellDropdownOutsideClickBound) {
+          _bellDropdownOutsideClickBound = true;
+          document.addEventListener('click', function(ev) {
+            const widget = document.getElementById('todayBellScheduleWidget');
+            const dropdown = document.getElementById('todayBellScheduleDropdown');
+            const chevron = document.getElementById('todayBellScheduleChevron');
+            if (widget && dropdown && !dropdown.classList.contains('hidden') && !widget.contains(ev.target)) {
+              dropdown.classList.add('hidden');
+              if (chevron) chevron.classList.remove('rotate-180');
+            }
+          });
+        }
+      }
+
+      function toggleTodayBellScheduleDropdown(e) {
+        if (e) e.stopPropagation();
+        const dropdown = document.getElementById('todayBellScheduleDropdown');
+        const chevron = document.getElementById('todayBellScheduleChevron');
+        if (!dropdown) return;
+        const isHidden = dropdown.classList.contains('hidden');
+        if (isHidden) {
+          renderBellScheduleDropdownForDate(_dateObjToIso(currentBellDropdownDateObj), currentBellDropdownDateObj);
+          dropdown.classList.remove('hidden');
+          if (chevron) chevron.classList.add('rotate-180');
+        } else {
+          dropdown.classList.add('hidden');
+          if (chevron) chevron.classList.remove('rotate-180');
+        }
+      }
+
+      function shiftBellScheduleDropdownDate(delta, e) {
+        if (e) e.stopPropagation();
+        const d = new Date(currentBellDropdownDateObj.getTime());
+        d.setHours(12, 0, 0, 0);
+        let steps = Math.abs(delta) || 1;
+        const dir = delta >= 0 ? 1 : -1;
+        while (steps > 0) {
+          d.setDate(d.getDate() + dir);
+          if (d.getDay() !== 0 && d.getDay() !== 6) {
+            steps--;
+          }
+        }
+        currentBellDropdownDateObj = d;
+        renderBellScheduleDropdownForDate(_dateObjToIso(d), d);
+      }
+
+      function resetBellScheduleDropdownDate(e) {
+        if (e) e.stopPropagation();
+        currentBellDropdownDateObj = _getInitialBellScheduleSchoolDate();
+        renderBellScheduleDropdownForDate(_dateObjToIso(currentBellDropdownDateObj), currentBellDropdownDateObj);
+      }
+
+      function openNewAbsenceForBellDropdownDate(e) {
+        if (e) e.stopPropagation();
+        const dropdown = document.getElementById('todayBellScheduleDropdown');
+        const chevron = document.getElementById('todayBellScheduleChevron');
+        if (dropdown) dropdown.classList.add('hidden');
+        if (chevron) chevron.classList.remove('rotate-180');
+        const isoDate = _dateObjToIso(currentBellDropdownDateObj);
+        toggleModal(false, null, false);
+        if (window.absDatePicker && isoDate) {
+          window.absDatePicker.setDate([isoDate], true);
+        }
+      }
+
+      function getMeetingPeriodsForDayColor(dayColor) {
+        const c = String(dayColor || '').trim();
+        if (c === 'Blue') return ['0', '1', '10', '2', '3', '4'];
+        if (c === 'Gold') return ['0', '5', '10', '6', '7', '8'];
+        if (c === 'Green') return ['0', '1', '10', '2', '3', '4', '5', '6', '7', '8'];
+        return [];
+      }
+
+      function renderBellScheduleDropdownForDate(isoDate, dateObjRef) {
+        const titleEl = document.getElementById('bellDropdownDateTitle');
+        const subTitleEl = document.getElementById('bellDropdownSubTitle');
+        const listEl = document.getElementById('bellDropdownPeriodsList');
+        if (!titleEl || !subTitleEl || !listEl) return;
+
+        const dObj = dateObjRef || new Date(isoDate + 'T12:00:00');
+        const fullDateLabel = dObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+        titleEl.innerText = fullDateLabel;
+
+        const colorDict = (typeof userDateColors === 'object' && userDateColors && Object.keys(userDateColors).length > 0)
+          ? userDateColors
+          : (typeof globalDateColors === 'object' && globalDateColors ? globalDateColors : {});
+        const dayColor = colorDict[isoDate] || 'Red';
+        const schedName = (userDateBellScheduleNames && userDateBellScheduleNames[isoDate]) ? userDateBellScheduleNames[isoDate] : '';
+
+        if (dayColor === 'Red') {
+          subTitleEl.innerText = 'Red Day • No School / Non-Instructional';
+          listEl.innerHTML = `<div class="p-6 text-center text-gray-500 text-xs">
+            <div class="text-2xl mb-1">🏫</div>
+            <div class="font-bold text-gray-700">No regular classes scheduled</div>
+            <div class="text-gray-400 mt-0.5">Use Prev / Next above to view another school day.</div>
+          </div>`;
+          return;
+        }
+
+        subTitleEl.innerText = schedName ? `${dayColor} Day • ${schedName}` : `${dayColor} Day Schedule`;
+
+        const periodsOrder = getMeetingPeriodsForDayColor(dayColor);
+        const teacherSched = (getActiveTeacherSchedule(isoDate) || []).map(p => String(p).trim());
+        const todayIso = _dateObjToIso(new Date());
+        const now = new Date();
+        const nowMinutes = now.getHours() * 60 + now.getMinutes();
+
+        let html = '';
+        periodsOrder.forEach(p => {
+          const tr = getClientPeriodTimeRange(isoDate, p);
+          if (!tr) return;
+          const joinP = (p === '0') ? '9' : String(p);
+          const isTeaching = teacherSched.includes(p) || teacherSched.includes(joinP);
+          // Hide Period 0 unless the teacher teaches Period 0
+          if (p === '0' && !isTeaching) return;
+
+          const pDisplay = (p === '10') ? 'Advisory' : `Period ${p}`;
+          let isNow = false;
+          if (isoDate === todayIso && tr.startTime && tr.endTime) {
+            const [sh, sm] = tr.startTime.split(':').map(Number);
+            const [eh, em] = tr.endTime.split(':').map(Number);
+            const startMin = sh * 60 + sm;
+            const endMin = eh * 60 + em;
+            if (nowMinutes >= startMin && nowMinutes <= endMin) {
+              isNow = true;
+            }
+          }
+
+          const rowBg = isNow
+            ? 'bg-green-50 border border-green-300 rounded-lg'
+            : (isTeaching ? 'bg-blue-50/60 rounded-lg' : 'hover:bg-gray-50 rounded-lg');
+
+          const statusPill = isTeaching
+            ? `<span class="text-[11px] font-bold px-2 py-0.5 rounded-full bg-[#002147] text-white">Teaching</span>`
+            : `<span class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">Free</span>`;
+
+          const nowBadge = isNow
+            ? `<span class="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#00843D] text-white animate-pulse">● NOW</span>`
+            : '';
+
+          html += `
+            <div class="flex items-center justify-between px-3 py-2 ${rowBg}">
+              <div class="flex items-center gap-2">
+                <span class="font-bold text-xs sm:text-sm text-[#002147]">${escapeHtml(pDisplay)}</span>
+                ${nowBadge}
+              </div>
+              <div class="flex items-center gap-2.5">
+                <span class="text-xs font-mono text-gray-600">${escapeHtml(tr.displayRange || (tr.startTime + '-' + tr.endTime))}</span>
+                ${currentUserRole !== 'substitute' ? statusPill : ''}
+              </div>
+            </div>
+          `;
+        });
+
+        listEl.innerHTML = html || `<div class="p-4 text-center text-xs text-gray-400 italic">No period times found.</div>`;
       }
 
       function formatPeriodLabel(period, dateStr) {
@@ -784,8 +1007,11 @@ const data = payload.userData;
             globalDateColors = payload.dateColors || {};
             window.appSettings = payload.settings || {};
             userDateColors = payload.dateColors || {};
+            userDateBellScheduleNames = payload.dateBellScheduleNames || {};
             userTeacherSchedule = data.teacherSchedule || [];
             userTeacherScheduleByTerm = data.teacherScheduleByTerm || {};
+
+            initTodayBellScheduleWidget();
 
             // Render common parts (after dateColors and appSettings are initialized so period times resolve)
             renderMyAbsences(payload.myAbsences);
@@ -862,12 +1088,26 @@ const data = payload.userData;
             if (!perms["My Upcoming Sub Duties"]) {
                 document.getElementById('headerMySubDuties').classList.add('hidden');
                 document.getElementById('mySubDutiesWrapper').classList.add('hidden');
+                const subDutiesCol = document.getElementById('mySubDutiesCol');
+                if (subDutiesCol) subDutiesCol.classList.add('hidden');
+                const absCol = document.getElementById('myAbsencesCol');
+                if (absCol) absCol.classList.add('lg:col-span-2');
             }
             if (lowerRole === 'substitute') {
                 const myAbsHeader = document.getElementById('headerMyAbsences');
                 if (myAbsHeader) myAbsHeader.classList.add('hidden');
                 const myAbsWrapper = document.getElementById('myAbsencesWrapper');
                 if (myAbsWrapper) myAbsWrapper.classList.add('hidden');
+                const myAbsCol = document.getElementById('myAbsencesCol');
+                if (myAbsCol) myAbsCol.classList.add('hidden');
+                const subDutiesCol = document.getElementById('mySubDutiesCol');
+                if (subDutiesCol) subDutiesCol.classList.add('lg:col-span-2');
+                const myPastAbsCol = document.getElementById('myPastAbsencesCol');
+                if (myPastAbsCol) myPastAbsCol.classList.add('hidden');
+                const myPastSubCol = document.getElementById('myPastSubDutiesSection');
+                if (myPastSubCol) myPastSubCol.classList.add('lg:col-span-2');
+                const myOpenJobsBar = document.getElementById('headerTodaysOpenJobsBar');
+                if (myOpenJobsBar) myOpenJobsBar.classList.add('hidden');
                 const myOpenJobsHeader = document.getElementById('headerTodaysOpenJobs');
                 if (myOpenJobsHeader) myOpenJobsHeader.classList.add('hidden');
                 const myOpenJobsWrapper = document.getElementById('todaysAbsencesWrapper');

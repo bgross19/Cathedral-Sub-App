@@ -146,7 +146,7 @@ function getInitialPayload(clientEmail, requestedComponents) {
           if (byTermMap[activeTermId] && Array.isArray(byTermMap[activeTermId])) {
             activeList = byTermMap[activeTermId].slice();
           } else if (rawTeachingPeriods) {
-            activeList = rawTeachingPeriods.split(",").map(function(p) { return getScheduleJoinPeriod(p.trim()); }).filter(function(p) { return p !== ""; });
+            activeList = String(rawTeachingPeriods).replace(/^'/, "").split(",").map(function(p) { return getScheduleJoinPeriod(p.trim()); }).filter(function(p) { return p !== ""; });
           }
           rosterSchedulesByEmail[rEmail] = sortPeriodList(activeList);
         }
@@ -167,6 +167,7 @@ function getInitialPayload(clientEmail, requestedComponents) {
 
     var needDates = want("dateColors") || want("hrData");
     var dateColors = needDates ? getDateColorsCached(ss) : {};
+    var dateBellScheduleNames = (needDates && typeof getDateBellScheduleNamesCached === "function") ? getDateBellScheduleNamesCached(ss) : {};
 
 
 
@@ -593,6 +594,7 @@ function getInitialPayload(clientEmail, requestedComponents) {
       todaysAbsences: todaysAbsences,
       permissions: permissions,
       dateColors: dateColors,
+      dateBellScheduleNames: dateBellScheduleNames,
       settings: safeSettings
     };
 

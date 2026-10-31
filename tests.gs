@@ -1305,9 +1305,9 @@ function runTests() {
       syncMasterScheduleToStaffRoster(sampleSyncSchedData, mockSyncSS);
       assert(writtenKLBlock && writtenKLBlock.length === 2, "Expected K:L block to be written for header + 1 existing roster row");
       assert(writtenKLBlock[0][0] === "TEACHING_PERIODS" && writtenKLBlock[0][1] === "SCHEDULE_BY_TERM", "Expected K1:L1 headers to be TEACHING_PERIODS and SCHEDULE_BY_TERM");
-      assert(writtenKLBlock[1][0] === "3, 5", "Expected active term (3601) TEACHING_PERIODS for Adam Barth to be '3, 5'");
+      assert(writtenKLBlock[1][0] === "'3, 5", "Expected active term (3601) TEACHING_PERIODS for Adam Barth to be plain-text prefixed \"'3, 5\"");
       assert(writtenKLBlock[1][1] === '{"3601":["3","5"],"3603":["2"]}', "Expected SCHEDULE_BY_TERM JSON to store both Semester 1 (3601) and Semester 2 (3603) periods");
-      assert(appendedNewTeacherRows && appendedNewTeacherRows.length === 1 && appendedNewTeacherRows[0][10] === "1" && appendedNewTeacherRows[0][11] === '{"3601":["1"],"3603":["4"]}', "Expected newly discovered teacher to be appended with Col K and Col L populated");
+      assert(appendedNewTeacherRows && appendedNewTeacherRows.length === 1 && appendedNewTeacherRows[0][10] === "'1" && appendedNewTeacherRows[0][11] === '{"3601":["1"],"3603":["4"]}', "Expected newly discovered teacher to be appended with Col K plain-text prefixed and Col L populated");
 
       // Verify case-insensitive getSheetOrThrow ("PayPeriods" -> "Payperiods")
       var mockPayperiodsSheet = { getName: function() { return "Payperiods"; } };
@@ -1325,7 +1325,7 @@ function runTests() {
       };
       var publicSafe = sanitizeSettingsForClient(sampleSettingsBlob, false);
       assert(publicSafe["Email Mode"] === "Live", "Expected Email Mode in public settings");
-      assert(publicSafe["Date Bell Schedule Names"] === undefined && publicSafe["Period Bell Times"] === undefined, "Expected server-only bell schedule blobs stripped from public payload settings");
+      assert(publicSafe["Date Bell Schedule Names"] === undefined && publicSafe["Period Bell Times"] !== undefined, "Expected Date Bell Schedule Names stripped from public payload settings while Period Bell Times is preserved");
       var adminSafe = sanitizeSettingsForClient(sampleSettingsBlob, true);
       assert(adminSafe["Date Bell Schedule Names"] !== undefined && adminSafe["Period Bell Times"] !== undefined, "Expected server-only bell schedule blobs preserved in admin settings");
 

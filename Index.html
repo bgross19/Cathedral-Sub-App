@@ -84,10 +84,48 @@
     <main id="mainContent" class="w-full max-w-6xl mx-auto p-4 mt-4">
       
       <div class="bg-white rounded-2xl shadow-sm p-6 mb-6 border-t-4 border-[#00843D]">
-        <h2 class="text-2xl font-bold text-[#002147]">Welcome, <span id="welcomeName">Teacher</span>!</h2>
-        <p id="welcomeDescription" class="text-gray-600 mt-1 mb-6">Need coverage for a class? Submit your request below.</p>
+        <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-5">
+          <div>
+            <h2 class="text-2xl font-bold text-[#002147]">Welcome, <span id="welcomeName">Teacher</span>!</h2>
+            <p id="welcomeDescription" class="text-gray-600 mt-1">Need coverage for a class? Submit your request below.</p>
+          </div>
+
+          <!-- Clickable Today's Bell Schedule Pill & Dropdown -->
+          <div id="todayBellScheduleWidget" class="relative self-start">
+            <button type="button" id="todayBellSchedulePillBtn" onclick="toggleTodayBellScheduleDropdown(event)" class="inline-flex items-center gap-2.5 px-3.5 py-2 rounded-xl border border-gray-200 bg-gray-50 hover:bg-gray-100 text-sm font-semibold text-[#002147] shadow-sm transition-all cursor-pointer select-none">
+              <span class="text-base">🔔</span>
+              <span id="todayBellSchedulePillDate" class="text-xs sm:text-sm font-bold text-[#002147]">Today's Schedule</span>
+              <span id="todayBellSchedulePillBadge" class="text-xs font-bold px-2.5 py-0.5 rounded-full border bg-gray-100 text-gray-700 border-gray-300">Loading...</span>
+              <svg id="todayBellScheduleChevron" class="w-4 h-4 text-gray-500 transition-transform duration-200" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+
+            <!-- Dropdown Popover -->
+            <div id="todayBellScheduleDropdown" class="hidden absolute right-0 left-0 md:left-auto mt-2 w-full min-w-[310px] sm:w-96 bg-white rounded-2xl shadow-2xl border border-gray-200 z-40 overflow-hidden">
+              <div class="bg-[#002147] text-white px-4 py-3 flex items-center justify-between gap-2">
+                <button type="button" onclick="shiftBellScheduleDropdownDate(-1, event)" class="px-2 py-1 rounded hover:bg-white/20 text-xs font-bold transition-colors" title="Previous School Day">&larr; Prev</button>
+                <div class="text-center flex-1">
+                  <div id="bellDropdownDateTitle" class="text-sm font-bold">Today</div>
+                  <div id="bellDropdownSubTitle" class="text-[11px] text-white/80 font-medium">Bell Schedule</div>
+                </div>
+                <div class="flex items-center gap-1">
+                  <button type="button" onclick="resetBellScheduleDropdownDate(event)" class="px-2 py-1 rounded bg-white/15 hover:bg-white/25 text-[11px] font-semibold transition-colors">Today</button>
+                  <button type="button" onclick="shiftBellScheduleDropdownDate(1, event)" class="px-2 py-1 rounded hover:bg-white/20 text-xs font-bold transition-colors" title="Next School Day">Next &rarr;</button>
+                </div>
+              </div>
+              <div id="bellDropdownPeriodsList" class="divide-y divide-gray-100 max-h-80 overflow-y-auto p-2">
+                <div class="p-4 text-center text-xs text-gray-400 italic">Loading bell schedule...</div>
+              </div>
+              <div id="bellDropdownFooter" class="bg-gray-50 px-4 py-2 border-t border-gray-100 text-[11px] text-gray-500 flex items-center justify-between">
+                <span>Your teaching periods are highlighted</span>
+                <button type="button" onclick="openNewAbsenceForBellDropdownDate(event)" class="text-[#00843D] hover:underline font-bold">Request Sub for Day &rarr;</button>
+              </div>
+            </div>
+          </div>
+        </div>
         
-        <div class="flex flex-col sm:flex-row gap-4">
+        <div class="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3">
           <button id="newAbsenceBtn" onclick="toggleModal()" class="w-full sm:w-auto bg-[#00843D] hover:bg-green-700 text-white font-bold py-3 px-8 rounded-xl transition-all transform hover:scale-105 shadow-md flex items-center justify-center gap-2">
             <span>➕</span> New Absence Request
           </button>
@@ -132,26 +170,39 @@
         </div>
       </div>
 
-      <div class="mb-3 flex items-center cursor-pointer select-none" id="headerMyAbsences" onclick="toggleSection('myAbsencesWrapper', 'iconMyAbsences')">
-        <svg id="iconMyAbsences" class="fill-current text-[#002147] mr-2 transition-transform duration-300" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
-        <h3 class="text-lg font-bold text-[#002147]">My Upcoming Absences</h3>
-      </div>
-      <div id="myAbsencesWrapper" class="grid grid-rows-1 transition-all duration-300 ease-in-out mb-6">
-        <div class="overflow-hidden">
-          <div id="myAbsences" class="bg-white rounded-xl shadow-sm p-8 text-center text-gray-400 border border-gray-200">
-              Loading requests...
+      <!-- Side-by-Side 2-Column Grid for Teacher's Upcoming Absences & Upcoming Sub-Duties -->
+      <div id="teacherUpcomingGrid" class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6 items-start">
+        <div id="myAbsencesCol">
+          <div class="mb-3 flex items-center justify-between cursor-pointer select-none" id="headerMyAbsences" onclick="toggleSection('myAbsencesWrapper', 'iconMyAbsences')">
+            <div class="flex items-center">
+              <svg id="iconMyAbsences" class="fill-current text-[#002147] mr-2 transition-transform duration-300" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+              <h3 class="text-lg font-bold text-[#002147]">My Upcoming Absences</h3>
+            </div>
+            <span id="badgeMyAbsencesCount" class="text-xs font-bold px-2.5 py-0.5 rounded-full bg-gray-200 text-gray-700">0</span>
+          </div>
+          <div id="myAbsencesWrapper" class="grid grid-rows-1 transition-all duration-300 ease-in-out">
+            <div class="overflow-hidden">
+              <div id="myAbsences" class="bg-white rounded-xl shadow-sm p-6 text-center text-gray-400 border border-gray-200">
+                  Loading requests...
+              </div>
+            </div>
           </div>
         </div>
-      </div>
 
-      <div class="mb-3 flex items-center cursor-pointer select-none" id="headerMySubDuties" onclick="toggleSection('mySubDutiesWrapper', 'iconMySubDuties')">
-        <svg id="iconMySubDuties" class="fill-current text-[#002147] mr-2 transition-transform duration-300" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
-        <h3 class="text-lg font-bold text-[#002147]">My Upcoming Sub-Duties</h3>
-      </div>
-      <div id="mySubDutiesWrapper" class="grid grid-rows-1 transition-all duration-300 ease-in-out mb-6">
-        <div class="overflow-hidden">
-          <div id="mySubDuties" class="bg-white rounded-xl shadow-sm p-8 text-center text-gray-400 border border-gray-200">
-              Loading sub-duties...
+        <div id="mySubDutiesCol">
+          <div class="mb-3 flex items-center justify-between cursor-pointer select-none" id="headerMySubDuties" onclick="toggleSection('mySubDutiesWrapper', 'iconMySubDuties')">
+            <div class="flex items-center">
+              <svg id="iconMySubDuties" class="fill-current text-[#002147] mr-2 transition-transform duration-300" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+              <h3 class="text-lg font-bold text-[#002147]">My Upcoming Sub-Duties</h3>
+            </div>
+            <span id="badgeMySubDutiesCount" class="text-xs font-bold px-2.5 py-0.5 rounded-full bg-gray-200 text-gray-700">0</span>
+          </div>
+          <div id="mySubDutiesWrapper" class="grid grid-rows-1 transition-all duration-300 ease-in-out">
+            <div class="overflow-hidden">
+              <div id="mySubDuties" class="bg-white rounded-xl shadow-sm p-6 text-center text-gray-400 border border-gray-200">
+                  Loading sub-duties...
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -181,9 +232,25 @@
         </div>
       </div>
 
-      <div class="mb-3 flex items-center cursor-pointer select-none" id="headerTodaysOpenJobs" onclick="toggleSection('todaysAbsencesWrapper', 'iconTodaysOpenJobs')">
-        <svg id="iconTodaysOpenJobs" class="fill-current text-[#002147] mr-2 transition-transform duration-300" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
-        <h3 class="text-lg font-bold text-[#002147]">Today's Absences</h3>
+      <div class="mb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2" id="headerTodaysOpenJobsBar">
+        <div class="flex items-center cursor-pointer select-none" id="headerTodaysOpenJobs" onclick="toggleSection('todaysAbsencesWrapper', 'iconTodaysOpenJobs')">
+          <svg id="iconTodaysOpenJobs" class="fill-current text-[#002147] mr-2 transition-transform duration-300" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+          <h3 class="text-lg font-bold text-[#002147]">Today's Absences</h3>
+          <span id="badgeTodaysOpenJobsCount" class="ml-2 text-xs font-bold px-2.5 py-0.5 rounded-full bg-gray-200 text-gray-700">0</span>
+        </div>
+
+        <!-- Quick Filter & View Controls for Today's Absences -->
+        <div id="todaysAbsencesToolbar" class="flex flex-wrap items-center gap-1.5">
+          <div class="inline-flex rounded-lg border border-gray-200 bg-white p-0.5 shadow-sm">
+            <button type="button" id="todaysFilterBtn-all" onclick="setTodaysAbsencesFilter('all')" class="px-2.5 py-1 rounded-md text-xs font-bold bg-[#002147] text-white transition-colors">All</button>
+            <button type="button" id="todaysFilterBtn-open" onclick="setTodaysAbsencesFilter('open')" class="px-2.5 py-1 rounded-md text-xs font-bold text-gray-600 hover:text-[#002147] transition-colors">Open Only</button>
+            <button type="button" id="todaysFilterBtn-free" onclick="setTodaysAbsencesFilter('free')" class="px-2.5 py-1 rounded-md text-xs font-bold text-gray-600 hover:text-[#002147] transition-colors">My Free Periods ✨</button>
+          </div>
+          <div class="inline-flex rounded-lg border border-gray-200 bg-white p-0.5 shadow-sm">
+            <button type="button" id="todaysViewBtn-grid" onclick="setTodaysAbsencesViewMode('grid')" class="px-2.5 py-1 rounded-md text-xs font-bold text-gray-600 hover:text-[#002147] transition-colors">Grid</button>
+            <button type="button" id="todaysViewBtn-cards" onclick="setTodaysAbsencesViewMode('cards')" class="px-2.5 py-1 rounded-md text-xs font-bold text-gray-600 hover:text-[#002147] transition-colors">Cards</button>
+          </div>
+        </div>
       </div>
       <div id="todaysAbsencesWrapper" class="grid grid-rows-1 transition-all duration-300 ease-in-out mb-6">
         <div class="overflow-hidden">
@@ -205,27 +272,38 @@
         </div>
       </div>
 
-      <div class="mb-3 flex items-center cursor-pointer select-none" id="headerMyPastAbsences" onclick="toggleSection('myPastAbsencesWrapper', 'iconMyPastAbsences')">
-        <svg id="iconMyPastAbsences" class="fill-current text-[#002147] mr-2 transition-transform duration-300 -rotate-90" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
-        <h3 class="text-lg font-bold text-[#002147]">My Past Absences</h3>
-      </div>
-      <div id="myPastAbsencesWrapper" class="grid grid-rows-[0fr] transition-all duration-300 ease-in-out mb-6">
-        <div class="overflow-hidden">
-          <div id="myPastAbsences" class="bg-white rounded-xl shadow-sm p-8 text-center text-gray-400 border border-gray-200">
-              Loading past requests...
+      <!-- Side-by-Side 2-Column Grid for Past History & Feedback -->
+      <div id="teacherPastHistoryGrid" class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6 items-start">
+        <div id="myPastAbsencesCol">
+          <div class="mb-3 flex items-center justify-between cursor-pointer select-none" id="headerMyPastAbsences" onclick="toggleSection('myPastAbsencesWrapper', 'iconMyPastAbsences')">
+            <div class="flex items-center">
+              <svg id="iconMyPastAbsences" class="fill-current text-[#002147] mr-2 transition-transform duration-300 -rotate-90" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+              <h3 class="text-lg font-bold text-[#002147]">My Past Absences</h3>
+            </div>
+            <span id="badgeMyPastAbsencesCount" class="text-xs font-bold px-2.5 py-0.5 rounded-full bg-gray-200 text-gray-600">0</span>
+          </div>
+          <div id="myPastAbsencesWrapper" class="grid grid-rows-[0fr] transition-all duration-300 ease-in-out">
+            <div class="overflow-hidden">
+              <div id="myPastAbsences" class="bg-white rounded-xl shadow-sm p-6 text-center text-gray-400 border border-gray-200">
+                  Loading past requests...
+              </div>
+            </div>
           </div>
         </div>
-      </div>
 
-      <div id="myPastSubDutiesSection" class="mb-6">
-        <div class="mb-3 flex items-center cursor-pointer select-none" id="headerMyPastSubDuties" onclick="toggleSection('myPastSubDutiesWrapper', 'iconMyPastSubDuties')">
-          <svg id="iconMyPastSubDuties" class="fill-current text-[#002147] mr-2 transition-transform duration-300 -rotate-90" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
-          <h3 class="text-lg font-bold text-[#002147]">My Past Sub-Duties</h3>
-        </div>
-        <div id="myPastSubDutiesWrapper" class="grid grid-rows-[0fr] transition-all duration-300 ease-in-out mb-6">
-          <div class="overflow-hidden">
-            <div id="myPastSubDutiesContent" class="bg-white rounded-xl shadow-sm p-8 text-center text-gray-400 border border-gray-200">
-                Loading past sub-duties...
+        <div id="myPastSubDutiesSection">
+          <div class="mb-3 flex items-center justify-between cursor-pointer select-none" id="headerMyPastSubDuties" onclick="toggleSection('myPastSubDutiesWrapper', 'iconMyPastSubDuties')">
+            <div class="flex items-center">
+              <svg id="iconMyPastSubDuties" class="fill-current text-[#002147] mr-2 transition-transform duration-300 -rotate-90" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+              <h3 class="text-lg font-bold text-[#002147]">My Past Sub-Duties</h3>
+            </div>
+            <span id="badgeMyPastSubDutiesCount" class="text-xs font-bold px-2.5 py-0.5 rounded-full bg-gray-200 text-gray-600">0</span>
+          </div>
+          <div id="myPastSubDutiesWrapper" class="grid grid-rows-[0fr] transition-all duration-300 ease-in-out">
+            <div class="overflow-hidden">
+              <div id="myPastSubDutiesContent" class="bg-white rounded-xl shadow-sm p-6 text-center text-gray-400 border border-gray-200">
+                  Loading past sub-duties...
+              </div>
             </div>
           </div>
         </div>

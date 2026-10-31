@@ -765,13 +765,18 @@ function syncMasterScheduleToStaffRoster(scheduleData, ss) {
       const rEmail = rosterData[r] ? String(rosterData[r][1] || "").toLowerCase().trim() : "";
       const pList = (rEmail && allSchedules[rEmail]) ? allSchedules[rEmail] : [];
       const byTerm = (rEmail && allSchedulesByTerm[rEmail]) ? allSchedulesByTerm[rEmail] : {};
+      // Prefix TEACHING_PERIODS with "'" so Google Sheets never parses 3 periods (e.g. "1, 2, 3") as a Date ("1, 2, 2003")
       klBlock.push([
-        pList.length > 0 ? pList.join(", ") : "",
+        pList.length > 0 ? ("'" + pList.join(", ")) : "",
         Object.keys(byTerm).length > 0 ? JSON.stringify(byTerm) : ""
       ]);
     }
     try {
-      rosterSheet.getRange(1, 11, klBlock.length, 2).setValues(klBlock);
+      const klRange = rosterSheet.getRange(1, 11, klBlock.length, 2);
+      if (typeof klRange.setNumberFormat === "function") {
+        klRange.setNumberFormat("@");
+      }
+      klRange.setValues(klBlock);
     } catch (klErr) {
       Logger.log("Could not update Staff Roster K:L schedule columns: " + klErr.message);
     }
@@ -795,7 +800,7 @@ function syncMasterScheduleToStaffRoster(scheduleData, ss) {
       "",
       "",
       "",
-      pList.length > 0 ? pList.join(", ") : "",
+      pList.length > 0 ? ("'" + pList.join(", ")) : "",
       Object.keys(byTerm).length > 0 ? JSON.stringify(byTerm) : ""
     ]);
     addedNames.push(teacher.name + " <" + teacher.email + ">");

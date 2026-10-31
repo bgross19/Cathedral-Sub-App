@@ -220,9 +220,37 @@
 
       function renderPeriodCheckboxTimeHints(containerEl, cbSelector, dateStr) {
           if (!containerEl) return;
+          const scheduleToUse = dateStr ? getActiveTeacherSchedule(dateStr) : [];
+          const dayColor = dateStr ? (userDateColors[dateStr] || '') : '';
+          const meetingPeriods = typeof getMeetingPeriodsForDayColor === 'function' ? getMeetingPeriodsForDayColor(dayColor) : [];
+
           containerEl.querySelectorAll(cbSelector).forEach(cb => {
               const label = cb.closest("label");
               if (!label) return;
+              const pVal = String(cb.value);
+              const isTeaching = scheduleToUse && (scheduleToUse.includes(pVal) || scheduleToUse.includes(parseInt(pVal, 10)));
+              const meetsToday = meetingPeriods.length === 0 || meetingPeriods.includes(pVal);
+
+              // Style label according to teacher's teaching schedule and whether period meets on dayColor
+              label.className = "flex items-center space-x-2 text-sm px-2 py-1.5 rounded-lg border transition-all cursor-pointer select-none " +
+                  (isTeaching && meetsToday
+                      ? "border-[#00843D] bg-green-50/60 text-[#002147] font-semibold shadow-[0_0_0_1px_rgba(0,132,61,0.15)]"
+                      : (!meetsToday
+                          ? "border-gray-200 bg-gray-100/70 text-gray-400 opacity-50"
+                          : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"));
+
+              let teachBadge = label.querySelector(".period-teaching-dot");
+              if (isTeaching) {
+                  if (!teachBadge) {
+                      teachBadge = document.createElement("span");
+                      teachBadge.className = "period-teaching-dot inline-block w-1.5 h-1.5 rounded-full bg-[#00843D] ml-1 shrink-0";
+                      teachBadge.title = "You teach this period";
+                      label.appendChild(teachBadge);
+                  }
+              } else if (teachBadge) {
+                  teachBadge.remove();
+              }
+
               let hintEl = label.querySelector(".period-time-hint");
               const tr = dateStr ? getClientPeriodTimeRange(dateStr, cb.value) : null;
               if (tr && tr.displayRange) {
@@ -330,13 +358,95 @@
       }
 
 
+      let todaysAbsencesData = [];
+      let todaysAbsencesFilterMode = 'all'; // 'all' | 'open' | 'free'
+      let todaysAbsencesViewMode = (typeof window !== 'undefined' && window.innerWidth < 640) ? 'cards' : 'grid'; // 'grid' | 'cards'
+
+      function getFilteredTodaysAbsences(rawRecords) {
+          if (!rawRecords || !Array.isArray(rawRecords)) return [];
+          const todayDateRef = (rawRecords[0] && (rawRecords[0].formDateString || rawRecords[0].date)) || new Date().toISOString().slice(0, 10);
+          const teacherSchedule = getActiveTeacherSchedule(todayDateRef).map(String);
+
+          return rawRecords.filter(req => {
+              const isOpen = !req.assignedSub || req.assignedSub.trim() === '';
+              if (todaysAbsencesFilterMode === 'open') {
+                  return isOpen;
+              }
+              if (todaysAbsencesFilterMode === 'free') {
+                  const pStr = String(req.period);
+                  const isTeacherBusy = teacherSchedule.includes(pStr);
+                  return isOpen && !isTeacherBusy;
+              }
+              return true;
+          });
+      }
+
+      function updateTodaysAbsencesToolbarUI() {
+          const filterModes = ['all', 'open', 'free'];
+          const btnIds = {
+              all: 'btnTodaysFilterAll',
+              open: 'btnTodaysFilterOpen',
+              free: 'btnTodaysFilterFree'
+          };
+          filterModes.forEach(m => {
+              const btn = document.getElementById(btnIds[m]);
+              if (!btn) return;
+              if (m === 'free' && currentUserRole === 'substitute') {
+                  btn.classList.add('hidden');
+              } else {
+                  btn.classList.remove('hidden');
+              }
+              if (todaysAbsencesFilterMode === m) {
+                  btn.className = "px-2.5 py-1 text-xs font-bold rounded-md bg-white text-[#002147] shadow-sm transition-all";
+              } else {
+                  btn.className = "px-2.5 py-1 text-xs font-bold rounded-md text-gray-600 hover:text-[#002147] transition-all";
+              }
+          });
+
+          const btnGrid = document.getElementById('btnTodaysViewGrid');
+          const btnCards = document.getElementById('btnTodaysViewCards');
+          if (btnGrid && btnCards) {
+              if (todaysAbsencesViewMode === 'grid') {
+                  btnGrid.className = "px-2.5 py-1 text-xs font-bold rounded-md bg-white text-[#002147] shadow-sm transition-all";
+                  btnCards.className = "px-2.5 py-1 text-xs font-bold rounded-md text-gray-600 hover:text-[#002147] transition-all";
+              } else {
+                  btnCards.className = "px-2.5 py-1 text-xs font-bold rounded-md bg-white text-[#002147] shadow-sm transition-all";
+                  btnGrid.className = "px-2.5 py-1 text-xs font-bold rounded-md text-gray-600 hover:text-[#002147] transition-all";
+              }
+          }
+      }
+
+      function setTodaysAbsencesFilter(mode) {
+          todaysAbsencesFilterMode = mode || 'all';
+          updateTodaysAbsencesToolbarUI();
+          renderTodaysAbsences(todaysAbsencesData);
+      }
+
+      function setTodaysAbsencesViewMode(mode) {
+          todaysAbsencesViewMode = mode || 'grid';
+          updateTodaysAbsencesToolbarUI();
+          const container = document.getElementById('todaysAbsences');
+          const gridContainer = document.getElementById('todaysAbsencesGridContainer');
+          if (!todaysAbsencesData || todaysAbsencesData.length === 0) return;
+          if (todaysAbsencesViewMode === 'grid') {
+              if (gridContainer) gridContainer.classList.remove('hidden');
+              if (container) container.classList.add('hidden');
+          } else {
+              if (gridContainer) gridContainer.classList.add('hidden');
+              if (container) container.classList.remove('hidden');
+          }
+      }
+
       function renderTodaysAbsencesGrid(records) {
         const thead = document.getElementById('todaysAbsencesGridTableHeader');
         const tbody = document.getElementById('todaysAbsencesGridTableBody');
 
         if (!records || records.length === 0) {
             thead.innerHTML = '<tr class="bg-gray-50 border-b border-gray-300 text-sm text-gray-700 uppercase"><th class="p-3 border border-gray-300 sticky left-0 z-20 bg-gray-50">Teacher Name</th></tr>';
-            tbody.innerHTML = '<tr><td class="p-8 text-center text-gray-400 italic border border-gray-300">No absences found for today.</td></tr>';
+            const emptyMsg = todaysAbsencesFilterMode === 'free'
+                ? 'No open sub periods match your free periods today.'
+                : (todaysAbsencesFilterMode === 'open' ? 'All periods for today are covered!' : 'No absences found for today.');
+            tbody.innerHTML = `<tr><td class="p-8 text-center text-gray-400 italic border border-gray-300">${escapeHtml(emptyMsg)}</td></tr>`;
             return;
         }
 
@@ -369,11 +479,20 @@
             return valA - valB;
         });
 
-        // 2. Build Header
+        // 2. Build Header (with Free / Teaching badges for teachers)
         const todayDateRef = (records[0] && (records[0].formDateString || records[0].date)) || new Date().toISOString().slice(0, 10);
+        const mySchedule = getActiveTeacherSchedule(todayDateRef).map(String);
+        const showTeacherFreeBadge = currentUserRole !== 'substitute' && mySchedule.length > 0;
+
         let headerHtml = `<th class="p-3 border border-gray-300 min-w-[200px] sticky left-0 z-20 bg-gray-50 shadow-[1px_0_0_0_#d1d5db]">Teacher Name</th>`;
         sortedActivePeriods.forEach(p => {
-            headerHtml += `<th class="p-3 border border-gray-300 text-center w-64">${formatPeriodLabel(p, todayDateRef)}</th>`;
+            const isTeachingThisPeriod = mySchedule.includes(String(p));
+            const statusPillHtml = showTeacherFreeBadge
+                ? (isTeachingThisPeriod
+                    ? `<div class="mt-1"><span class="inline-block text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 normal-case">Teaching</span></div>`
+                    : `<div class="mt-1"><span class="inline-block text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 normal-case">✓ You're Free</span></div>`)
+                : '';
+            headerHtml += `<th class="p-3 border border-gray-300 text-center w-64">${formatPeriodLabel(p, todayDateRef)}${statusPillHtml}</th>`;
         });
         thead.innerHTML = headerHtml;
 
@@ -390,7 +509,6 @@
                 if (pData) {
                     const req = pData.req;
                     const assignId = 'btn_assign_todays_' + req.id + '_' + req.period;
-                    const quickCoverLink = req.subPlanUrl || '#';
 
                     if (pData.assignedSub && pData.assignedSub.trim() !== '' && pData.assignedSub !== 'No Sub Needed') {
                         html += `<td class="p-3 text-xs text-center border border-gray-300 bg-green-50 align-top">
@@ -426,67 +544,102 @@
         tbody.innerHTML = html;
       }
 
-      let todaysAbsencesData = [];
-
       function renderTodaysAbsences(requests) {
             const container = document.getElementById('todaysAbsences');
             const gridContainer = document.getElementById('todaysAbsencesGridContainer');
+            const openBadge = document.getElementById('badgeTodaysOpenJobsCount');
+            const toolbar = document.getElementById('todaysAbsencesToolbar');
 
-            if (!requests || !Array.isArray(requests) || requests.length === 0) {
+            todaysAbsencesData = Array.isArray(requests) ? requests : [];
+
+            // Count open periods across all of today's absences
+            const openCount = todaysAbsencesData.filter(r => !r.assignedSub || r.assignedSub.trim() === '').length;
+            if (openBadge) {
+                openBadge.innerText = openCount === 1 ? '1 Open' : `${openCount} Open`;
+                openBadge.className = openCount > 0
+                    ? "text-xs font-bold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300"
+                    : "text-xs font-bold px-2.5 py-0.5 rounded-full bg-green-100 text-green-800 border border-green-200";
+                openBadge.classList.remove('hidden');
+            }
+
+            updateTodaysAbsencesToolbarUI();
+
+            if (todaysAbsencesData.length === 0) {
+              if (toolbar) toolbar.classList.add('hidden');
               container.innerHTML = 'There are no absences available for today.';
               container.classList.add('text-gray-400');
+              container.classList.remove('hidden');
               gridContainer.classList.add('hidden');
               return;
             }
 
-            // Show both containers
-            gridContainer.classList.remove('hidden');
+            if (toolbar) toolbar.classList.remove('hidden');
 
-            renderTodaysAbsencesGrid(requests);
+            const filteredRequests = getFilteredTodaysAbsences(todaysAbsencesData);
 
-            // Re-render the original list as well
-            let html = '<div class="divide-y divide-gray-200 text-left">';
-            todaysAbsencesData = requests;
+            renderTodaysAbsencesGrid(filteredRequests);
 
-            requests.forEach((req, index) => {
-              let assignId = `todays-assign-${req.id}-${req.period}`;
-              let roomPillClass = req.room === "No Class Assigned" ? "bg-gray-100 text-gray-600 border-gray-200" : "bg-blue-100 text-blue-800 border-blue-200";
-              let coursePillClass = req.course === "No Class Assigned" ? "bg-gray-100 text-gray-600 border-gray-200" : "bg-purple-100 text-purple-800 border-purple-200";
+            if (filteredRequests.length === 0) {
+                const emptyMsg = todaysAbsencesFilterMode === 'free'
+                    ? 'No open sub periods match your free periods today.'
+                    : (todaysAbsencesFilterMode === 'open' ? 'All periods for today are covered!' : 'There are no absences available for today.');
+                container.innerHTML = `<div class="p-6 text-center text-gray-400 italic">${escapeHtml(emptyMsg)}</div>`;
+            } else {
+                const todayDateRef = (filteredRequests[0] && (filteredRequests[0].formDateString || filteredRequests[0].date)) || new Date().toISOString().slice(0, 10);
+                const mySchedule = getActiveTeacherSchedule(todayDateRef).map(String);
+                const showTeacherFreeBadge = currentUserRole !== 'substitute' && mySchedule.length > 0;
 
-              html += `
-                <div class="p-4 hover:bg-orange-50 transition-colors flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white gap-4">
-                  <div>
-                    <p class="font-bold text-[#002147]">${escapeHtml(req.date)}</p>
-                    <p class="text-sm text-gray-600 font-semibold">${escapeHtml(req.teacherName)}</p>
+                let html = '<div class="divide-y divide-gray-200 text-left">';
+                filteredRequests.forEach((req) => {
+                  let assignId = `todays-assign-${req.id}-${req.period}`;
+                  let roomPillClass = req.room === "No Class Assigned" ? "bg-gray-100 text-gray-600 border-gray-200" : "bg-blue-100 text-blue-800 border-blue-200";
+                  let coursePillClass = req.course === "No Class Assigned" ? "bg-gray-100 text-gray-600 border-gray-200" : "bg-purple-100 text-purple-800 border-purple-200";
+                  const isFree = showTeacherFreeBadge && !mySchedule.includes(String(req.period));
 
-                    <div class="mt-2 flex flex-col sm:flex-row flex-wrap gap-2 items-start sm:items-center">
-                       <span class="inline-block bg-orange-100 text-orange-800 text-xs font-bold px-3 py-1 rounded-full border border-orange-200">${formatPeriodLabel(req.period, req.formDateString || req.date)}</span>
-                       <span class="inline-block ${roomPillClass} text-xs font-bold px-3 py-1 rounded-full border">Room: ${escapeHtml(req.room)}</span>
-                       <span class="inline-block ${coursePillClass} text-xs font-bold px-3 py-1 rounded-full border truncate max-w-xs">Course: ${escapeHtml(req.course)}</span>
+                  html += `
+                    <div class="p-4 hover:bg-orange-50 transition-colors flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white gap-4">
+                      <div>
+                        <p class="font-bold text-[#002147]">${escapeHtml(req.date)}</p>
+                        <p class="text-sm text-gray-600 font-semibold">${escapeHtml(req.teacherName)}</p>
+
+                        <div class="mt-2 flex flex-col sm:flex-row flex-wrap gap-2 items-start sm:items-center">
+                           <span class="inline-block bg-orange-100 text-orange-800 text-xs font-bold px-3 py-1 rounded-full border border-orange-200">${formatPeriodLabel(req.period, req.formDateString || req.date)}</span>
+                           ${isFree ? `<span class="inline-block bg-emerald-100 text-emerald-800 text-xs font-bold px-2.5 py-1 rounded-full border border-emerald-300">✓ You're Free</span>` : ''}
+                           <span class="inline-block ${roomPillClass} text-xs font-bold px-3 py-1 rounded-full border">Room: ${escapeHtml(req.room)}</span>
+                           <span class="inline-block ${coursePillClass} text-xs font-bold px-3 py-1 rounded-full border truncate max-w-xs">Course: ${escapeHtml(req.course)}</span>
+                        </div>
+                      </div>
+                      <div class="flex items-center gap-2 w-full sm:w-auto" onclick="event.stopPropagation()">
+                        ${(!req.assignedSub || req.assignedSub.trim() === '') ? `
+                            <button id="${escapeHtml(assignId)}" onclick="handleSignMeUp('${escapeJs(req.id)}', '${escapeJs(req.period)}', '${escapeJs(assignId)}', '${escapeJs(req.teacherName)}', '${escapeJs(req.course)}')"  class="bg-[#00843D] hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg text-sm transition-colors shadow-sm">
+                              Sign Me Up
+                            </button>
+                        ` : (req.assignedSub === 'No Sub Needed' ? `
+                            <div class="bg-gray-100 border-2 border-gray-200 text-gray-500 font-bold py-2 px-4 rounded-lg text-sm flex items-center justify-center gap-2 w-full sm:w-auto cursor-default">
+                              <span>No Sub Needed</span>
+                            </div>
+                        ` : `
+                            <div class="bg-green-50 border-2 border-green-200 text-green-800 font-bold py-2 px-4 rounded-lg text-sm flex items-center justify-center gap-2 w-full sm:w-auto cursor-default">
+                              <span>✓ Filled by ${escapeHtml(req.assignedSub)}</span>
+                            </div>
+                        `)}
+                      </div>
                     </div>
-                  </div>
-                  <div class="flex items-center gap-2 w-full sm:w-auto" onclick="event.stopPropagation()">
-                    ${(!req.assignedSub || req.assignedSub.trim() === '') ? `
-                        <button id="${escapeHtml(assignId)}" onclick="handleSignMeUp('${escapeJs(req.id)}', '${escapeJs(req.period)}', '${escapeJs(assignId)}', '${escapeJs(req.teacherName)}', '${escapeJs(req.course)}')"  class="bg-[#00843D] hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg text-sm transition-colors shadow-sm">
-                          Sign Me Up
-                        </button>
-                    ` : (req.assignedSub === 'No Sub Needed' ? `
-                        <div class="bg-gray-100 border-2 border-gray-200 text-gray-500 font-bold py-2 px-4 rounded-lg text-sm flex items-center justify-center gap-2 w-full sm:w-auto cursor-default">
-                          <span>No Sub Needed</span>
-                        </div>
-                    ` : `
-                        <div class="bg-green-50 border-2 border-green-200 text-green-800 font-bold py-2 px-4 rounded-lg text-sm flex items-center justify-center gap-2 w-full sm:w-auto cursor-default">
-                          <span>✓ Filled by ${escapeHtml(req.assignedSub)}</span>
-                        </div>
-                    `)}
-                  </div>
-                </div>
-              `;
-            });
-            html += '</div>';
+                  `;
+                });
+                html += '</div>';
+                container.innerHTML = html;
+                container.classList.remove('text-gray-400');
+            }
 
-            container.innerHTML = html;
-            container.classList.remove('text-gray-400');
+            // Apply active view mode (Grid vs Cards)
+            if (todaysAbsencesViewMode === 'grid') {
+                gridContainer.classList.remove('hidden');
+                container.classList.add('hidden');
+            } else {
+                gridContainer.classList.add('hidden');
+                container.classList.remove('hidden');
+            }
       }
 
       function loadTodaysAbsences() {
@@ -1199,6 +1352,15 @@
       function renderMySubDuties(duties) {
             mySubDutiesData = duties;
             const container = document.getElementById('mySubDuties');
+            const badge = document.getElementById('badgeMySubDutiesCount');
+            const count = Array.isArray(duties) ? duties.length : 0;
+            if (badge) {
+              badge.innerText = String(count);
+              badge.className = count > 0
+                ? "text-xs font-bold px-2 py-0.5 rounded-full bg-green-100 text-[#00843D] border border-green-300"
+                : "text-xs font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 border border-gray-200";
+              badge.classList.remove('hidden');
+            }
 
             if (!duties || !Array.isArray(duties) || duties.length === 0) {
               container.innerHTML = 'You have no assigned sub-duties over the next week.';
@@ -1217,10 +1379,11 @@
                     <p class="font-bold text-[#002147]">${escapeHtml(duty.date)}</p>
                     <p class="text-sm text-gray-600 font-semibold">${escapeHtml(duty.teacherName)}</p>
 
-                    <div class="mt-2 flex flex-col gap-1 items-start">
+                    <div class="mt-2 flex flex-wrap gap-1.5 items-center">
                        <span class="inline-block bg-orange-100 text-orange-800 text-xs font-bold px-3 py-1 rounded-full border border-orange-200">${formatPeriodLabel(duty.period, duty.formDateString || duty.date)}</span>
                        <span class="inline-block ${roomPillClass} text-xs font-bold px-3 py-1 rounded-full border">Room: ${escapeHtml(duty.room)}</span>
                        <span class="inline-block ${coursePillClass} text-xs font-bold px-3 py-1 rounded-full border truncate max-w-xs">Course: ${escapeHtml(duty.course)}</span>
+                       ${duty.subPlanUrl ? `<span class="inline-block bg-indigo-50 text-indigo-700 text-xs font-bold px-2.5 py-1 rounded-full border border-indigo-200">📎 Sub Plan Attached</span>` : ''}
                     </div>
                   </div>
                   <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto" onclick="event.stopPropagation()">
@@ -1332,9 +1495,74 @@
         });
       }
 
+      function buildAbsencePeriodStatusChips(abs) {
+            if (!abs || !abs.periodsWithSubs) {
+              return { chipsHtml: '', summaryBadgeHtml: '' };
+            }
+            const dateStr = abs.formDateString || abs.date;
+            const rawParts = String(abs.periodsWithSubs).split(',').map(s => s.trim()).filter(Boolean);
+            let neededCount = 0;
+            let coveredCount = 0;
+            const chips = [];
+
+            rawParts.forEach(part => {
+              const m = part.match(/^(Advisory|\d+)\s*(?:\((.*)\))?$/i);
+              if (!m) {
+                chips.push(`<span class="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg bg-gray-100 text-gray-700 border border-gray-200">${escapeHtml(part)}</span>`);
+                return;
+              }
+              const pToken = m[1];
+              const subStatus = (m[2] || 'Unassigned').trim();
+              const tr = getClientPeriodTimeRange(dateStr, pToken);
+              const shortPeriodName = (String(pToken).toLowerCase() === 'advisory' || String(pToken) === '10')
+                ? 'Advisory'
+                : (String(pToken) === '9' ? 'Pd 0' : `Pd ${pToken}`);
+              const timeStr = (tr && tr.displayRange) ? ` (${tr.displayRange})` : '';
+
+              if (subStatus.toLowerCase() === 'no sub needed') {
+                chips.push(`<span class="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg bg-gray-100 text-gray-600 border border-gray-200" title="No substitute required for this period"><span>⚪</span><span>${escapeHtml(shortPeriodName + timeStr)} • No Sub Needed</span></span>`);
+              } else if (!subStatus || subStatus.toLowerCase() === 'unassigned') {
+                neededCount++;
+                chips.push(`<span class="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 border border-amber-300" title="Awaiting substitute assignment"><span>⏳</span><span>${escapeHtml(shortPeriodName + timeStr)} • Awaiting Sub</span></span>`);
+              } else {
+                neededCount++;
+                coveredCount++;
+                chips.push(`<span class="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-lg bg-green-50 text-[#00843D] border border-green-300" title="Covered by ${escapeHtml(subStatus)}"><span>✓</span><span>${escapeHtml(shortPeriodName + timeStr)} • ${escapeHtml(subStatus)}</span></span>`);
+              }
+            });
+
+            let summaryBadgeHtml = '';
+            if (neededCount > 0) {
+              if (coveredCount === neededCount) {
+                summaryBadgeHtml = `<span class="text-[11px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-[#00843D] border border-green-300">✓ Fully Covered (${coveredCount}/${neededCount})</span>`;
+              } else if (coveredCount > 0) {
+                summaryBadgeHtml = `<span class="text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300">${coveredCount}/${neededCount} Covered</span>`;
+              } else {
+                summaryBadgeHtml = `<span class="text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300">0/${neededCount} Covered</span>`;
+              }
+            } else if (rawParts.length > 0) {
+              summaryBadgeHtml = `<span class="text-[11px] font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 border border-gray-300">No Sub Needed</span>`;
+            }
+
+            return {
+              chipsHtml: chips.join(''),
+              summaryBadgeHtml: summaryBadgeHtml
+            };
+          }
+
       function renderMyAbsences(absences) {
             myAbsencesData = absences;
             const container = document.getElementById('myAbsences');
+            const badge = document.getElementById('badgeMyAbsencesCount');
+            const count = Array.isArray(absences) ? absences.length : 0;
+            if (badge) {
+              badge.innerText = String(count);
+              badge.className = count > 0
+                ? "text-xs font-bold px-2 py-0.5 rounded-full bg-blue-100 text-[#002147] border border-blue-200"
+                : "text-xs font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 border border-gray-200";
+              badge.classList.remove('hidden');
+            }
+
             if (!absences || !Array.isArray(absences) || absences.length === 0) {
               container.innerHTML = 'No active requests found. You are doing great!';
               return;
@@ -1342,29 +1570,48 @@
 
             let html = '<div class="space-y-3 text-left">';
             absences.forEach((abs, index) => {
-              let bgClass = abs.urgency === 'Urgent' ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200';
+              let bgClass = abs.urgency === 'Urgent' ? 'bg-red-50/70 border-red-200' : 'bg-white border-gray-200 hover:border-gray-300';
               let textClass = abs.urgency === 'Urgent' ? 'text-red-700' : 'text-[#002147]';
+              const isoDate = abs.formDateString || '';
+              const dayColor = isoDate ? (userDateColors[isoDate] || '') : '';
+              const dayColorBadge = dayColor ? `<span class="text-[11px] font-bold px-2 py-0.5 rounded-full border ${
+                  dayColor === 'Blue' ? 'bg-blue-100 text-blue-800 border-blue-300' :
+                  dayColor === 'Gold' ? 'bg-yellow-100 text-yellow-800 border-yellow-300' :
+                  dayColor === 'Green' ? 'bg-green-100 text-green-800 border-green-300' : 'bg-gray-100 text-gray-700 border-gray-300'
+              }">${escapeHtml(dayColor)} Day</span>` : '';
+
+              const { chipsHtml, summaryBadgeHtml } = buildAbsencePeriodStatusChips(abs);
+              const subPlanChip = abs.subPlanUrl
+                ? `<a href="${escapeHtml(abs.subPlanUrl)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" class="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 transition-colors"><span>📎</span><span>View Sub Plan</span></a>`
+                : `<button type="button" onclick="event.stopPropagation(); editAbsence(${index})" class="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600 border border-dashed border-gray-300 transition-colors" title="Attach a sub plan or instructions"><span>+</span><span>Add Sub Plan</span></button>`;
               
               html += `
-                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 border rounded-xl shadow-sm ${bgClass} gap-4">
-                  <div>
-                    <div class="flex items-center gap-2">
-                       <p class="font-bold ${textClass} text-lg">${escapeHtml(abs.date)}</p>
-                       <span class="text-[10px] font-bold uppercase tracking-wider opacity-60 bg-white px-2 py-0.5 rounded border border-gray-300">${escapeHtml(abs.urgency)}</span>
+                <div class="flex flex-col p-4 border rounded-xl shadow-sm transition-colors ${bgClass} gap-3">
+                  <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                    <div>
+                      <div class="flex flex-wrap items-center gap-2">
+                         <p class="font-bold ${textClass} text-lg">${escapeHtml(abs.date)}</p>
+                         ${dayColorBadge}
+                         ${summaryBadgeHtml}
+                         ${abs.urgency === 'Urgent' ? `<span class="text-[10px] font-bold uppercase tracking-wider bg-red-100 text-red-700 px-2 py-0.5 rounded border border-red-300">Urgent</span>` : ''}
+                      </div>
+                      <p class="text-sm text-gray-600 font-semibold mt-0.5">${escapeHtml(abs.reason)}</p>
                     </div>
-                    <p class="text-sm text-gray-600 font-semibold">${escapeHtml(abs.reason)}</p>
-                    <p class="text-xs text-gray-500 mt-1">Periods: ${escapeHtml(formatPeriodsWithSubsAndTimes(abs))}</p>
+                    <div class="flex flex-wrap gap-1.5 w-full sm:w-auto" onclick="event.stopPropagation()">
+                      <button type="button" onclick="openMyAbsenceGoogleCalendar(${index})" title="Add Absence to Google Calendar" class="flex-1 sm:flex-none bg-white hover:bg-green-50 text-[#00843D] text-xs font-bold py-1.5 px-2.5 rounded-lg border border-green-300 transition-colors shadow-sm flex items-center justify-center gap-1">
+                        <span>📅</span> Calendar
+                      </button>
+                      <button onclick="editAbsence(${index})" class="flex-1 sm:flex-none bg-white hover:bg-gray-100 text-gray-700 text-xs font-bold py-1.5 px-3 rounded-lg border border-gray-300 transition-colors shadow-sm">
+                        Edit
+                      </button>
+                      <button onclick="cancelAbsence('${escapeJs(abs.id)}')" class="flex-1 sm:flex-none bg-white hover:bg-red-50 text-red-600 text-xs font-bold py-1.5 px-3 rounded-lg border border-red-200 transition-colors shadow-sm">
+                        Cancel
+                      </button>
+                    </div>
                   </div>
-                  <div class="flex flex-wrap gap-2 w-full sm:w-auto" onclick="event.stopPropagation()">
-                    <button type="button" onclick="openMyAbsenceGoogleCalendar(${index})" title="Add Absence to Google Calendar" class="flex-1 sm:flex-none bg-white hover:bg-green-50 text-[#00843D] text-sm font-bold py-2 px-3 rounded-lg border border-green-300 transition-colors shadow-sm flex items-center justify-center gap-1.5">
-                      <span>📅</span> Calendar
-                    </button>
-                    <button onclick="editAbsence(${index})" class="flex-1 sm:flex-none bg-white hover:bg-gray-100 text-gray-700 text-sm font-bold py-2 px-4 rounded-lg border border-gray-300 transition-colors shadow-sm">
-                      Edit
-                    </button>
-                    <button onclick="cancelAbsence('${escapeJs(abs.id)}')" class="flex-1 sm:flex-none bg-white hover:bg-red-50 text-red-600 text-sm font-bold py-2 px-4 rounded-lg border border-red-200 transition-colors shadow-sm">
-                      Cancel
-                    </button>
+                  <div class="flex flex-wrap items-center gap-1.5 pt-1 border-t border-gray-100">
+                    ${chipsHtml}
+                    ${subPlanChip}
                   </div>
                 </div>
               `;
@@ -1656,6 +1903,12 @@
       function renderMyPastAbsences(absences) {
             myPastAbsencesData = absences;
             const container = document.getElementById('myPastAbsences');
+            const badge = document.getElementById('badgeMyPastAbsencesCount');
+            const count = Array.isArray(absences) ? absences.length : 0;
+            if (badge) {
+              badge.innerText = String(count);
+              badge.classList.remove('hidden');
+            }
             if (!absences || !Array.isArray(absences) || absences.length === 0) {
               container.innerHTML = 'No past requests found.';
               return;
@@ -1736,6 +1989,12 @@
       function renderMyPastSubDuties(jobs) {
           userMyPastSubDuties = jobs;
           const container = document.getElementById('myPastSubDutiesContent');
+          const badge = document.getElementById('badgeMyPastSubDutiesCount');
+          const count = Array.isArray(jobs) ? jobs.length : 0;
+          if (badge) {
+              badge.innerText = String(count);
+              badge.classList.remove('hidden');
+          }
           if (!jobs || !Array.isArray(jobs) || jobs.length === 0) {
               container.innerHTML = 'No past sub-duties found.';
               return;
