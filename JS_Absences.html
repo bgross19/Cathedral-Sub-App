@@ -1500,7 +1500,7 @@
               return { chipsHtml: '', summaryBadgeHtml: '' };
             }
             const dateStr = abs.formDateString || abs.date;
-            const rawParts = String(abs.periodsWithSubs).split(',').map(s => s.trim()).filter(Boolean);
+            const rawParts = String(abs.periodsWithSubs).split(/,(?![^(]*\))/).map(s => s.trim()).filter(Boolean);
             let neededCount = 0;
             let coveredCount = 0;
             const chips = [];
@@ -1512,16 +1512,23 @@
                 return;
               }
               const pToken = m[1];
-              const subStatus = (m[2] || 'Unassigned').trim();
+              const subStatus = (m[2] || 'Not Yet Assigned').trim();
+              const subStatusLower = subStatus.toLowerCase();
               const tr = getClientPeriodTimeRange(dateStr, pToken);
               const shortPeriodName = (String(pToken).toLowerCase() === 'advisory' || String(pToken) === '10')
                 ? 'Advisory'
                 : (String(pToken) === '9' ? 'Pd 0' : `Pd ${pToken}`);
               const timeStr = (tr && tr.displayRange) ? ` (${tr.displayRange})` : '';
 
-              if (subStatus.toLowerCase() === 'no sub needed') {
+              const isUnassigned = !subStatus
+                || subStatusLower === 'unassigned'
+                || subStatusLower === 'not yet assigned'
+                || subStatusLower === 'awaiting sub'
+                || subStatusLower === 'open';
+
+              if (subStatusLower === 'no sub needed') {
                 chips.push(`<span class="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg bg-gray-100 text-gray-600 border border-gray-200" title="No substitute required for this period"><span>⚪</span><span>${escapeHtml(shortPeriodName + timeStr)} • No Sub Needed</span></span>`);
-              } else if (!subStatus || subStatus.toLowerCase() === 'unassigned') {
+              } else if (isUnassigned) {
                 neededCount++;
                 chips.push(`<span class="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 border border-amber-300" title="Awaiting substitute assignment"><span>⏳</span><span>${escapeHtml(shortPeriodName + timeStr)} • Awaiting Sub</span></span>`);
               } else {

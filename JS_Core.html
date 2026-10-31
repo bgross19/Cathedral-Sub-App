@@ -743,7 +743,7 @@
           return formatPeriodsList(abs.periods, dateStr);
         }
         return String(abs.periodsWithSubs)
-          .split(',')
+          .split(/,(?![^(]*\))/)
           .map(part => {
             const trimmed = part.trim();
             const m = trimmed.match(/^(Advisory|\d+)\s*(\(.*\))$/i);
