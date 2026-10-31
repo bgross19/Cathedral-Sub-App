@@ -1133,7 +1133,7 @@ function assignSubToPeriod(absenceId, period, subName, forceOverride, clientEmai
                  }
                  if (!foundRosterSchedule && rawTeachingPds) {
                    foundRosterSchedule = true;
-                   teacherSchedule = rawTeachingPds.split(",").map(function(tp) { return getScheduleJoinPeriod(tp.trim()); }).filter(function(tp) { return tp !== ""; });
+                   teacherSchedule = String(rawTeachingPds).replace(/^'/, "").split(",").map(function(tp) { return getScheduleJoinPeriod(tp.trim()); }).filter(function(tp) { return tp !== ""; });
                  }
                  break;
                }
