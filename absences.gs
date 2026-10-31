@@ -928,9 +928,8 @@ function getAbsenceDetails(absenceId, period, optionalData, clientEmail) {
   }
 
   if (!_cachedNameLookup) {
-    var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
-    if (rosterSheet) {
-      var rosterData = rosterSheet.getDataRange().getValues();
+    var rosterData = getRosterDataCached(ss);
+    if (rosterData && rosterData.length > 0) {
       _cachedNameLookup = buildNameLookup(rosterData);
     } else {
       _cachedNameLookup = {};
@@ -938,11 +937,19 @@ function getAbsenceDetails(absenceId, period, optionalData, clientEmail) {
   }
 
   if (!_cachedScheduleLookup) {
+    var v2Compat = (typeof readV2AbsenceDataCompat === "function") ? readV2AbsenceDataCompat(ss) : null;
     var scheduleData = getMasterScheduleData();
     if (scheduleData.length > 0) {
       _cachedScheduleLookup = buildScheduleLookup(scheduleData);
     } else {
       _cachedScheduleLookup = {};
+    }
+    if (v2Compat && v2Compat.snapshottedScheduleLookup) {
+      for (var sk in v2Compat.snapshottedScheduleLookup) {
+        if (Object.prototype.hasOwnProperty.call(v2Compat.snapshottedScheduleLookup, sk) && !_cachedScheduleLookup[sk]) {
+          _cachedScheduleLookup[sk] = v2Compat.snapshottedScheduleLookup[sk];
+        }
+      }
     }
   }
 

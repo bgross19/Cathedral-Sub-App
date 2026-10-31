@@ -42,16 +42,22 @@ function saveSubstituteAvailability(dateStr, status, clientEmail) {
     }
   }
 
-  if (matchingRows.length > 0) {
-    // Update the first matching row with the new status (even if 'Not Available')
-    subAvailSheet.getRange(matchingRows[0], 3).setValue(status);
+  var normStatus = String(status || "").trim();
+  var isNotAvailable = !normStatus || normStatus.toLowerCase() === "not available";
+
+  if (isNotAvailable) {
+    for (var d = matchingRows.length - 1; d >= 0; d--) {
+      subAvailSheet.deleteRow(matchingRows[d]);
+    }
+  } else if (matchingRows.length > 0) {
+    subAvailSheet.getRange(matchingRows[0], 3).setValue(normStatus);
 
     // Delete any subsequent duplicate rows (iterate backwards to avoid shifting issues)
     for (var j = matchingRows.length - 1; j > 0; j--) {
       subAvailSheet.deleteRow(matchingRows[j]);
     }
   } else {
-    subAvailSheet.appendRow([targetEmail, dateStr, status]);
+    subAvailSheet.appendRow([targetEmail, dateStr, normStatus]);
   }
   clearSubAvailabilityCache();
 }
@@ -166,18 +172,63 @@ function saveSubstituteAvailabilityAdmin(subName, dateStr, status, clientEmail) 
     }
   }
 
-  if (matchingRows.length > 0) {
-    // Update the first matching row with the new status (even if 'Not Available')
-    subAvailSheet.getRange(matchingRows[0], 3).setValue(status);
+  var normStatus = String(status || "").trim();
+  var isNotAvailable = !normStatus || normStatus.toLowerCase() === "not available";
+
+  if (isNotAvailable) {
+    for (var d = matchingRows.length - 1; d >= 0; d--) {
+      subAvailSheet.deleteRow(matchingRows[d]);
+    }
+  } else if (matchingRows.length > 0) {
+    subAvailSheet.getRange(matchingRows[0], 3).setValue(normStatus);
 
     // Delete any subsequent duplicate rows (iterate backwards to avoid shifting issues)
     for (var j = matchingRows.length - 1; j > 0; j--) {
       subAvailSheet.deleteRow(matchingRows[j]);
     }
   } else {
-    subAvailSheet.appendRow([targetEmail, dateStr, status]);
+    subAvailSheet.appendRow([targetEmail, dateStr, normStatus]);
   }
   clearSubAvailabilityCache();
+}
+
+/**
+ * Prunes "Not Available" rows and past dates older than 7 days from SubstituteAvailability.
+ */
+function pruneSubstituteAvailabilitySheet(ss) {
+  var sheetSS = ss || getSS();
+  var subAvailSheet = sheetSS.getSheetByName("SubstituteAvailability");
+  if (!subAvailSheet) return 0;
+
+  var data = subAvailSheet.getDataRange().getValues();
+  if (!data || data.length <= 1) return 0;
+
+  var cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 7);
+  var cutoffStr = _formatDateToYYYYMMDD(cutoff);
+
+  var rowsToDelete = [];
+  for (var i = 1; i < data.length; i++) {
+    var row = data[i];
+    if (!row) continue;
+    var email = String(row[0] || "").trim();
+    var cellVal = row[1];
+    var rowDateStr = (cellVal instanceof Date) ? _formatDateToYYYYMMDD(cellVal) : String(cellVal || "").trim();
+    var status = String(row[2] || "").trim().toLowerCase();
+
+    if (!email || !rowDateStr || status === "" || status === "not available" || (/^\d{4}-\d{2}-\d{2}$/.test(rowDateStr) && rowDateStr < cutoffStr)) {
+      rowsToDelete.push(i + 1);
+    }
+  }
+
+  for (var d = rowsToDelete.length - 1; d >= 0; d--) {
+    subAvailSheet.deleteRow(rowsToDelete[d]);
+  }
+
+  if (rowsToDelete.length > 0) {
+    clearSubAvailabilityCache();
+  }
+  return rowsToDelete.length;
 }
 
 function getSuggestedSubs(dateStr, clientEmail) {
@@ -202,9 +253,8 @@ function getSuggestedSubs(dateStr, clientEmail) {
   var requests = fetchAbsenceRequestsForDate(ss, dateStr);
 
   // 2. Get Roster Data
-  var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
-  if (!rosterSheet) return { success: false, error: "Staff Roster sheet not found." };
-  var rosterData = rosterSheet.getDataRange().getValues();
+  var rosterData = getRosterDataCached(ss);
+  if (!rosterData || rosterData.length === 0) return { success: false, error: "Staff Roster sheet not found." };
 
   // 3. Build a map of teachers by email for quick lookup
   var staffMap = {};

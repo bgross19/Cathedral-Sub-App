@@ -334,6 +334,15 @@ function warmMasterScheduleCache() {
     } catch (e) {
       Logger.log("Error syncing bell schedule during cache warm: " + e.toString());
     }
+
+    // Prune past/Not Available rows from SubstituteAvailability
+    try {
+      if (typeof pruneSubstituteAvailabilitySheet === "function") {
+        pruneSubstituteAvailabilitySheet(ss);
+      }
+    } catch (e) {
+      Logger.log("Error pruning SubstituteAvailability during cache warm: " + e.toString());
+    }
   } else {
     Logger.log("Master Schedule fetch returned empty data. Cache sheet not updated.");
   }
@@ -458,7 +467,7 @@ function fetchBellScheduleFromAPI() {
       const color = resolveBellScheduleColorFromPSRecord(r);
       const bsName = String(r.bell_schedule_name || r.BELL_SCHEDULE_NAME || "").trim();
       if (stdDate && color) {
-        updates.push({ date: stdDate, color: color });
+        updates.push({ date: stdDate, color: color, scheduleName: bsName });
         if (bsName) {
           dateBellScheduleNames[stdDate] = bsName;
         }
