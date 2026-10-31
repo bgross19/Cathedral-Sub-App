@@ -421,10 +421,12 @@
         const colorDict = (typeof userDateColors === 'object' && userDateColors && Object.keys(userDateColors).length > 0)
           ? userDateColors
           : (typeof globalDateColors === 'object' && globalDateColors ? globalDateColors : {});
-        const dayColorRaw = colorDict[isoDate] ? String(colorDict[isoDate]).trim() : 'Green';
+        const dayColorRaw = colorDict[isoDate] ? String(colorDict[isoDate]).trim() : '';
+        if (dayColorRaw === 'No School') return null;
+
         const dayColor = (dayColorRaw === 'Blue' || dayColorRaw === 'Gold' || dayColorRaw === 'Green')
           ? dayColorRaw
-          : 'Green';
+          : (dayColorRaw || 'Green');
 
         let timesMap = CLIENT_DEFAULT_PERIOD_BELL_TIMES;
         const rawBellTimes = window.appSettings && window.appSettings['Period Bell Times'];
@@ -451,15 +453,22 @@
           } catch (e2) {}
         }
 
-        const scheduleBucket = (specificScheduleName && timesMap[specificScheduleName])
+        const hasExactNamedBucket = Boolean(specificScheduleName && timesMap[specificScheduleName]);
+        const hasExactColorBucket = Boolean(dayColorRaw && timesMap[dayColorRaw] && dayColorRaw !== 'Green' && dayColorRaw !== 'Blue' && dayColorRaw !== 'Gold');
+
+        const scheduleBucket = hasExactNamedBucket
           ? timesMap[specificScheduleName]
           : (timesMap[dayColor] || CLIENT_DEFAULT_PERIOD_BELL_TIMES[dayColor] || CLIENT_DEFAULT_PERIOD_BELL_TIMES.Green);
 
-        const slot = scheduleBucket[pKey]
-          || (pKey === '0' ? scheduleBucket['9'] : null)
-          || (pKey === '9' ? scheduleBucket['0'] : null)
-          || (timesMap[dayColor] && timesMap[dayColor][pKey])
-          || CLIENT_DEFAULT_PERIOD_BELL_TIMES.Green[pKey];
+        const slot = (hasExactNamedBucket || hasExactColorBucket)
+          ? (scheduleBucket[pKey]
+              || (pKey === '0' ? scheduleBucket['9'] : null)
+              || (pKey === '9' ? scheduleBucket['0'] : null))
+          : (scheduleBucket[pKey]
+              || (pKey === '0' ? scheduleBucket['9'] : null)
+              || (pKey === '9' ? scheduleBucket['0'] : null)
+              || (timesMap[dayColor] && timesMap[dayColor][pKey])
+              || CLIENT_DEFAULT_PERIOD_BELL_TIMES.Green[pKey]);
         if (!slot || !slot.start || !slot.end) return null;
 
         const ymd = isoDate.replace(/-/g, '');
@@ -475,6 +484,37 @@
         };
       }
 
+      // === Day Schedule Label & Bell Schedule Helpers ===
+      function getDayColorDict() {
+        return (typeof userDateColors === 'object' && userDateColors && Object.keys(userDateColors).length > 0)
+          ? userDateColors
+          : (typeof globalDateColors === 'object' && globalDateColors ? globalDateColors : {});
+      }
+
+      function getDayScheduleLabel(dateStr, rawColorOverride) {
+        const colorDict = getDayColorDict();
+        const rawColor = (rawColorOverride !== undefined ? String(rawColorOverride) : String(colorDict[dateStr] || '')).trim();
+        const schedName = (typeof userDateBellScheduleNames === 'object' && userDateBellScheduleNames && userDateBellScheduleNames[dateStr])
+          ? String(userDateBellScheduleNames[dateStr]).trim()
+          : '';
+        if (!rawColor && !schedName) return 'No School';
+        if (rawColor.toLowerCase() === 'no school') return 'No School';
+        if (rawColor.toLowerCase() === 'red' && !schedName) return 'No School';
+        if (rawColor === 'Green' || rawColor === 'Blue' || rawColor === 'Gold') {
+          return `${rawColor} Day`;
+        }
+        return schedName || rawColor;
+      }
+
+      function _getColorPillClass(colorOrLabel) {
+        const c = String(colorOrLabel || '').trim().toLowerCase();
+        if (c === 'green' || c === 'green day') return 'bg-green-100 text-green-800 border-green-300';
+        if (c === 'blue' || c === 'blue day') return 'bg-blue-100 text-blue-800 border-blue-300';
+        if (c === 'gold' || c === 'gold day') return 'bg-yellow-100 text-yellow-800 border-yellow-300';
+        if (!c || c === 'no school' || c === 'unset') return 'bg-gray-100 text-gray-600 border-gray-300';
+        return 'bg-purple-100 text-purple-800 border-purple-300';
+      }
+
       // === Interactive "Today's Bell Schedule" Pill & Dropdown ===
       let currentBellDropdownDateObj = new Date();
       let _bellDropdownOutsideClickBound = false;
@@ -486,22 +526,31 @@
         return `${yyyy}-${mm}-${dd}`;
       }
 
+      function _isConfiguredSchoolDay(isoDate) {
+        const colorDict = getDayColorDict();
+        if (!colorDict || Object.keys(colorDict).length === 0) return true;
+        const val = String(colorDict[isoDate] || '').trim();
+        const schedName = (typeof userDateBellScheduleNames === 'object' && userDateBellScheduleNames && userDateBellScheduleNames[isoDate])
+          ? String(userDateBellScheduleNames[isoDate]).trim()
+          : '';
+        if (!val && !schedName) return false;
+        if (val.toLowerCase() === 'no school') return false;
+        if (val.toLowerCase() === 'red' && !schedName) return false;
+        return true;
+      }
+
       function _getInitialBellScheduleSchoolDate() {
         const d = new Date();
         d.setHours(12, 0, 0, 0);
-        const dow = d.getDay();
-        if (dow === 6) d.setDate(d.getDate() + 2); // Saturday -> Monday
-        else if (dow === 0) d.setDate(d.getDate() + 1); // Sunday -> Monday
+        for (let i = 0; i < 14; i++) {
+          const dow = d.getDay();
+          const iso = _dateObjToIso(d);
+          if (dow !== 0 && dow !== 6 && _isConfiguredSchoolDay(iso)) {
+            return d;
+          }
+          d.setDate(d.getDate() + 1);
+        }
         return d;
-      }
-
-      function _getColorPillClass(color) {
-        const c = String(color || '').toLowerCase();
-        if (c === 'green') return 'bg-green-100 text-green-800 border-green-300';
-        if (c === 'blue') return 'bg-blue-100 text-blue-800 border-blue-300';
-        if (c === 'gold') return 'bg-yellow-100 text-yellow-800 border-yellow-300';
-        if (c === 'red') return 'bg-red-100 text-red-800 border-red-300';
-        return 'bg-gray-100 text-gray-700 border-gray-300';
       }
 
       function initTodayBellScheduleWidget() {
@@ -516,22 +565,20 @@
         const schoolDayIso = _dateObjToIso(schoolDayObj);
         currentBellDropdownDateObj = new Date(schoolDayObj.getTime());
 
-        const colorDict = (typeof userDateColors === 'object' && userDateColors && Object.keys(userDateColors).length > 0)
-          ? userDateColors
-          : (typeof globalDateColors === 'object' && globalDateColors ? globalDateColors : {});
-
-        const isWeekendToday = (todayObj.getDay() === 0 || todayObj.getDay() === 6);
-        const refDateObj = isWeekendToday ? schoolDayObj : todayObj;
-        const refIso = isWeekendToday ? schoolDayIso : todayIso;
-        const rawColor = colorDict[refIso] || 'Red';
+        const colorDict = getDayColorDict();
+        const isTodaySchoolDay = (todayObj.getDay() !== 0 && todayObj.getDay() !== 6 && _isConfiguredSchoolDay(todayIso));
+        const refDateObj = isTodaySchoolDay ? todayObj : schoolDayObj;
+        const refIso = isTodaySchoolDay ? todayIso : schoolDayIso;
+        const rawColor = colorDict[refIso] || '';
         const schedName = (userDateBellScheduleNames && userDateBellScheduleNames[refIso]) ? userDateBellScheduleNames[refIso] : '';
 
         const shortDayStr = refDateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-        dateEl.innerText = isWeekendToday ? `Next (${shortDayStr})` : `Today (${shortDayStr})`;
+        dateEl.innerText = isTodaySchoolDay ? `Today (${shortDayStr})` : `Next (${shortDayStr})`;
 
-        const displayColorLabel = rawColor === 'Red' ? 'No School' : `${rawColor} Day`;
-        badgeEl.innerText = schedName && rawColor !== 'Red' ? `${displayColorLabel} • ${schedName}` : displayColorLabel;
-        badgeEl.className = `text-xs font-bold px-2.5 py-0.5 rounded-full border ${_getColorPillClass(rawColor)}`;
+        const displayLabel = getDayScheduleLabel(refIso, rawColor);
+        const isStandardColor = (rawColor === 'Green' || rawColor === 'Blue' || rawColor === 'Gold');
+        badgeEl.innerText = (isStandardColor && schedName) ? `${displayLabel} • ${schedName}` : displayLabel;
+        badgeEl.className = `text-xs font-bold px-2.5 py-0.5 rounded-full border ${_getColorPillClass(rawColor || displayLabel)}`;
 
         renderBellScheduleDropdownForDate(refIso, refDateObj);
 
@@ -608,6 +655,50 @@
         return [];
       }
 
+      function getMeetingPeriodsForDate(dateStr) {
+        if (!dateStr) return [];
+        const colorDict = getDayColorDict();
+        const rawColor = String(colorDict[dateStr] || '').trim();
+        const schedName = (typeof userDateBellScheduleNames === 'object' && userDateBellScheduleNames && userDateBellScheduleNames[dateStr])
+          ? String(userDateBellScheduleNames[dateStr]).trim()
+          : '';
+        if ((!rawColor && !schedName) || rawColor.toLowerCase() === 'no school' || (rawColor.toLowerCase() === 'red' && !schedName)) {
+          return [];
+        }
+
+        let timesMap = CLIENT_DEFAULT_PERIOD_BELL_TIMES;
+        const rawBellTimes = window.appSettings && window.appSettings['Period Bell Times'];
+        if (rawBellTimes) {
+          try {
+            const parsed = typeof rawBellTimes === 'string' ? JSON.parse(rawBellTimes) : rawBellTimes;
+            if (parsed && typeof parsed === 'object') {
+              timesMap = Object.assign({}, CLIENT_DEFAULT_PERIOD_BELL_TIMES, parsed);
+            }
+          } catch (e) {}
+        }
+
+        const bucket = (schedName && timesMap[schedName])
+          ? timesMap[schedName]
+          : (timesMap[rawColor] || null);
+
+        if (bucket && typeof bucket === 'object') {
+          const seen = new Set();
+          const entries = [];
+          Object.keys(bucket).forEach(k => {
+            const slot = bucket[k];
+            if (!slot || !slot.start) return;
+            const normKey = (k === '9') ? '0' : String(k);
+            if (seen.has(normKey)) return;
+            seen.add(normKey);
+            entries.push({ period: normKey, start: String(slot.start) });
+          });
+          entries.sort((a, b) => a.start.localeCompare(b.start));
+          return entries.map(e => e.period);
+        }
+
+        return getMeetingPeriodsForDayColor(rawColor);
+      }
+
       function renderBellScheduleDropdownForDate(isoDate, dateObjRef) {
         const titleEl = document.getElementById('bellDropdownDateTitle');
         const subTitleEl = document.getElementById('bellDropdownSubTitle');
@@ -618,25 +709,25 @@
         const fullDateLabel = dObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
         titleEl.innerText = fullDateLabel;
 
-        const colorDict = (typeof userDateColors === 'object' && userDateColors && Object.keys(userDateColors).length > 0)
-          ? userDateColors
-          : (typeof globalDateColors === 'object' && globalDateColors ? globalDateColors : {});
-        const dayColor = colorDict[isoDate] || 'Red';
-        const schedName = (userDateBellScheduleNames && userDateBellScheduleNames[isoDate]) ? userDateBellScheduleNames[isoDate] : '';
+        const colorDict = getDayColorDict();
+        const rawColor = String(colorDict[isoDate] || '').trim();
+        const schedName = (userDateBellScheduleNames && userDateBellScheduleNames[isoDate]) ? String(userDateBellScheduleNames[isoDate]).trim() : '';
+        const displayLabel = getDayScheduleLabel(isoDate, rawColor);
 
-        if (dayColor === 'Red') {
-          subTitleEl.innerText = 'Red Day • No School / Non-Instructional';
+        if (displayLabel === 'No School') {
+          subTitleEl.innerText = 'No School • Non-Instructional Day';
           listEl.innerHTML = `<div class="p-6 text-center text-gray-500 text-xs">
             <div class="text-2xl mb-1">🏫</div>
-            <div class="font-bold text-gray-700">No regular classes scheduled</div>
+            <div class="font-bold text-gray-700">No classes scheduled</div>
             <div class="text-gray-400 mt-0.5">Use Prev / Next above to view another school day.</div>
           </div>`;
           return;
         }
 
-        subTitleEl.innerText = schedName ? `${dayColor} Day • ${schedName}` : `${dayColor} Day Schedule`;
+        const isStandardColor = (rawColor === 'Green' || rawColor === 'Blue' || rawColor === 'Gold');
+        subTitleEl.innerText = (isStandardColor && schedName) ? `${displayLabel} • ${schedName}` : displayLabel;
 
-        const periodsOrder = getMeetingPeriodsForDayColor(dayColor);
+        const periodsOrder = getMeetingPeriodsForDate(isoDate);
         const teacherSched = (getActiveTeacherSchedule(isoDate) || []).map(p => String(p).trim());
         const todayIso = _dateObjToIso(new Date());
         const now = new Date();
@@ -689,7 +780,7 @@
           `;
         });
 
-        listEl.innerHTML = html || `<div class="p-4 text-center text-xs text-gray-400 italic">No period times found.</div>`;
+        listEl.innerHTML = html || `<div class="p-4 text-center text-xs text-gray-400 italic">No period times found for ${escapeHtml(displayLabel)}.</div>`;
       }
 
       function formatPeriodLabel(period, dateStr) {
@@ -743,7 +834,7 @@
           return formatPeriodsList(abs.periods, dateStr);
         }
         return String(abs.periodsWithSubs)
-          .split(',')
+          .split(/,(?![^(]*\))/)
           .map(part => {
             const trimmed = part.trim();
             const m = trimmed.match(/^(Advisory|\d+)\s*(\(.*\))$/i);

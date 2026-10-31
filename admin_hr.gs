@@ -1158,10 +1158,8 @@ function _normalizeBellColor(colorRaw) {
   if (c === "green" || c === "green day" || c === "g") return "Green";
   if (c === "blue" || c === "blue day" || c === "b") return "Blue";
   if (c === "gold" || c === "gold day" || c === "y") return "Gold";
-  if (c === "red" || c === "red day" || c === "no school" || c === "holiday" || c === "r") return "Red";
-  // Preserve capitalized custom day types if ever used
-  var rawTrim = String(colorRaw).trim();
-  return rawTrim.charAt(0).toUpperCase() + rawTrim.slice(1);
+  if (c === "no school" || c === "holiday" || c === "break" || c === "n") return "No School";
+  return String(colorRaw).trim();
 }
 
 /**
@@ -1198,6 +1196,13 @@ function getDateColorsCached(ss) {
       var dateFormatted = _normalizeScheduleDateStr(datesData[d][0]);
       var colorNormalized = _normalizeBellColor(datesData[d][1]);
       var schedName = datesData[d].length >= 3 && datesData[d][2] ? String(datesData[d][2]).trim() : "";
+      // Legacy migration: if Col B was "Red" without a bell schedule name, treat as "No School";
+      // if Col B was not Green/Blue/Gold/No School and Col C has a Bell Schedule Name, label the day by its Bell Schedule Name.
+      if (colorNormalized.toLowerCase() === "red" && !schedName) {
+        colorNormalized = "No School";
+      } else if (schedName && colorNormalized !== "Green" && colorNormalized !== "Blue" && colorNormalized !== "Gold" && colorNormalized !== "No School") {
+        colorNormalized = schedName;
+      }
       if (dateFormatted && colorNormalized) {
         dateColors[dateFormatted] = colorNormalized;
         if (schedName) {

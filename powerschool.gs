@@ -350,7 +350,8 @@ function warmMasterScheduleCache() {
 
 /**
  * Maps a single PowerSchool `com.cathedral.subapp.bellschedule` record to a normalized
- * Sub App day color ("Green", "Blue", "Gold", "Red", or "").
+ * Sub App day label ("Green", "Blue", "Gold", "No School", or the exact Bell Schedule Name
+ * such as "FINALS 1-2" for non-Green/Blue/Gold school days).
  */
 function resolveBellScheduleColorFromPSRecord(r) {
   if (!r || typeof r !== 'object') return "";
@@ -358,13 +359,14 @@ function resolveBellScheduleColorFromPSRecord(r) {
   const insessionRaw = r.insession !== undefined ? r.insession : r.INSESSION;
   if (insessionRaw !== undefined && insessionRaw !== null && String(insessionRaw).trim() !== "") {
     if (Number(insessionRaw) === 0) {
-      return "Red";
+      return "No School";
     }
   }
 
+  const bsName = String(r.bell_schedule_name || r.BELL_SCHEDULE_NAME || "").trim();
   const candidates = [
     r.cycle_day_name || r.CYCLE_DAY_NAME || "",
-    r.bell_schedule_name || r.BELL_SCHEDULE_NAME || "",
+    bsName,
     r.day_note || r.DAY_NOTE || ""
   ];
 
@@ -372,27 +374,26 @@ function resolveBellScheduleColorFromPSRecord(r) {
     const text = String(candidates[i] || "").trim();
     if (!text) continue;
 
-    if (typeof normalizeBellScheduleColor === "function") {
-      const exact = normalizeBellScheduleColor(text);
-      if (exact === "Green" || exact === "Blue" || exact === "Gold" || exact === "Red") {
-        return exact;
-      }
-    }
-
     const lower = text.toLowerCase();
+    if (lower.indexOf("no school") !== -1 || lower.indexOf("holiday") !== -1 || lower.indexOf("break") !== -1) {
+      return "No School";
+    }
     if (lower.indexOf("green") !== -1) return "Green";
     if (lower.indexOf("blue") !== -1) return "Blue";
     if (lower.indexOf("gold") !== -1) return "Gold";
-    if (lower.indexOf("no school") !== -1 || lower.indexOf("holiday") !== -1 || lower.indexOf("break") !== -1 || lower.indexOf("red") !== -1) {
-      return "Red";
-    }
+  }
+
+  // For any in-session day with a bell schedule that isn't Green, Blue, or Gold (e.g. "FINALS 1-2", "RED DAY"),
+  // use the exact Bell Schedule Name so the day is labeled by its bell schedule and never combined with "No School".
+  if (bsName) {
+    return bsName;
   }
 
   const letter = String(r.cycle_day_letter || r.CYCLE_DAY_LETTER || "").trim().toUpperCase();
   if (letter === "G") return "Green";
   if (letter === "B") return "Blue";
   if (letter === "AU" || letter === "Y") return "Gold";
-  if (letter === "R" || letter === "N") return "Red";
+  if (letter === "N") return "No School";
 
   return "";
 }

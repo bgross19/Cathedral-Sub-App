@@ -168,23 +168,14 @@
               updatePeriodsForSingleDate(dateStr, duration);
           }
       }
-      function updatePeriodsForSingleDate(dateStr, duration) {
-          if (!dateStr) {
-              document.getElementById("dayColorBadge").classList.add("hidden");
-              return;
-          }
-
-          let color = userDateColors[dateStr] || 'Red';
-          const badge = document.getElementById('dayColorBadge');
-          badge.classList.remove('hidden');
-          badge.innerText = color + ' Day';
-          badge.className = "ml-2 text-xs font-bold px-2 py-1 rounded border " +
-                          (color === "Green" ? "bg-green-100 text-green-800 border-green-300" :
-                           color === "Blue" ? "bg-blue-100 text-blue-800 border-blue-300" :
-                           color === "Gold" ? "bg-yellow-100 text-yellow-800 border-yellow-300" : "bg-gray-100 text-gray-800 border-gray-300");
+      function getActivePeriodsForDateAndDuration(dateStr, duration) {
+          if (!dateStr) return [];
+          const colorDict = typeof getDayColorDict === 'function' ? getDayColorDict() : (userDateColors || {});
+          const color = String(colorDict[dateStr] || '').trim();
+          const dayLabel = typeof getDayScheduleLabel === 'function' ? getDayScheduleLabel(dateStr, color) : (color || 'No School');
+          if (dayLabel === 'No School') return [];
 
           let activePeriods = [];
-
           if (color === "Green") {
               if (duration === "Full Day") activePeriods = [1, 2, 3, 4, 5, 6, 7, 8];
               else if (duration === "Half Day (AM)" || duration === "Half Day") activePeriods = [1, 2, 3, 4];
@@ -197,16 +188,46 @@
               if (duration === "Full Day") activePeriods = [5, 6, 7, 8];
               else if (duration === "Half Day (AM)" || duration === "Half Day") activePeriods = [5, 6];
               else if (duration === "Half Day (PM)") activePeriods = [7, 8];
+          } else if (typeof getMeetingPeriodsForDate === 'function') {
+              const meeting = getMeetingPeriodsForDate(dateStr).filter(p => p !== '0' && p !== '9');
+              if (duration === "Full Day") {
+                  activePeriods = meeting;
+              } else if (duration === "Half Day (AM)" || duration === "Half Day") {
+                  activePeriods = meeting.filter(p => {
+                      const tr = getClientPeriodTimeRange(dateStr, p);
+                      return !tr || !tr.startTime || tr.startTime < "12:00";
+                  });
+              } else if (duration === "Half Day (PM)") {
+                  activePeriods = meeting.filter(p => {
+                      const tr = getClientPeriodTimeRange(dateStr, p);
+                      return tr && tr.startTime && tr.startTime >= "12:00";
+                  });
+              }
           }
+          return activePeriods;
+      }
+
+      function updatePeriodsForSingleDate(dateStr, duration) {
+          if (!dateStr) {
+              document.getElementById("dayColorBadge").classList.add("hidden");
+              return;
+          }
+
+          let color = userDateColors[dateStr] || '';
+          const dayLabel = typeof getDayScheduleLabel === 'function' ? getDayScheduleLabel(dateStr, color) : (color ? `${color} Day` : 'No School');
+          const badge = document.getElementById('dayColorBadge');
+          badge.classList.remove('hidden');
+          badge.innerText = dayLabel;
+          badge.className = "ml-2 text-xs font-bold px-2 py-1 rounded border " +
+                          (typeof _getColorPillClass === 'function' ? _getColorPillClass(color || dayLabel) : "bg-gray-100 text-gray-800 border-gray-300");
+
+          let activePeriods = getActivePeriodsForDateAndDuration(dateStr, duration);
 
           let finalPeriods = [];
           let scheduleToUse = getActiveTeacherSchedule(dateStr);
           if (scheduleToUse && scheduleToUse.length > 0) {
               activePeriods.forEach(ap => {
-                  // scheduleToUse may contain strings ('9' for 0, '10' for Advisory, or ints)
-                  // So we should convert everything to string to check properly, but activePeriods
-                  // contains ints from the color logic (e.g. [1,2,3,4]).
-                  if (scheduleToUse.includes(ap) || scheduleToUse.includes(String(ap))) {
+                  if (scheduleToUse.includes(ap) || scheduleToUse.includes(String(ap)) || scheduleToUse.includes(Number(ap))) {
                       finalPeriods.push(String(ap));
                   }
               });
@@ -221,17 +242,20 @@
       function renderPeriodCheckboxTimeHints(containerEl, cbSelector, dateStr) {
           if (!containerEl) return;
           const scheduleToUse = dateStr ? getActiveTeacherSchedule(dateStr) : [];
-          const dayColor = dateStr ? (userDateColors[dateStr] || '') : '';
-          const meetingPeriods = typeof getMeetingPeriodsForDayColor === 'function' ? getMeetingPeriodsForDayColor(dayColor) : [];
+          const meetingPeriods = (dateStr && typeof getMeetingPeriodsForDate === 'function')
+              ? getMeetingPeriodsForDate(dateStr)
+              : [];
+          const dayLabel = (dateStr && typeof getDayScheduleLabel === 'function') ? getDayScheduleLabel(dateStr) : '';
+          const isNoSchool = (dayLabel === 'No School');
 
           containerEl.querySelectorAll(cbSelector).forEach(cb => {
               const label = cb.closest("label");
               if (!label) return;
               const pVal = String(cb.value);
               const isTeaching = scheduleToUse && (scheduleToUse.includes(pVal) || scheduleToUse.includes(parseInt(pVal, 10)));
-              const meetsToday = meetingPeriods.length === 0 || meetingPeriods.includes(pVal);
+              const meetsToday = !isNoSchool && (meetingPeriods.length === 0 || meetingPeriods.includes(pVal));
 
-              // Style label according to teacher's teaching schedule and whether period meets on dayColor
+              // Style label according to teacher's teaching schedule and whether period meets on this date's bell schedule
               label.className = "flex items-center space-x-2 text-sm px-2 py-1.5 rounded-lg border transition-all cursor-pointer select-none " +
                   (isTeaching && meetsToday
                       ? "border-[#00843D] bg-green-50/60 text-[#002147] font-semibold shadow-[0_0_0_1px_rgba(0,132,61,0.15)]"
@@ -268,40 +292,22 @@
 
       function updatePeriodsForMultiDateBlock(dateStr, duration, blockId, badgeId) {
           if (!dateStr) return;
-          let color = userDateColors[dateStr] || 'Red';
+          let color = userDateColors[dateStr] || '';
+          const dayLabel = typeof getDayScheduleLabel === 'function' ? getDayScheduleLabel(dateStr, color) : (color ? `${color} Day` : 'No School');
           const badge = document.getElementById(badgeId);
           if(badge) {
-              badge.innerText = color + " Day";
-              badge.className = "text-xs px-2 py-1 rounded border " +
-                              (color === "Green" ? "bg-green-100 text-green-800 border-green-300" :
-                               color === "Blue" ? "bg-blue-100 text-blue-800 border-blue-300" :
-                               color === "Gold" ? "bg-yellow-100 text-yellow-800 border-yellow-300" : "bg-gray-100 text-gray-800 border-gray-300");
+              badge.innerText = dayLabel;
+              badge.className = "text-xs font-bold px-2 py-1 rounded border " +
+                              (typeof _getColorPillClass === 'function' ? _getColorPillClass(color || dayLabel) : "bg-gray-100 text-gray-800 border-gray-300");
           }
 
-          let activePeriods = [];
-
-          if (color === "Green") {
-              if (duration === "Full Day") activePeriods = [1, 2, 3, 4, 5, 6, 7, 8];
-              else if (duration === "Half Day (AM)" || duration === "Half Day") activePeriods = [1, 2, 3, 4];
-              else if (duration === "Half Day (PM)") activePeriods = [5, 6, 7, 8];
-          } else if (color === "Blue") {
-              if (duration === "Full Day") activePeriods = [1, 2, 3, 4];
-              else if (duration === "Half Day (AM)" || duration === "Half Day") activePeriods = [1, 2];
-              else if (duration === "Half Day (PM)") activePeriods = [3, 4];
-          } else if (color === "Gold") {
-              if (duration === "Full Day") activePeriods = [5, 6, 7, 8];
-              else if (duration === "Half Day (AM)" || duration === "Half Day") activePeriods = [5, 6];
-              else if (duration === "Half Day (PM)") activePeriods = [7, 8];
-          }
+          let activePeriods = getActivePeriodsForDateAndDuration(dateStr, duration);
 
           let finalPeriods = [];
           let scheduleToUse = getActiveTeacherSchedule(dateStr);
           if (scheduleToUse && scheduleToUse.length > 0) {
               activePeriods.forEach(ap => {
-                  // scheduleToUse may contain strings ('9' for 0, '10' for Advisory, or ints)
-                  // So we should convert everything to string to check properly, but activePeriods
-                  // contains ints from the color logic (e.g. [1,2,3,4]).
-                  if (scheduleToUse.includes(ap) || scheduleToUse.includes(String(ap))) {
+                  if (scheduleToUse.includes(ap) || scheduleToUse.includes(String(ap)) || scheduleToUse.includes(Number(ap))) {
                       finalPeriods.push(String(ap));
                   }
               });
@@ -915,17 +921,22 @@
         const days = [];
         let current = new Date();
         current.setHours(12, 0, 0, 0); // Noon to avoid timezone issues
+        let safety = 0;
 
-        while (days.length < numDays) {
+        while (days.length < numDays && safety < 60) {
+            safety++;
             const dayOfWeek = current.getDay();
             if (dayOfWeek !== 0 && dayOfWeek !== 6) { // Skip Sunday (0) and Saturday (6)
                 const yyyy = current.getFullYear();
                 const mm = String(current.getMonth() + 1).padStart(2, '0');
                 const dd = String(current.getDate()).padStart(2, '0');
-                days.push({
-                    dateStr: `${yyyy}-${mm}-${dd}`,
-                    dateObj: new Date(current.getTime())
-                });
+                const iso = `${yyyy}-${mm}-${dd}`;
+                if (typeof _isConfiguredSchoolDay !== 'function' || _isConfiguredSchoolDay(iso)) {
+                    days.push({
+                        dateStr: iso,
+                        dateObj: new Date(current.getTime())
+                    });
+                }
             }
             current.setDate(current.getDate() + 1);
         }
@@ -954,18 +965,11 @@
             // Format date for display (e.g., "Mon, Oct 16")
             const displayDate = dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 
-            // Get day color
-            const color = globalDateColors[dateStr] || "Unknown";
-            let colorPill = '';
-            if (color.toLowerCase() === 'green') {
-                colorPill = '<span class="ml-2 inline-block bg-green-100 text-green-800 text-[10px] font-bold px-2 py-0.5 rounded border border-green-200 uppercase tracking-wider">Green</span>';
-            } else if (color.toLowerCase() === 'blue') {
-                colorPill = '<span class="ml-2 inline-block bg-blue-100 text-blue-800 text-[10px] font-bold px-2 py-0.5 rounded border border-blue-200 uppercase tracking-wider">Blue</span>';
-            } else if (color.toLowerCase() === 'gold') {
-                colorPill = '<span class="ml-2 inline-block bg-yellow-100 text-yellow-800 text-[10px] font-bold px-2 py-0.5 rounded border border-yellow-200 uppercase tracking-wider">Gold</span>';
-            } else {
-                colorPill = `<span class="ml-2 inline-block bg-gray-100 text-gray-800 text-[10px] font-bold px-2 py-0.5 rounded border border-gray-200 uppercase tracking-wider">${escapeHtml(color)}</span>`;
-            }
+            // Get day schedule label
+            const color = globalDateColors[dateStr] || "";
+            const dayLabel = typeof getDayScheduleLabel === 'function' ? getDayScheduleLabel(dateStr, color) : (color || "Unscheduled");
+            const pillClass = typeof _getColorPillClass === 'function' ? _getColorPillClass(color || dayLabel) : "bg-gray-100 text-gray-800 border-gray-200";
+            let colorPill = `<span class="ml-2 inline-block ${pillClass} text-[10px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider">${escapeHtml(dayLabel)}</span>`;
 
             // Find subs available on this day
             const availableAllDay = [];
@@ -1218,8 +1222,8 @@
       function buildSubDutyCalendarEvent(duty) {
         const range = getCalendarAllDayRangeStrings(duty.formDateString, duty.date);
         const periodTime = range.iso ? getClientPeriodTimeRange(range.iso, duty.period) : null;
-        const dayColor = (range.iso && typeof userDateColors === 'object' && userDateColors[range.iso])
-          ? `${userDateColors[range.iso]} Day`
+        const dayColor = (range.iso && typeof getDayScheduleLabel === 'function')
+          ? getDayScheduleLabel(range.iso)
           : '';
         const periodLabel = formatPeriodLabel(duty.period);
         const timeRangeLabel = periodTime ? ` (${periodTime.startTime} - ${periodTime.endTime})` : '';
@@ -1500,7 +1504,7 @@
               return { chipsHtml: '', summaryBadgeHtml: '' };
             }
             const dateStr = abs.formDateString || abs.date;
-            const rawParts = String(abs.periodsWithSubs).split(',').map(s => s.trim()).filter(Boolean);
+            const rawParts = String(abs.periodsWithSubs).split(/,(?![^(]*\))/).map(s => s.trim()).filter(Boolean);
             let neededCount = 0;
             let coveredCount = 0;
             const chips = [];
@@ -1512,16 +1516,23 @@
                 return;
               }
               const pToken = m[1];
-              const subStatus = (m[2] || 'Unassigned').trim();
+              const subStatus = (m[2] || 'Not Yet Assigned').trim();
+              const subStatusLower = subStatus.toLowerCase();
               const tr = getClientPeriodTimeRange(dateStr, pToken);
               const shortPeriodName = (String(pToken).toLowerCase() === 'advisory' || String(pToken) === '10')
                 ? 'Advisory'
                 : (String(pToken) === '9' ? 'Pd 0' : `Pd ${pToken}`);
               const timeStr = (tr && tr.displayRange) ? ` (${tr.displayRange})` : '';
 
-              if (subStatus.toLowerCase() === 'no sub needed') {
+              const isUnassigned = !subStatus
+                || subStatusLower === 'unassigned'
+                || subStatusLower === 'not yet assigned'
+                || subStatusLower === 'awaiting sub'
+                || subStatusLower === 'open';
+
+              if (subStatusLower === 'no sub needed') {
                 chips.push(`<span class="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg bg-gray-100 text-gray-600 border border-gray-200" title="No substitute required for this period"><span>⚪</span><span>${escapeHtml(shortPeriodName + timeStr)} • No Sub Needed</span></span>`);
-              } else if (!subStatus || subStatus.toLowerCase() === 'unassigned') {
+              } else if (isUnassigned) {
                 neededCount++;
                 chips.push(`<span class="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 border border-amber-300" title="Awaiting substitute assignment"><span>⏳</span><span>${escapeHtml(shortPeriodName + timeStr)} • Awaiting Sub</span></span>`);
               } else {
@@ -1574,11 +1585,11 @@
               let textClass = abs.urgency === 'Urgent' ? 'text-red-700' : 'text-[#002147]';
               const isoDate = abs.formDateString || '';
               const dayColor = isoDate ? (userDateColors[isoDate] || '') : '';
-              const dayColorBadge = dayColor ? `<span class="text-[11px] font-bold px-2 py-0.5 rounded-full border ${
-                  dayColor === 'Blue' ? 'bg-blue-100 text-blue-800 border-blue-300' :
-                  dayColor === 'Gold' ? 'bg-yellow-100 text-yellow-800 border-yellow-300' :
-                  dayColor === 'Green' ? 'bg-green-100 text-green-800 border-green-300' : 'bg-gray-100 text-gray-700 border-gray-300'
-              }">${escapeHtml(dayColor)} Day</span>` : '';
+              const dayLabel = (isoDate && typeof getDayScheduleLabel === 'function') ? getDayScheduleLabel(isoDate, dayColor) : (dayColor ? `${dayColor} Day` : '');
+              const dayPillClasses = typeof _getColorPillClass === 'function' ? _getColorPillClass(dayColor || dayLabel) : 'bg-gray-100 text-gray-700 border-gray-300';
+              const dayColorBadge = (dayLabel && dayLabel !== 'No School')
+                ? `<span class="text-[11px] font-bold px-2 py-0.5 rounded-full border ${dayPillClasses}">${escapeHtml(dayLabel)}</span>`
+                : '';
 
               const { chipsHtml, summaryBadgeHtml } = buildAbsencePeriodStatusChips(abs);
               const subPlanChip = abs.subPlanUrl

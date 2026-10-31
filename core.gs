@@ -1052,7 +1052,8 @@ function getStandardizedDateString(dateRaw) {
 }
 
 /**
- * Normalizes a bell schedule color / day type string to "Green", "Blue", "Gold", "Red", or "".
+ * Normalizes a bell schedule color / day type string to "Green", "Blue", "Gold", "No School",
+ * or the exact Bell Schedule Name for special schedules (e.g. "FINALS 1-2").
  */
 function normalizeBellScheduleColor(colorRaw) {
   if (!colorRaw) return "";
@@ -1061,9 +1062,8 @@ function normalizeBellScheduleColor(colorRaw) {
   if (c === "green" || c === "green day" || c === "g") return "Green";
   if (c === "blue" || c === "blue day" || c === "b") return "Blue";
   if (c === "gold" || c === "gold day" || c === "y") return "Gold";
-  if (c === "red" || c === "red day" || c === "no school" || c === "holiday" || c === "r") return "Red";
-  var rawTrim = String(colorRaw).trim();
-  return rawTrim.charAt(0).toUpperCase() + rawTrim.slice(1);
+  if (c === "no school" || c === "holiday" || c === "break" || c === "n") return "No School";
+  return String(colorRaw).trim();
 }
 
 /**
@@ -1150,7 +1150,7 @@ function getPeriodTimeRangeForDate(dateStr, period, optionalDateColors, optional
   var settings = optionalSettings || (typeof getSettings === "function" ? getSettings() : {});
   var dateColors = optionalDateColors || (typeof getDateColorsCached === "function" ? getDateColorsCached() : {});
   var dayColor = (dateColors && dateColors[isoDate]) ? String(dateColors[isoDate]).trim() : "Green";
-  if (dayColor === "Red") return null;
+  if (dayColor === "No School") return null;
 
   var bellTimesMap = DEFAULT_PERIOD_BELL_TIMES;
   if (settings && settings["Period Bell Times"]) {
