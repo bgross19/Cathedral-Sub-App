@@ -932,8 +932,9 @@ function generatePrincipalsDigestHTML(dateObj) {
     dutyLookup[nm] = String(rosterData[roIdx][3] || "").trim();
   }
 
-  var absenceSheet = getSheetOrThrow(ss, "Absence Requests");
-  var absenceData = absenceSheet.getDataRange().getValues();
+  var v2CompatDigest = (typeof readV2AbsenceDataCompat === "function") ? readV2AbsenceDataCompat(ss) : null;
+  var absenceSheet = !v2CompatDigest ? getSheetOrThrow(ss, "Absence Requests") : null;
+  var absenceData = v2CompatDigest ? v2CompatDigest.absenceData : absenceSheet.getDataRange().getValues();
 
   var currentWeekAbsences = {};
   var currentWeekCoverage = {};
@@ -1179,11 +1180,12 @@ function generatePrincipalsDigestPreview(dateStr, clientEmail) {
 function sendDailySubFeedbackRequests() {
   try {
     var ss = getSS();
-    var mainSheet = getSheetOrThrow(ss, "Absence Requests");
+    var v2CompatFb = (typeof readV2AbsenceDataCompat === "function") ? readV2AbsenceDataCompat(ss) : null;
+    var mainSheet = !v2CompatFb ? getSheetOrThrow(ss, "Absence Requests") : null;
     var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
     var settings = getSettings(ss);
 
-    var data = mainSheet.getDataRange().getValues();
+    var data = v2CompatFb ? v2CompatFb.absenceData : mainSheet.getDataRange().getValues();
     var rosterData = rosterSheet.getDataRange().getValues();
     var appUrl = settings["App URL"] || DEFAULT_APP_URL;
 

@@ -145,6 +145,9 @@ function submitMultipleAbsenceRequests(requestsToSubmit, clientEmail) {
     if (rowsToAppend.length > 0) {
       var startRow = mainSheet.getLastRow() + 1;
       mainSheet.getRange(startRow, 1, rowsToAppend.length, rowsToAppend[0].length).setValues(rowsToAppend);
+      if (typeof syncV2SheetsForAbsenceRows === "function") {
+        syncV2SheetsForAbsenceRows(ss, rowsToAppend, null, rosterData, null, settings);
+      }
 
       for (var a = 0; a < postWriteActions.length; a++) {
         var act = postWriteActions[a];
@@ -321,6 +324,9 @@ function submitAbsence(formData, clientEmail) {
       "", "", "", "", "", "", "", "", "", "", "Active", subPlanUrl, "[]"
     ];
     mainSheet.appendRow(newRow);
+    if (typeof syncV2SheetsForAbsenceRows === "function") {
+      syncV2SheetsForAbsenceRows(ss, [newRow]);
+    }
 
     var isMarkedUrgent = urgencyFormatted === 'Urgent (Less than 24 hr notice)';
     var isUrgentByTime = calculateIsUrgentByTime(formData.date, timestamp, ss);
@@ -481,6 +487,10 @@ function cancelMySubDuty(absenceId, period, clientEmail) {
           var details = getAbsenceDetailsLocal(data[i], period, scheduleLookup, nameLookup);
 
           sheet.getRange(i + 1, subColumnIndex).setValue("");
+          data[i][subColumnIndex - 1] = "";
+          if (typeof syncV2SheetsForAbsenceRows === "function") {
+            syncV2SheetsForAbsenceRows(ss, [data[i]], null, rosterData);
+          }
           logAuditAction("SUB_DUTY_CANCELLED", absenceId, "Cancelled coverage for period " + period, clientEmail);
 
           if (details && typeof syncSubDutyCalendarEvent === "function") {
@@ -639,6 +649,10 @@ function cancelAbsence(absenceId, clientEmail) {
       }
 
       sheet.getRange(i + 1, 20).setValue("Canceled");
+      data[i][19] = "Canceled";
+      if (typeof syncV2SheetsForAbsenceRows === "function") {
+        syncV2SheetsForAbsenceRows(ss, [data[i]], null, rosterData);
+      }
       logAuditAction("ABSENCE_CANCELLED", absenceId, "Cancelled entire absence request", clientEmail);
 
       var allPeriods = ['1', '2', '3', '4', '5', '6', '7', '8', '0', '10'];
@@ -835,8 +849,15 @@ function updateAbsence(absenceId, formData, clientEmail) {
 
       // Single API call to update both the basic info and all sub clearing at once
       sheet.getRange(i + 1, 4, 1, 16).setValues([updatedRowBlock]);
+      for (var blkIdx = 0; blkIdx < updatedRowBlock.length; blkIdx++) {
+        data[i][3 + blkIdx] = updatedRowBlock[blkIdx];
+      }
       if (formData.subPlanUrl !== undefined) {
         sheet.getRange(i + 1, 21).setValue(newSubPlanUrl);
+        data[i][20] = newSubPlanUrl;
+      }
+      if (typeof syncV2SheetsForAbsenceRows === "function") {
+        syncV2SheetsForAbsenceRows(ss, [data[i]], null, rosterData);
       }
       logAuditAction("ABSENCE_UPDATED", absenceId, "Updated absence details (Date: " + formData.date + ", Periods: " + formData.periods + ")", clientEmail);
 
@@ -1161,6 +1182,10 @@ function assignSubToPeriod(absenceId, period, subName, forceOverride, clientEmai
 
       // Write the subname
       sheet.getRange(i + 1, subColumnIndex).setValue(newSub);
+      data[i][subColumnIndex - 1] = newSub;
+      if (typeof syncV2SheetsForAbsenceRows === "function") {
+        syncV2SheetsForAbsenceRows(ss, [data[i]], null, rosterData, null, settingsForPerm);
+      }
       logAuditAction("SUB_ASSIGNED", absenceId, "Assigned " + (newSub || "NO ONE") + " to period " + period, clientEmail);
 
       // Notify new sub if there is one
@@ -1263,8 +1288,13 @@ function saveSubFeedback(absenceId, period, rating, note, clientEmail) {
 
     // Write Sub Feedback to Column 22 (index 21), keeping Column 21 (index 20) for Sub Plan URL
     sheet.getRange(targetIndex + 1, 22).setValue(JSON.stringify(subFeedbackParsed));
+    row[21] = JSON.stringify(subFeedbackParsed);
     if (row.length > 20 && String(row[20] || "").trim().indexOf("[") === 0) {
        sheet.getRange(targetIndex + 1, 21).setValue("");
+       row[20] = "";
+    }
+    if (typeof syncV2SheetsForAbsenceRows === "function") {
+      syncV2SheetsForAbsenceRows(ss, [row], null, rosterData);
     }
 
     var teacherEmail = String(row[2]).toLowerCase().trim();

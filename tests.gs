@@ -1190,6 +1190,60 @@ function runTests() {
       assert(mockPayrollRows.length === 4, "Expected Payroll sheet to append new snapshot below existing rows (total 4 rows), got: " + mockPayrollRows.length);
       assert(mockPayrollRows[3][0] === "5" && mockPayrollRows[3][2] === "Sub One" && mockPayrollRows[3][5] === "$50.00 (1 Green, 2 Blue/Gold)", "Expected appended re-approval row to have updated $50.00 pay");
 
+      // Test 10: Normalized v2 schema (Absences + Coverage_Assignments) conversion, sync, and readV2AbsenceDataCompat
+      var v2RosterLookups = buildV2RosterLookups([
+        ["Name", "Email", "Role", "Duty"],
+        ["Brooks, Aarti", "abrooks@gocathedral.com", "Teacher", ""],
+        ["Kelley, Ethan", "ekelley@gocathedral.com", "Teacher", "1"],
+        ["Tappel, Tim", "ttappel@gocathedral.com", "Teacher", "5"]
+      ]);
+      var v2SchedLookup = {
+        "abrooks@gocathedral.com-1": { room: "4304", course: "AP BIOLOGY (X)" },
+        "abrooks@gocathedral.com-2": { room: "4304", course: "HONORS BIO" },
+        "abrooks@gocathedral.com-10": { room: "4304", course: "ADVISORY 10" }
+      };
+      var legacyRowSample = [
+        "abs-v2-1", "2026-08-02 18:08:01", "abrooks@gocathedral.com", "2026-08-20", "1, 2, Advisory",
+        "PTO", "Full Day", "Standard (Advanced Notice)", "[HR Docs Provided] Leave plans on desk (Submitted by Admin User)",
+        "Kelley, Ethan", "Tappel, Tim", "", "", "", "", "", "", "", "No Sub Needed",
+        "Active", "https://docs.google.com/document/d/plan123",
+        JSON.stringify([{ subName: "Kelley, Ethan", period: "1", rating: 5, note: "Great class!" }])
+      ];
+      var convV2 = convertLegacyAbsenceRowToV2(
+        legacyRowSample,
+        v2RosterLookups,
+        v2SchedLookup,
+        { "2026-08-20": "Gold" },
+        { "Green Day Pay Rate": "10", "Blue/Gold Day Pay Rate": "20", "Special Pay Rates": "[]" }
+      );
+      assert(convV2 && convV2.absenceRow && convV2.assignmentRows.length === 3, "Expected legacy row with 3 periods to convert into 1 Absence row and 3 Coverage_Assignments rows");
+      assert(convV2.absenceRow[0] === "abs-v2-1" && convV2.absenceRow[4] === "Brooks, Aarti", "Expected Absence row to include Absence ID and Teacher Name");
+      assert(convV2.absenceRow[9] === "TRUE" && convV2.absenceRow[10] === "Admin User", "Expected HR Docs Provided=TRUE and Submitted By='Admin User' to be extracted");
+      assert(convV2.absenceRow[12].indexOf("[HR Docs Provided]") === -1, "Expected [HR Docs Provided] prefix to be stripped from clean Instructions");
+      assert(convV2.assignmentRows[0][0] === "abs-v2-1_P1" && convV2.assignmentRows[0][6] === "AP BIOLOGY (X)" && convV2.assignmentRows[0][11] === "Duty" && convV2.assignmentRows[0][12] === "0", "Expected Period 1 assignment to snapshot course and Duty $0 pay");
+      assert(convV2.assignmentRows[0][13] === "5" && convV2.assignmentRows[0][14] === "Great class!", "Expected Period 1 assignment to include structured Feedback Rating=5 and Feedback Note");
+      assert(convV2.assignmentRows[1][0] === "abs-v2-1_P2" && convV2.assignmentRows[1][11] === "Gold" && convV2.assignmentRows[1][12] === "20", "Expected Period 2 assignment to calculate Gold Day extra pay ($20)");
+      assert(convV2.assignmentRows[2][0] === "abs-v2-1_P10" && convV2.assignmentRows[2][8] === "No Sub Needed", "Expected Advisory (P10) assignment to have status 'No Sub Needed'");
+
+      var mockV2AbsRows = [V2_ABSENCES_HEADERS, convV2.absenceRow];
+      var mockV2AsgRows = [V2_ASSIGNMENTS_HEADERS].concat(convV2.assignmentRows);
+      var mockV2SS = {
+        getSheetByName: function(n) {
+          if (n === "Absences") {
+            return { getDataRange: function() { return { getValues: function() { return mockV2AbsRows; } }; } };
+          }
+          if (n === "Coverage_Assignments") {
+            return { getDataRange: function() { return { getValues: function() { return mockV2AsgRows; } }; } };
+          }
+          return null;
+        }
+      };
+      var compatRead = readV2AbsenceDataCompat(mockV2SS);
+      assert(compatRead && compatRead.absenceData.length === 2, "Expected readV2AbsenceDataCompat to reconstruct header + 1 absence row");
+      assert(compatRead.absenceData[1][4] === "1, 2, 10", "Expected reconstructed periods string '1, 2, 10'");
+      assert(compatRead.absenceData[1][9] === "Kelley, Ethan" && compatRead.absenceData[1][10] === "Tappel, Tim" && compatRead.absenceData[1][18] === "No Sub Needed", "Expected reconstructed period sub columns to match");
+      assert(compatRead.snapshottedScheduleLookup["abrooks@gocathedral.com-1"].course === "AP BIOLOGY (X)", "Expected snapshottedScheduleLookup to pre-populate course and room without Master Schedule Cache read");
+
       getSettings = origGetSettings;
       if (origUrlFetchApp !== undefined) global.UrlFetchApp = origUrlFetchApp;
 
