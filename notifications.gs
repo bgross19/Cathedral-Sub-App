@@ -143,20 +143,33 @@ function processEmailQueue() {
     }
 
     var scheduleLookup = null;
+    var snapshottedLookup = null;
     if (needsScheduleLookup) {
+      try {
+        var v2Compat = (typeof readV2AbsenceDataCompat === "function") ? readV2AbsenceDataCompat(ss) : null;
+        if (v2Compat && v2Compat.snapshottedScheduleLookup && Object.keys(v2Compat.snapshottedScheduleLookup).length > 0) {
+          snapshottedLookup = v2Compat.snapshottedScheduleLookup;
+        }
+      } catch (v2Err) {}
+    }
+
+    var getFallbackScheduleLookup = function() {
+      if (scheduleLookup !== null) return scheduleLookup;
       try {
         var scheduleData = getMasterScheduleData();
         scheduleLookup = buildScheduleLookup(scheduleData, settings["Term ID"] || "3601");
       } catch (err) {
         console.error("Failed to load master schedule for email queue processing: " + err.message);
+        scheduleLookup = {};
       }
-    }
+      return scheduleLookup;
+    };
 
     for (let i = 0; i < data.length; i++) {
         statuses.push([data[i][5]]);
     }
 
-    // Helper to replace placeholders using regex (supports date-aware semester lookup when isoDate is provided)
+    // Helper to replace placeholders using regex (checks snapshotted Coverage_Assignments first, then falls back to Master Schedule Cache)
     var replacePlaceholders = function(text, targetIsoDate) {
       if (!text || typeof text !== 'string') return text;
       var termForDate = (targetIsoDate && typeof resolveTermIdForDate === 'function')
@@ -166,11 +179,17 @@ function processEmailQueue() {
         var val = "No Class Assigned";
         var normKey = String(joinKey || "").toLowerCase().trim();
         var entry = null;
-        if (scheduleLookup) {
-          if (termForDate && scheduleLookup[normKey + "-" + termForDate]) {
-            entry = scheduleLookup[normKey + "-" + termForDate];
-          } else {
-            entry = scheduleLookup[normKey];
+        if (snapshottedLookup && snapshottedLookup[normKey]) {
+          entry = snapshottedLookup[normKey];
+        }
+        if (!entry) {
+          var masterLookup = getFallbackScheduleLookup();
+          if (masterLookup) {
+            if (termForDate && masterLookup[normKey + "-" + termForDate]) {
+              entry = masterLookup[normKey + "-" + termForDate];
+            } else {
+              entry = masterLookup[normKey];
+            }
           }
         }
         if (entry) {

@@ -1309,6 +1309,26 @@ function runTests() {
       assert(writtenKLBlock[1][1] === '{"3601":["3","5"],"3603":["2"]}', "Expected SCHEDULE_BY_TERM JSON to store both Semester 1 (3601) and Semester 2 (3603) periods");
       assert(appendedNewTeacherRows && appendedNewTeacherRows.length === 1 && appendedNewTeacherRows[0][10] === "1" && appendedNewTeacherRows[0][11] === '{"3601":["1"],"3603":["4"]}', "Expected newly discovered teacher to be appended with Col K and Col L populated");
 
+      // Verify case-insensitive getSheetOrThrow ("PayPeriods" -> "Payperiods")
+      var mockPayperiodsSheet = { getName: function() { return "Payperiods"; } };
+      var mockCaseSS = {
+        getSheetByName: function(name) { return name === "Payperiods" ? mockPayperiodsSheet : null; }
+      };
+      assert(getSheetOrThrow(mockCaseSS, "PayPeriods") === mockPayperiodsSheet, "Expected getSheetOrThrow('PayPeriods') to resolve live 'Payperiods' sheet");
+
+      // Verify sanitizeSettingsForClient strips internal server-only blobs on public payloads
+      var sampleSettingsBlob = {
+        "Email Mode": "Live",
+        "Date Bell Schedule Names": '{"2026-08-11":"BLUE (85)"}',
+        "Period Bell Times": '{"Green":{}}',
+        "PS_CLIENT_SECRET": "top-secret"
+      };
+      var publicSafe = sanitizeSettingsForClient(sampleSettingsBlob, false);
+      assert(publicSafe["Email Mode"] === "Live", "Expected Email Mode in public settings");
+      assert(publicSafe["Date Bell Schedule Names"] === undefined && publicSafe["Period Bell Times"] === undefined, "Expected server-only bell schedule blobs stripped from public payload settings");
+      var adminSafe = sanitizeSettingsForClient(sampleSettingsBlob, true);
+      assert(adminSafe["Date Bell Schedule Names"] !== undefined && adminSafe["Period Bell Times"] !== undefined, "Expected server-only bell schedule blobs preserved in admin settings");
+
       getSettings = origGetSettings;
       if (origUrlFetchApp !== undefined) global.UrlFetchApp = origUrlFetchApp;
 

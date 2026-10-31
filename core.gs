@@ -690,9 +690,10 @@ function sanitizeSettingsForClient(settings, includeAdminFields) {
   var safe = {};
   if (!settings) return safe;
   var sensitiveKeys = { "PS_CLIENT_SECRET": true, "PS_CLIENT_ID": true, "PS_URL": true };
+  var serverOnlyPublicKeys = { "Date Bell Schedule Names": true, "Period Bell Times": true };
   for (var k in settings) {
     if (!Object.prototype.hasOwnProperty.call(settings, k)) continue;
-    if (!includeAdminFields && sensitiveKeys[k]) continue;
+    if (!includeAdminFields && (sensitiveKeys[k] || serverOnlyPublicKeys[k])) continue;
     if (includeAdminFields && k === "PS_CLIENT_SECRET") {
       safe[k] = settings[k] ? MASKED_SECRET_VALUE : "";
     } else {
@@ -792,6 +793,21 @@ function getSS() {
  */
 function getSheetOrThrow(ss, sheetName) {
   var sheet = ss.getSheetByName(sheetName);
+  if (!sheet && sheetName === "PayPeriods") {
+    sheet = ss.getSheetByName("Payperiods");
+  } else if (!sheet && sheetName === "Payperiods") {
+    sheet = ss.getSheetByName("PayPeriods");
+  }
+  if (!sheet && typeof ss.getSheets === "function") {
+    var sheets = ss.getSheets() || [];
+    var targetLower = String(sheetName || "").toLowerCase();
+    for (var i = 0; i < sheets.length; i++) {
+      if (sheets[i] && typeof sheets[i].getName === "function" && String(sheets[i].getName()).toLowerCase() === targetLower) {
+        sheet = sheets[i];
+        break;
+      }
+    }
+  }
   if (!sheet) {
     throw new Error(sheetName + " sheet not found.");
   }
@@ -955,7 +971,18 @@ function getAuditLogs(startDateStr, endDateStr, clientEmail) {
     var auditSheet = ss.getSheetByName("Audit Log");
     if (!auditSheet) return [];
 
-    var data = auditSheet.getDataRange().getValues();
+    var data;
+    if (typeof auditSheet.getLastRow === "function" && typeof auditSheet.getRange === "function") {
+      var lastRow = auditSheet.getLastRow();
+      if (lastRow <= 1) return [];
+      var maxRowsToRead = 5000;
+      var startRow = Math.max(1, lastRow - maxRowsToRead + 1);
+      var numRows = lastRow - startRow + 1;
+      var rawSlice = auditSheet.getRange(startRow, 1, numRows, 5).getValues();
+      data = startRow === 1 ? rawSlice : [["Timestamp", "Actor", "Action", "Target", "Details"]].concat(rawSlice);
+    } else {
+      data = auditSheet.getDataRange().getValues();
+    }
     var logs = [];
 
     var startDate = new Date(startDateStr);
@@ -1138,7 +1165,13 @@ function getPeriodTimeRangeForDate(dateStr, period, optionalDateColors, optional
   }
 
   var scheduleName = dayColor;
-  if (settings && settings["Date Bell Schedule Names"]) {
+  if (typeof getDateBellScheduleNamesCached === "function") {
+    var cachedSchedMap = getDateBellScheduleNamesCached();
+    if (cachedSchedMap && cachedSchedMap[isoDate] && bellTimesMap[cachedSchedMap[isoDate]]) {
+      scheduleName = cachedSchedMap[isoDate];
+    }
+  }
+  if (scheduleName === dayColor && settings && settings["Date Bell Schedule Names"]) {
     try {
       var dateSchedMap = JSON.parse(settings["Date Bell Schedule Names"]);
       if (dateSchedMap && dateSchedMap[isoDate] && bellTimesMap[dateSchedMap[isoDate]]) {

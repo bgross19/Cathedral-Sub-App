@@ -1024,7 +1024,9 @@ function bulkUpsertPayPeriods(updates, clientEmail) {
     var newRows = [];
     for (var i = 0; i < updates.length; i++) {
        var u = updates[i];
-       newRows.push([u.period, u.start, u.end, "FALSE"]); // Default approved to FALSE
+       var normStart = _normalizeScheduleDateStr(u.start) || u.start;
+       var normEnd = _normalizeScheduleDateStr(u.end) || u.end;
+       newRows.push([u.period, normStart, normEnd, "FALSE"]); // Default approved to FALSE
     }
 
     if (newRows.length > 0) {
@@ -1121,6 +1123,7 @@ function loadPayPeriodsSettings(clientEmail) {
 // BELL SCHEDULE (DATES SHEET) MANAGEMENT & CACHING
 // ============================================================================
 var _globalDatesCache = null;
+var _globalDateBellScheduleNamesCache = null;
 
 function _normalizeScheduleDateStr(dateRaw) {
   if (!dateRaw) return "";
@@ -1162,16 +1165,21 @@ function _normalizeBellColor(colorRaw) {
 }
 
 /**
- * Retrieves the Date -> Color map from CacheService or the Dates sheet.
+ * Retrieves the Date -> Color map from CacheService or the Dates sheet,
+ * and simultaneously populates the Date -> Bell Schedule Name map (Col C).
  */
 function getDateColorsCached(ss) {
   if (_globalDatesCache) return _globalDatesCache;
 
   var cache = CacheService.getScriptCache();
   var cached = cache ? cache.get("bell_schedule_dates") : null;
+  var cachedNames = cache ? cache.get("bell_schedule_names") : null;
   if (cached) {
     try {
       _globalDatesCache = JSON.parse(cached);
+      if (cachedNames) {
+        _globalDateBellScheduleNamesCache = JSON.parse(cachedNames);
+      }
       return _globalDatesCache;
     } catch (e) {
       console.warn("Failed to parse cached bell schedule dates.");
@@ -1181,6 +1189,7 @@ function getDateColorsCached(ss) {
   var sheetSS = ss || getSS();
   var datesSheet = sheetSS.getSheetByName("Dates");
   var dateColors = {};
+  var dateBellScheduleNames = {};
 
   if (datesSheet) {
     var datesData = datesSheet.getDataRange().getValues();
@@ -1188,8 +1197,12 @@ function getDateColorsCached(ss) {
       if (!datesData[d] || datesData[d].length < 2) continue;
       var dateFormatted = _normalizeScheduleDateStr(datesData[d][0]);
       var colorNormalized = _normalizeBellColor(datesData[d][1]);
+      var schedName = datesData[d].length >= 3 && datesData[d][2] ? String(datesData[d][2]).trim() : "";
       if (dateFormatted && colorNormalized) {
         dateColors[dateFormatted] = colorNormalized;
+        if (schedName) {
+          dateBellScheduleNames[dateFormatted] = schedName;
+        }
       }
     }
   }
@@ -1200,18 +1213,44 @@ function getDateColorsCached(ss) {
       if (str.length < 100000) {
         cache.put("bell_schedule_dates", str, 1800); // 30 minutes
       }
+      var namesStr = JSON.stringify(dateBellScheduleNames);
+      if (namesStr.length < 100000) {
+        cache.put("bell_schedule_names", namesStr, 1800);
+      }
     }
   } catch (e) {}
 
   _globalDatesCache = dateColors;
+  _globalDateBellScheduleNamesCache = dateBellScheduleNames;
   return dateColors;
+}
+
+/**
+ * Retrieves the Date -> Bell Schedule Name map (Col C of Dates sheet).
+ */
+function getDateBellScheduleNamesCached(ss) {
+  if (_globalDateBellScheduleNamesCache) return _globalDateBellScheduleNamesCache;
+  var cache = CacheService.getScriptCache();
+  var cachedNames = cache ? cache.get("bell_schedule_names") : null;
+  if (cachedNames) {
+    try {
+      _globalDateBellScheduleNamesCache = JSON.parse(cachedNames);
+      return _globalDateBellScheduleNamesCache;
+    } catch (e) {}
+  }
+  getDateColorsCached(ss);
+  return _globalDateBellScheduleNamesCache || {};
 }
 
 function clearDatesCache() {
   _globalDatesCache = null;
+  _globalDateBellScheduleNamesCache = null;
   try {
     var cache = CacheService.getScriptCache();
-    if (cache) cache.remove("bell_schedule_dates");
+    if (cache) {
+      cache.remove("bell_schedule_dates");
+      cache.remove("bell_schedule_names");
+    }
   } catch (e) {}
 }
 
@@ -1219,8 +1258,8 @@ function _getOrCreateDatesSheet(ss) {
   var sheet = ss.getSheetByName("Dates");
   if (!sheet) {
     sheet = ss.insertSheet("Dates");
-    sheet.getRange(1, 1, 1, 2).setValues([["Date", "Color"]]);
-    sheet.getRange(1, 1, 1, 2).setFontWeight("bold");
+    sheet.getRange(1, 1, 1, 3).setValues([["Date", "Color", "Bell Schedule Name"]]);
+    sheet.getRange(1, 1, 1, 3).setFontWeight("bold");
     sheet.getRange("A:A").setNumberFormat("@");
   }
   return sheet;
@@ -1325,6 +1364,7 @@ function bulkUpsertBellScheduleDates(updates, replaceAll, clientEmail) {
 
     var sheet = _getOrCreateDatesSheet(ss);
     var dateMap = {};
+    var schedNameMap = {};
 
     if (!replaceAll) {
       var existingData = sheet.getDataRange().getValues();
@@ -1332,8 +1372,10 @@ function bulkUpsertBellScheduleDates(updates, replaceAll, clientEmail) {
         if (!existingData[i] || existingData[i].length < 2) continue;
         var exDate = _normalizeScheduleDateStr(existingData[i][0]);
         var exColor = _normalizeBellColor(existingData[i][1]);
+        var exSched = existingData[i].length >= 3 && existingData[i][2] ? String(existingData[i][2]).trim() : "";
         if (exDate && exColor) {
           dateMap[exDate] = exColor;
+          if (exSched) schedNameMap[exDate] = exSched;
         }
       }
     }
@@ -1344,25 +1386,28 @@ function bulkUpsertBellScheduleDates(updates, replaceAll, clientEmail) {
       if (!item) continue;
       var normDate = _normalizeScheduleDateStr(item.date);
       var normColor = _normalizeBellColor(item.color);
+      var normSched = item.scheduleName ? String(item.scheduleName).trim() : "";
       if (!normDate) continue;
       if (!normColor) {
         delete dateMap[normDate];
+        delete schedNameMap[normDate];
       } else {
         dateMap[normDate] = normColor;
+        if (normSched) schedNameMap[normDate] = normSched;
       }
       validUpdatesCount++;
     }
 
     var sortedDates = Object.keys(dateMap).sort();
-    var allRows = [["Date", "Color"]];
+    var allRows = [["Date", "Color", "Bell Schedule Name"]];
     for (var s = 0; s < sortedDates.length; s++) {
       var dt = sortedDates[s];
-      allRows.push([dt, dateMap[dt]]);
+      allRows.push([dt, dateMap[dt], schedNameMap[dt] || ""]);
     }
 
     sheet.clearContents();
-    sheet.getRange(1, 1, allRows.length, 2).setValues(allRows);
-    sheet.getRange(1, 1, 1, 2).setFontWeight("bold");
+    sheet.getRange(1, 1, allRows.length, 3).setValues(allRows);
+    sheet.getRange(1, 1, 1, 3).setFontWeight("bold");
 
     clearDatesCache();
     logAuditAction("BELL_SCHEDULE_BULK_UPLOAD", "Multiple (" + validUpdatesCount + ")", (replaceAll ? "Replaced" : "Merged") + " bell schedule with " + validUpdatesCount + " entries", clientEmail);
