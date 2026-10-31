@@ -173,9 +173,83 @@ function fetchMasterScheduleFromAPI() {
   return scheduleData;
 }
 
+const MASTER_SCHEDULE_CACHE_CHUNK_SIZE = 90000;
+const MASTER_SCHEDULE_CACHE_MAX_CHUNKS = 10;
+
+function _readMasterScheduleFromScriptCache(cache) {
+  if (!cache || typeof cache.get !== "function") return null;
+  try {
+    const chunkCountStr = cache.get("master_schedule_chunks");
+    if (chunkCountStr) {
+      const count = parseInt(chunkCountStr, 10);
+      if (!isNaN(count) && count > 0 && count <= MASTER_SCHEDULE_CACHE_MAX_CHUNKS) {
+        let combined = "";
+        for (let i = 0; i < count; i++) {
+          const part = cache.get("master_schedule_chunk_" + i);
+          if (!part) return null;
+          combined += part;
+        }
+        return JSON.parse(combined);
+      }
+    }
+    const legacySingle = cache.get("master_schedule_data");
+    if (legacySingle) {
+      return JSON.parse(legacySingle);
+    }
+  } catch (e) {
+    Logger.log("Failed to parse cached Master Schedule data.");
+  }
+  return null;
+}
+
+function _writeMasterScheduleToScriptCache(cache, data) {
+  if (!cache || typeof cache.put !== "function" || !data) return;
+  try {
+    const compact = [];
+    for (let i = 0; i < data.length; i++) {
+      const r = data[i];
+      if (!r) continue;
+      const sliced = r.slice(0, 7);
+      const hasAny = sliced.some(c => c !== undefined && c !== null && String(c).trim() !== "");
+      if (i === 0 || hasAny) {
+        compact.push(sliced);
+      }
+    }
+    const stringified = JSON.stringify(compact);
+    if (stringified.length < MASTER_SCHEDULE_CACHE_CHUNK_SIZE) {
+      cache.put("master_schedule_data", stringified, 1800);
+      if (typeof cache.remove === "function") cache.remove("master_schedule_chunks");
+      return;
+    }
+    const numChunks = Math.ceil(stringified.length / MASTER_SCHEDULE_CACHE_CHUNK_SIZE);
+    if (numChunks <= MASTER_SCHEDULE_CACHE_MAX_CHUNKS) {
+      for (let c = 0; c < numChunks; c++) {
+        const chunkStr = stringified.substring(c * MASTER_SCHEDULE_CACHE_CHUNK_SIZE, (c + 1) * MASTER_SCHEDULE_CACHE_CHUNK_SIZE);
+        cache.put("master_schedule_chunk_" + c, chunkStr, 1800);
+      }
+      cache.put("master_schedule_chunks", String(numChunks), 1800);
+    }
+  } catch (e) {
+    /* ignored */
+  }
+}
+
+function _clearMasterScheduleFromScriptCache(cache) {
+  if (!cache || typeof cache.remove !== "function") return;
+  try {
+    cache.remove("master_schedule_data");
+    cache.remove("master_schedule_chunks");
+    for (let c = 0; c < MASTER_SCHEDULE_CACHE_MAX_CHUNKS; c++) {
+      cache.remove("master_schedule_chunk_" + c);
+    }
+  } catch (e) {
+    /* ignored */
+  }
+}
+
 /**
- * Gets the Master Schedule data by reading directly from the "Master Schedule Cache" sheet.
- * This completely avoids API calls during normal app usage.
+ * Gets the Master Schedule data by reading from CacheService (with multi-chunk support)
+ * or falling back to the "Master Schedule Cache" sheet.
  * Uses a global variable to avoid repeated sheet reads in the same execution context.
  */
 function getMasterScheduleData() {
@@ -184,14 +258,10 @@ function getMasterScheduleData() {
   }
 
   const cache = CacheService.getScriptCache();
-  const cachedData = cache.get("master_schedule_data");
+  const cachedData = _readMasterScheduleFromScriptCache(cache);
   if (cachedData) {
-    try {
-      global_master_schedule_cache = JSON.parse(cachedData);
-      return global_master_schedule_cache;
-    } catch (e) {
-      Logger.log("Failed to parse cached Master Schedule data.");
-    }
+    global_master_schedule_cache = cachedData;
+    return global_master_schedule_cache;
   }
 
   try {
@@ -207,16 +277,7 @@ function getMasterScheduleData() {
     const data = sheet.getDataRange().getValues();
     if (data && data.length > 1) {
       global_master_schedule_cache = data;
-
-      try {
-        const stringified = JSON.stringify(data);
-        if (stringified.length < 100000) { // Max 100KB cache
-           cache.put("master_schedule_data", stringified, 1800); // 30 mins
-        }
-      } catch (e) {
-        /* ignored */
-      }
-
+      _writeMasterScheduleToScriptCache(cache, data);
       return data;
     }
 
@@ -240,7 +301,7 @@ function getMasterScheduleData() {
 function warmMasterScheduleCache() {
   // Clear the global in-memory variable
   global_master_schedule_cache = null;
-  CacheService.getScriptCache().remove("master_schedule_data");
+  _clearMasterScheduleFromScriptCache(CacheService.getScriptCache());
 
   // Fetch from API
   const scheduleData = fetchMasterScheduleFromAPI();
@@ -256,14 +317,7 @@ function warmMasterScheduleCache() {
     sheet.clearContents();
     sheet.getRange(1, 1, scheduleData.length, scheduleData[0].length).setValues(scheduleData);
     global_master_schedule_cache = scheduleData;
-    try {
-      const stringified = JSON.stringify(scheduleData);
-      if (stringified.length < 100000) {
-        CacheService.getScriptCache().put("master_schedule_data", stringified, 1800);
-      }
-    } catch (e) {
-      /* ignored */
-    }
+    _writeMasterScheduleToScriptCache(CacheService.getScriptCache(), scheduleData);
 
     Logger.log("Master Schedule Cache sheet updated successfully with " + scheduleData.length + " rows.");
 
@@ -588,8 +642,10 @@ function syncBellScheduleFromPowerSchool(replaceAll, clientEmail) {
 }
 
 /**
- * Synchronizes the Master Schedule teachers to the Staff Roster.
- * Adds any missing teachers with default role "Teacher" and blank duty.
+ * Synchronizes the Master Schedule teachers and their teaching periods (`TEACHING_PERIODS` in Col K
+ * and `SCHEDULE_BY_TERM` JSON in Col L) to the Staff Roster.
+ * Automatically updates teaching periods whenever the Master Schedule refreshes (e.g. overnight or across semesters)
+ * and adds any missing teachers with default role "Teacher" and blank duty.
  */
 function syncMasterScheduleToStaffRoster(scheduleData, ss) {
   if (!scheduleData || scheduleData.length <= 1) return;
@@ -600,33 +656,115 @@ function syncMasterScheduleToStaffRoster(scheduleData, ss) {
   const rosterData = rosterSheet.getDataRange().getValues();
   const existingEmails = {};
 
-  // Roster format: Name, Email, Role, Duty
+  const settings = (typeof getSettings === "function") ? getSettings(ss) : {};
+  const activeTermId = String(settings["Term ID"] || "3601").trim();
+
+  const sortPeriods = function(arr) {
+    arr.sort(function(a, b) {
+      const numA = parseInt(a, 10);
+      const numB = parseInt(b, 10);
+      if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+      if (a < b) return -1;
+      if (a > b) return 1;
+      return 0;
+    });
+    return arr;
+  };
+
+  // Roster format: Name (0), Email (1), Role (2), Duty (3), Dept (4), Homebase (5), Building (6), ID (7), TeacherNum (8), Phone (9), TEACHING_PERIODS (10), SCHEDULE_BY_TERM (11)
   for (let i = 1; i < rosterData.length; i++) {
-    const email = String(rosterData[i][1]).toLowerCase().trim();
+    if (!rosterData[i]) continue;
+    const email = String(rosterData[i][1] || "").toLowerCase().trim();
     if (email) {
-      existingEmails[email] = true;
+      existingEmails[email] = i;
     }
   }
 
   const newTeachers = {};
+  const allSchedules = {};
+  const allSchedulesByTerm = {};
+
   const headers = scheduleData[0];
   const nameIdx = headers.indexOf("LASTFIRST");
   const emailIdx = headers.indexOf("EMAIL_ADDR");
+  const periodIdx = headers.indexOf("PERIOD");
+  const termIdx = headers.indexOf("TERM");
 
   if (nameIdx === -1 || emailIdx === -1) return;
 
   for (let s = 1; s < scheduleData.length; s++) {
     const row = scheduleData[s];
-    const teacherName = String(row[nameIdx]).trim();
-    // Maintain the exact casing for the email in the sheet, but lower-case for comparison
-    const rawEmail = String(row[emailIdx]).trim();
+    if (!row) continue;
+    const teacherName = String(row[nameIdx] || "").trim();
+    const rawEmail = String(row[emailIdx] || "").trim();
     const teacherEmail = rawEmail.toLowerCase();
+    if (!teacherEmail) continue;
 
-    if (teacherEmail && teacherName && !existingEmails[teacherEmail] && !newTeachers[teacherEmail]) {
+    if (teacherName && existingEmails[teacherEmail] === undefined && !newTeachers[teacherEmail]) {
       newTeachers[teacherEmail] = {
         name: teacherName,
         email: rawEmail
       };
+    }
+
+    if (periodIdx !== -1 && row[periodIdx] !== undefined) {
+      const pVal = String(row[periodIdx] || "").trim();
+      const joinP = (typeof getScheduleJoinPeriod === "function") ? getScheduleJoinPeriod(pVal) : pVal;
+      const rowTerm = (termIdx !== -1 && row[termIdx] !== undefined && String(row[termIdx]).trim() !== "")
+        ? String(row[termIdx]).trim()
+        : activeTermId;
+      if (joinP) {
+        if (!allSchedules[teacherEmail]) allSchedules[teacherEmail] = [];
+        if ((!rowTerm || rowTerm === activeTermId || Math.floor(Number(rowTerm) / 100) * 100 === Number(rowTerm)) && allSchedules[teacherEmail].indexOf(joinP) === -1) {
+          allSchedules[teacherEmail].push(joinP);
+        }
+        if (rowTerm) {
+          if (!allSchedulesByTerm[teacherEmail]) allSchedulesByTerm[teacherEmail] = {};
+          if (!allSchedulesByTerm[teacherEmail][rowTerm]) allSchedulesByTerm[teacherEmail][rowTerm] = [];
+          if (allSchedulesByTerm[teacherEmail][rowTerm].indexOf(joinP) === -1) {
+            allSchedulesByTerm[teacherEmail][rowTerm].push(joinP);
+          }
+        }
+      }
+    }
+  }
+
+  for (const emailKey in allSchedulesByTerm) {
+    if (!allSchedules[emailKey] || allSchedules[emailKey].length === 0) {
+      allSchedules[emailKey] = [];
+      for (const tk in allSchedulesByTerm[emailKey]) {
+        for (let ti = 0; ti < allSchedulesByTerm[emailKey][tk].length; ti++) {
+          const pItem = allSchedulesByTerm[emailKey][tk][ti];
+          if (allSchedules[emailKey].indexOf(pItem) === -1) {
+            allSchedules[emailKey].push(pItem);
+          }
+        }
+      }
+    }
+    for (const termKey in allSchedulesByTerm[emailKey]) {
+      sortPeriods(allSchedulesByTerm[emailKey][termKey]);
+    }
+  }
+  for (const emailKey in allSchedules) {
+    sortPeriods(allSchedules[emailKey]);
+  }
+
+  // Update Col K (11: TEACHING_PERIODS) and Col L (12: SCHEDULE_BY_TERM) for all existing roster rows
+  if (rosterData.length > 0) {
+    const klBlock = [["TEACHING_PERIODS", "SCHEDULE_BY_TERM"]];
+    for (let r = 1; r < rosterData.length; r++) {
+      const rEmail = rosterData[r] ? String(rosterData[r][1] || "").toLowerCase().trim() : "";
+      const pList = (rEmail && allSchedules[rEmail]) ? allSchedules[rEmail] : [];
+      const byTerm = (rEmail && allSchedulesByTerm[rEmail]) ? allSchedulesByTerm[rEmail] : {};
+      klBlock.push([
+        pList.length > 0 ? pList.join(", ") : "",
+        Object.keys(byTerm).length > 0 ? JSON.stringify(byTerm) : ""
+      ]);
+    }
+    try {
+      rosterSheet.getRange(1, 11, klBlock.length, 2).setValues(klBlock);
+    } catch (klErr) {
+      Logger.log("Could not update Staff Roster K:L schedule columns: " + klErr.message);
     }
   }
 
@@ -635,14 +773,29 @@ function syncMasterScheduleToStaffRoster(scheduleData, ss) {
   let addedCount = 0;
   for (const key in newTeachers) {
     const teacher = newTeachers[key];
-    newRows.push([teacher.name, teacher.email, "Teacher", ""]);
+    const pList = allSchedules[key] || [];
+    const byTerm = allSchedulesByTerm[key] || {};
+    newRows.push([
+      teacher.name,
+      teacher.email,
+      "Teacher",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      pList.length > 0 ? pList.join(", ") : "",
+      Object.keys(byTerm).length > 0 ? JSON.stringify(byTerm) : ""
+    ]);
     addedNames.push(teacher.name + " <" + teacher.email + ">");
     addedCount++;
   }
 
   if (newRows.length > 0) {
     const startRow = rosterSheet.getLastRow() + 1;
-    rosterSheet.getRange(startRow, 1, newRows.length, 4).setValues(newRows);
+    rosterSheet.getRange(startRow, 1, newRows.length, 12).setValues(newRows);
     Logger.log("Successfully synced " + addedCount + " new teachers to Staff Roster.");
 
     try {
@@ -652,15 +805,15 @@ function syncMasterScheduleToStaffRoster(scheduleData, ss) {
     } catch (e) {
       Logger.log("Failed to log audit action for staff sync: " + e.message);
     }
+  }
 
-    // Invalidate roster cache
-    try {
-      if (typeof clearRosterCache === 'function') {
-        clearRosterCache();
-      }
-    } catch (e) {
-      /* ignored */
+  // Always invalidate roster cache after syncing schedules or new teachers
+  try {
+    if (typeof clearRosterCache === 'function') {
+      clearRosterCache();
     }
+  } catch (e) {
+    /* ignored */
   }
 }
 

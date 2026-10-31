@@ -177,7 +177,15 @@ function getRosterDataCached(ss) {
 
   var sheetSS = ss || getSS();
   var rosterSheet = getSheetOrThrow(sheetSS, "Staff Roster");
-  var rosterData = rosterSheet ? rosterSheet.getDataRange().getValues() : [];
+  var rawRosterData = rosterSheet ? rosterSheet.getDataRange().getValues() : [];
+  var rosterData = [];
+  for (var rIdx = 0; rIdx < rawRosterData.length; rIdx++) {
+    var rRow = rawRosterData[rIdx];
+    if (!rRow) continue;
+    if (rIdx === 0 || (rRow[0] && String(rRow[0]).trim() !== "") || (rRow[1] && String(rRow[1]).trim() !== "")) {
+      rosterData.push(rRow.slice(0, 12));
+    }
+  }
 
   // Try to cache if it's not huge
   try {

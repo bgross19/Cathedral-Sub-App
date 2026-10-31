@@ -2,24 +2,22 @@
 // SUB_MATCHING.GS — Substitute Availability & Auto-Suggestion Engine
 // ============================================================================
 
-function getSubstituteAvailability(email) {
-  var ss = getSS();
-  var subAvailSheet = ss.getSheetByName("SubstituteAvailability");
-  if (!subAvailSheet) return {};
+var _globalSubAvailCache = null;
 
-  var data = subAvailSheet.getDataRange().getValues();
-  var availability = {};
-  var targetEmail = String(email).toLowerCase();
-
-  for (var i = 1; i < data.length; i++) {
-  if (!data[i]) continue;
-    if (String(data[i][0]).toLowerCase() === targetEmail) {
-      var cellVal = data[i][1];
-      var dateStr = (cellVal instanceof Date) ? _formatDateToYYYYMMDD(cellVal) : String(cellVal).trim();
-      availability[dateStr] = data[i][2];
+function clearSubAvailabilityCache() {
+  _globalSubAvailCache = null;
+  try {
+    var cache = CacheService.getScriptCache();
+    if (cache && typeof cache.remove === "function") {
+      cache.remove("sub_availability_map");
     }
-  }
-  return availability;
+  } catch (e) {}
+}
+
+function getSubstituteAvailability(email) {
+  var allMap = getAllSubstituteAvailability();
+  var targetEmail = String(email || "").toLowerCase().trim();
+  return allMap[targetEmail] || {};
 }
 
 function saveSubstituteAvailability(dateStr, status, clientEmail) {
@@ -55,9 +53,23 @@ function saveSubstituteAvailability(dateStr, status, clientEmail) {
   } else {
     subAvailSheet.appendRow([targetEmail, dateStr, status]);
   }
+  clearSubAvailabilityCache();
 }
 
 function getAllSubstituteAvailability() {
+  if (_globalSubAvailCache) return _globalSubAvailCache;
+
+  var cache = (typeof CacheService !== "undefined" && CacheService.getScriptCache) ? CacheService.getScriptCache() : null;
+  if (cache && typeof cache.get === "function") {
+    var cachedStr = cache.get("sub_availability_map");
+    if (cachedStr) {
+      try {
+        _globalSubAvailCache = JSON.parse(cachedStr);
+        return _globalSubAvailCache;
+      } catch (e) {}
+    }
+  }
+
   var ss = getSS();
   var subAvailSheet = ss.getSheetByName("SubstituteAvailability");
   if (!subAvailSheet) return {};
@@ -67,10 +79,11 @@ function getAllSubstituteAvailability() {
 
   for (var i = 1; i < data.length; i++) {
   if (!data[i]) continue;
-    var email = String(data[i][0]).toLowerCase().trim();
-      var cellVal = data[i][1];
-    var dateStr = (cellVal instanceof Date) ? _formatDateToYYYYMMDD(cellVal) : String(cellVal).trim();
-    var status = String(data[i][2]).trim();
+    var email = String(data[i][0] || "").toLowerCase().trim();
+    if (!email) continue;
+    var cellVal = data[i][1];
+    var dateStr = (cellVal instanceof Date) ? _formatDateToYYYYMMDD(cellVal) : String(cellVal || "").trim();
+    var status = String(data[i][2] || "").trim();
 
     if (!availabilityMap[email]) {
       availabilityMap[email] = {};
@@ -78,6 +91,16 @@ function getAllSubstituteAvailability() {
     availabilityMap[email][dateStr] = status;
   }
 
+  try {
+    if (cache && typeof cache.put === "function") {
+      var serialized = JSON.stringify(availabilityMap);
+      if (serialized.length < 95000) {
+        cache.put("sub_availability_map", serialized, 1800);
+      }
+    }
+  } catch (e) {}
+
+  _globalSubAvailCache = availabilityMap;
   return availabilityMap;
 }
 
@@ -154,6 +177,7 @@ function saveSubstituteAvailabilityAdmin(subName, dateStr, status, clientEmail) 
   } else {
     subAvailSheet.appendRow([targetEmail, dateStr, status]);
   }
+  clearSubAvailabilityCache();
 }
 
 function getSuggestedSubs(dateStr, clientEmail) {
