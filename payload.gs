@@ -266,41 +266,92 @@ function getInitialPayload(clientEmail, requestedComponents) {
     cutoffDate.setDate(today.getDate() - fetchWindowDays);
     cutoffDate.setHours(0, 0, 0, 0);
 
+    var tz = Session.getScriptTimeZone();
+    var formattedDateCache = {};
+    var yyyymmddCache = {};
+    var getCachedDateFormats = function(rawVal, dateObj, isValid) {
+      var cacheKey = (rawVal instanceof Date) ? String(dateObj.getTime()) : String(rawVal);
+      if (formattedDateCache[cacheKey] !== undefined) {
+        return { formattedDate: formattedDateCache[cacheKey], yyyymmdd: yyyymmddCache[cacheKey] };
+      }
+      var fDate = "Unknown Date";
+      var ymd = "";
+      if (isValid) {
+        fDate = Utilities.formatDate(dateObj, tz, "MMM d, yyyy");
+        ymd = Utilities.formatDate(dateObj, tz, "yyyy-MM-dd");
+      } else {
+        try {
+          var fallbackObj = new Date(rawVal);
+          fDate = fallbackObj.toLocaleDateString();
+          ymd = Utilities.formatDate(fallbackObj, tz, "yyyy-MM-dd");
+        } catch (e) {
+          ymd = String(rawVal);
+        }
+      }
+      formattedDateCache[cacheKey] = fDate;
+      yyyymmddCache[cacheKey] = ymd;
+      return { formattedDate: fDate, yyyymmdd: ymd };
+    };
+
+    var formatFirstLastTeacherName = function(emailKey) {
+      var tName = nameLookup[emailKey] || emailKey;
+      if (tName.includes(",")) {
+        var parts = tName.split(",");
+        if (parts.length > 1) tName = parts[1].trim() + " " + parts[0].trim();
+      }
+      return tName;
+    };
+
+    var wantQuickCover = want("quickCover") && (permissions["Admin Dashboard"] || permissions["Today at a Glance"] || permissions["Today's Absences"]);
+    var wantAdminData = want("adminData") && (permissions["Admin Dashboard"] || permissions["Today at a Glance"] || permissions["Today's Absences"]);
+    var wantHrData = want("hrData") && permissions["HR Dashboard"];
+
+    var quickCover = [];
+    var targetEndQC = new Date(today);
+    if (wantQuickCover) {
+      var dayOfWeek = today.getDay();
+      var daysToAdd = 1;
+      if (dayOfWeek === 5) daysToAdd = 3;
+      else if (dayOfWeek === 6) daysToAdd = 2;
+      targetEndQC.setDate(today.getDate() + daysToAdd);
+      targetEndQC.setHours(23, 59, 59, 999);
+    }
+
+    var adminData = [];
+    var hrData = [];
+
     for (let i = 1; i < absenceData.length; i++) {
       var row = absenceData[i];
-      var status = String(row[19] || 'Active');
+      if (!row || row.length < 4) continue;
+      var status = String(row[19] || 'Active').trim();
       if (status === 'Canceled') continue;
 
-      var rowTeacherEmail = String(row[2]).toLowerCase();
+      var rowTeacherEmail = String(row[2] || "").toLowerCase().trim();
       var dateVal = row[3];
       if (!dateVal) continue;
 
-      var rowDate = new Date(dateVal);
+      var rowDate = (dateVal instanceof Date) ? dateVal : new Date(dateVal);
       var isDateValid = !isNaN(rowDate.getTime());
+      var isWithinWindow = !isDateValid || rowDate >= cutoffDate;
 
-      var formattedDate = "Unknown Date";
-      var yyyymmdd = "";
-      if (isDateValid) {
-         formattedDate = Utilities.formatDate(rowDate, Session.getScriptTimeZone(), "MMM d, yyyy");
-         yyyymmdd = Utilities.formatDate(rowDate, Session.getScriptTimeZone(), "yyyy-MM-dd");
-      } else {
-         try {
-            formattedDate = new Date(dateVal).toLocaleDateString();
-            yyyymmdd = Utilities.formatDate(new Date(dateVal), Session.getScriptTimeZone(), "yyyy-MM-dd");
-         } catch(e) {
-            console.error("Error formatting date: " + e.message);
-            yyyymmdd = String(dateVal); // fallback
-         }
-      }
+      var dateFmts = getCachedDateFormats(dateVal, rowDate, isDateValid);
+      var formattedDate = dateFmts.formattedDate;
+      var yyyymmdd = dateFmts.yyyymmdd;
+      var rawDate = isDateValid ? Number(rowDate.getTime()) : 0;
 
-      // My Absences
+      var rowId = String(row[0] || "");
+      var periodsStrRaw = String(row[4] || "");
+      var reason = String(row[5] || "");
+      var duration = String(row[6] || "");
+      var urgencyStr = String(row[7] || "");
+      var instructions = String(row[8] || "");
+      var rowSubPlanUrl = extractSubPlanUrl(row);
+
+      // 3a. My Absences
       if (rowTeacherEmail === targetEmail) {
-        var urgencyStr = String(row[7] || '');
         let subFeedbackRaw = extractSubFeedbackRaw(row);
-        var subPlanUrl = extractSubPlanUrl(row);
-
-        var periodsRequested = String(row[4] || "").split(",").map(function(p) { return p.trim(); }).filter(function(p) { return p !== ""; });
-        var periodsWithSubs = periodsRequested.map(function(p) {
+        var periodsRequestedForMe = periodsStrRaw.split(",").map(function(p) { return p.trim(); }).filter(function(p) { return p !== ""; });
+        var periodsWithSubs = periodsRequestedForMe.map(function(p) {
           var subColIdx = getSubColumnIndex(p);
           var subName = (subColIdx > 0 && subColIdx <= row.length) ? row[subColIdx - 1] : "";
           var displayP = formatPeriodDisplay(p);
@@ -312,18 +363,18 @@ function getInitialPayload(clientEmail, requestedComponents) {
         }).join(", ");
 
         var absenceObj = {
-          id: String(row[0]),
+          id: rowId,
           date: String(formattedDate),
-          rawDate: isDateValid ? Number(rowDate.getTime()) : 0,
+          rawDate: rawDate,
           rawDateString: String(dateVal),
           formDateString: String(yyyymmdd),
-          periods: String(row[4]),
+          periods: periodsStrRaw,
           periodsWithSubs: periodsWithSubs,
-          reason: String(row[5]),
+          reason: reason,
           urgency: urgencyStr.includes('Urgent') ? 'Urgent' : 'Standard',
-          duration: String(row[6]),
-          instructions: String(row[8]),
-          subPlanUrl: subPlanUrl,
+          duration: duration,
+          instructions: instructions,
+          subPlanUrl: rowSubPlanUrl,
           subFeedback: subFeedbackRaw
         };
         if (isDateValid && rowDate < today) {
@@ -333,74 +384,137 @@ function getInitialPayload(clientEmail, requestedComponents) {
         }
       }
 
-      // My Sub Duties & Open Jobs
-      if (isDateValid && rowDate <= targetEndWeek) {
-        var teacherName = nameLookup[rowTeacherEmail] || rowTeacherEmail;
-        if (teacherName.includes(",")) {
-          var parts = teacherName.split(",");
-          if (parts.length > 1) teacherName = parts[1].trim() + " " + parts[0].trim();
-        }
+      // 3b. My Sub Duties & Today's Absences
+      var isWithinSubWeek = isDateValid && rowDate <= targetEndWeek;
+      var isWithinQC = wantQuickCover && isDateValid && isWithinWindow && rowDate >= today && rowDate <= targetEndQC;
 
-        periodsRequested = String(row[4]).split(",").map(function(p) { return parsePeriod(p); });
-        var rowId = String(row[0]);
-        var rawDate = Number(rowDate.getTime());
-        var reason = String(row[5]);
-        var duration = String(row[6]);
-        var instructions = String(row[8]);
-        var jobSubPlanUrl = extractSubPlanUrl(row);
-
+      if (isWithinSubWeek || isWithinQC) {
+        var displayTeacherName = formatFirstLastTeacherName(rowTeacherEmail);
+        var normPeriodsRequested = periodsStrRaw.split(",").map(function(p) { return parsePeriod(p); });
         var allPeriods = ['1', '2', '3', '4', '5', '6', '7', '8', '0', '10'];
-      for (var pIdx = 0; pIdx < allPeriods.length; pIdx++) {
-        var p = allPeriods[pIdx];
-          if (periodsRequested.indexOf(String(p)) !== -1) {
-            var subColumnIndex = getSubColumnIndex(p) - 1;
-            var assignedSub = String(row[subColumnIndex] || "").trim().toLowerCase();
 
-            var scheduleInfo = lookupTeacherScheduleInfo(scheduleLookup, rowTeacherEmail, p, yyyymmdd, settings);
-            var roomStr = scheduleInfo && scheduleInfo.room ? String(scheduleInfo.room) : "No Class Assigned";
-            var courseStr = scheduleInfo && scheduleInfo.course ? String(scheduleInfo.course) : "No Class Assigned";
+        for (var pIdx = 0; pIdx < allPeriods.length; pIdx++) {
+          var p = allPeriods[pIdx];
+          if (normPeriodsRequested.indexOf(String(p)) === -1) continue;
 
+          var subColumnIndex = getSubColumnIndex(p) - 1;
+          var rawAssignedSub = String(row[subColumnIndex] || "").trim();
+          var assignedSubLower = rawAssignedSub.toLowerCase();
+
+          var scheduleInfo = lookupTeacherScheduleInfo(scheduleLookup, rowTeacherEmail, p, yyyymmdd, settings);
+          var roomStr = scheduleInfo && scheduleInfo.room ? String(scheduleInfo.room) : "No Class Assigned";
+          var courseStr = scheduleInfo && scheduleInfo.course ? String(scheduleInfo.course) : "No Class Assigned";
+
+          if (isWithinSubWeek) {
             var jobObj = {
-                id: rowId,
-                teacherName: String(teacherName),
-                teacherEmail: String(rowTeacherEmail),
-                date: formattedDate,
-                formDateString: yyyymmdd,
-                period: String(p),
-                rawDate: rawDate,
-                room: roomStr,
-                course: courseStr,
-                reason: reason,
-                duration: duration,
-                instructions: instructions,
-                subPlanUrl: jobSubPlanUrl,
-                assignedSub: assignedSub
+              id: rowId,
+              teacherName: String(displayTeacherName),
+              teacherEmail: String(rowTeacherEmail),
+              date: formattedDate,
+              formDateString: yyyymmdd,
+              period: String(p),
+              rawDate: rawDate,
+              room: roomStr,
+              course: courseStr,
+              reason: reason,
+              duration: duration,
+              instructions: instructions,
+              subPlanUrl: rowSubPlanUrl,
+              assignedSub: assignedSubLower
             };
 
-            // My Sub Duties
-            if (assignedSub === userName) {
+            if (assignedSubLower === userName) {
               if (rowDate < today && rowDate >= cutoffDate) {
-                 let subFeedbackRaw = extractSubFeedbackRaw(row);
-                 var subFeedbackParsed = [];
-                 try {
-                     subFeedbackParsed = JSON.parse(subFeedbackRaw);
-                 } catch(e) {
-                     // Ignore parse error
-                 }
-                 var matchingFeedback = subFeedbackParsed.filter(function(fb) { return fb.period === String(p) && String(fb.subName).toLowerCase() === userName; });
-                 jobObj.rating = matchingFeedback.length > 0 ? matchingFeedback[0].rating : 0;
-                 jobObj.note = matchingFeedback.length > 0 ? matchingFeedback[0].note : "";
-                 myPastSubDuties.push(jobObj);
+                let subFeedbackRaw = extractSubFeedbackRaw(row);
+                var subFeedbackParsed = [];
+                try {
+                  subFeedbackParsed = JSON.parse(subFeedbackRaw);
+                } catch(e) {}
+                var matchingFeedback = subFeedbackParsed.filter(function(fb) { return fb.period === String(p) && String(fb.subName).toLowerCase() === userName; });
+                jobObj.rating = matchingFeedback.length > 0 ? matchingFeedback[0].rating : 0;
+                jobObj.note = matchingFeedback.length > 0 ? matchingFeedback[0].note : "";
+                myPastSubDuties.push(jobObj);
               } else if (rowDate >= today) {
-                 mySubDuties.push(jobObj);
+                mySubDuties.push(jobObj);
               }
             }
 
-            // Open Jobs (Today only)
             if (rowDate <= targetEndToday && rowDate >= today) {
               todaysAbsences.push(jobObj);
             }
           }
+
+          if (isWithinQC && rawAssignedSub === "") {
+            quickCover.push({
+              id: rowId,
+              teacherName: String(displayTeacherName),
+              teacherEmail: String(rowTeacherEmail),
+              date: String(formattedDate),
+              formDateString: String(yyyymmdd),
+              period: String(p),
+              rawDate: rawDate,
+              room: roomStr,
+              course: courseStr,
+              reason: reason,
+              duration: duration,
+              instructions: instructions,
+              subPlanUrl: rowSubPlanUrl
+            });
+          }
+        }
+      }
+
+      // 3c. Admin Dashboard Data & HR Dashboard Requests (single pass)
+      if (isWithinWindow && (wantAdminData || wantHrData)) {
+        var rawRosterTeacherName = nameLookup[rowTeacherEmail] || rowTeacherEmail;
+        var pdsTokens = periodsStrRaw.split(',').map(function(p) { return p.trim(); });
+        var hrAssignedSubs = wantHrData ? [] : null;
+
+        for (var pdsIdx = 0; pdsIdx < pdsTokens.length; pdsIdx++) {
+          var rawPd = pdsTokens[pdsIdx];
+          if (!rawPd) continue;
+          var normPd = parsePeriod(rawPd);
+          var pdNum = parseInt(normPd, 10);
+          var subColOneBased = getSubColumnIndex(rawPd);
+          var assignedSubVal = (subColOneBased > 0 && subColOneBased <= row.length) ? String(row[subColOneBased - 1] || "").trim() : "";
+          var adSchedInfo = lookupTeacherScheduleInfo(scheduleLookup, rowTeacherEmail, !isNaN(pdNum) ? pdNum : rawPd, yyyymmdd, settings);
+
+          if (wantAdminData && !isNaN(pdNum)) {
+            adminData.push({
+              id: rowId,
+              originalDate: String(dateVal || ""),
+              date: String(yyyymmdd || ""),
+              formDateString: String(yyyymmdd || ""),
+              period: pdNum,
+              periodsString: periodsStrRaw,
+              urgency: urgencyStr,
+              teacherName: String(rawRosterTeacherName || ""),
+              teacherEmail: String(rowTeacherEmail || ""),
+              course: adSchedInfo ? String(adSchedInfo.course) : "",
+              room: adSchedInfo ? String(adSchedInfo.room) : "",
+              assignedSub: assignedSubVal,
+              reason: reason.trim(),
+              duration: duration.trim(),
+              instructions: instructions.trim(),
+              subPlanUrl: rowSubPlanUrl
+            });
+          }
+
+          if (wantHrData && assignedSubVal !== "") {
+            var hrCourseStr = adSchedInfo ? String(adSchedInfo.course) : "No Class Assigned";
+            hrAssignedSubs.push({ name: assignedSubVal, period: String(rawPd), course: hrCourseStr });
+          }
+        }
+
+        if (wantHrData) {
+          hrData.push({
+            id: rowId,
+            date: String(yyyymmdd || ""),
+            teacherName: String(rawRosterTeacherName || ""),
+            reason: reason.trim(),
+            duration: duration.trim(),
+            assignedSubs: hrAssignedSubs
+          });
         }
       }
     }
@@ -528,141 +642,25 @@ function getInitialPayload(clientEmail, requestedComponents) {
       payload.staffList = staffList;
     }
 
-    if ((want("quickCover") || want("adminData")) && (permissions["Admin Dashboard"] || permissions["Today at a Glance"] || permissions["Today's Absences"])) {
-      if (want("quickCover")) {
-        // Quick Cover Data
-        var quickCover = [];
-        var targetEndQC = new Date(today);
-        var dayOfWeek = today.getDay();
-        var daysToAdd = 1;
-        if (dayOfWeek === 5) daysToAdd = 3;
-        else if (dayOfWeek === 6) daysToAdd = 2;
-        targetEndQC.setDate(today.getDate() + daysToAdd);
-        targetEndQC.setHours(23, 59, 59, 999);
-
-        for (var abIdx = 1; abIdx < absenceData.length; abIdx++) {
-          let row = absenceData[abIdx];
-          if (!row || row.length < 4) continue;
-          var stat = String(row[19] || 'Active');
-          if (stat === 'Canceled') continue;
-
-          var dVal = row[3];
-          if (!dVal) continue;
-          var rDate = new Date(dVal);
-          if (isNaN(rDate.getTime())) continue;
-          if (rDate < cutoffDate) continue;
-
-          if (rDate >= today && rDate <= targetEndQC) {
-            var rTeacherEmail = String(row[2]).toLowerCase();
-            var tName = nameLookup[rTeacherEmail] || rTeacherEmail;
-            if (tName.includes(",")) {
-              var prts = tName.split(",");
-              if (prts.length > 1) tName = prts[1].trim() + " " + prts[0].trim();
-            }
-
-            var prdsRequested = String(row[4]).split(",").map(function(p) { return parsePeriod(p); });
-            var rId = String(row[0]);
-            var fmtDate = String(Utilities.formatDate(rDate, Session.getScriptTimeZone(), "MMM d, yyyy"));
-            var fDateString = String(Utilities.formatDate(rDate, Session.getScriptTimeZone(), "yyyy-MM-dd"));
-            var rwDate = Number(rDate.getTime());
-            var rsn = String(row[5]);
-            var dur = String(row[6]);
-            var inst = String(row[8]);
-            var qcSubPlanUrl = extractSubPlanUrl(row);
-
-            var aPeriods = ['1', '2', '3', '4', '5', '6', '7', '8', '0', '10'];
-            for (let prIdx = 0; prIdx < aPeriods.length; prIdx++) {
-              var prd = aPeriods[prIdx];
-              if (prdsRequested.indexOf(String(prd)) !== -1) {
-                var asgSub = row[getSubColumnIndex(prd) - 1];
-                if (!asgSub || String(asgSub).trim() === "") {
-                  var schedInfo = lookupTeacherScheduleInfo(scheduleLookup, rTeacherEmail, prd, fDateString, settings);
-                  quickCover.push({
-                    id: rId,
-                    teacherName: String(tName),
-                    teacherEmail: String(rTeacherEmail),
-                    date: fmtDate,
-                    formDateString: fDateString,
-                    period: String(prd),
-                    rawDate: rwDate,
-                    room: schedInfo && schedInfo.room ? String(schedInfo.room) : "No Class Assigned",
-                    course: schedInfo && schedInfo.course ? String(schedInfo.course) : "No Class Assigned",
-                    reason: rsn,
-                    duration: dur,
-                    instructions: inst,
-                    subPlanUrl: qcSubPlanUrl
-                  });
-                }
-              }
-            }
-          }
-        }
-        quickCover.sort(sortJobs);
-        payload.quickCover = quickCover;
-      }
-
-      if (want("adminData")) {
-        // Admin Dashboard Data
-        var adminData = [];
-        for (var adIdx = 1; adIdx < absenceData.length; adIdx++) {
-          var adRow = absenceData[adIdx];
-          if (String(adRow[19] || "").trim() === "Canceled") continue;
-
-          var dtStr = adRow[3];
-          var dtObj = new Date(dtStr);
-          if (!isNaN(dtObj.getTime()) && dtObj < cutoffDate) continue;
-
-          var adTeacherEmail = String(adRow[2]).toLowerCase().trim();
-          var adTeacherName = nameLookup[adTeacherEmail] || adTeacherEmail;
-          var dtFormatted = !isNaN(dtObj.getTime()) ? Utilities.formatDate(dtObj, Session.getScriptTimeZone(), "yyyy-MM-dd") : dtStr;
-          var pdsStr = String(adRow[4]);
-          var pds = pdsStr.split(',').map(function(p) { return p.trim(); });
-
-          for (var pdsIdx = 0; pdsIdx < pds.length; pdsIdx++) {
-            var rawPd = pds[pdsIdx];
-            var pdNum = parseInt(parsePeriod(rawPd), 10);
-
-            if (!isNaN(pdNum)) {
-              var pd = pdNum;
-              var adSchedInfo = lookupTeacherScheduleInfo(scheduleLookup, adTeacherEmail, pd, dtFormatted, settings);
-              adminData.push({
-                id: String(adRow[0] || ""),
-                originalDate: String(dtStr || ""),
-                date: String(dtFormatted || ""),
-                formDateString: String(dtFormatted || ""),
-                period: pd,
-                periodsString: String(pdsStr || ""),
-                urgency: String(adRow[7] || ""),
-                teacherName: String(adTeacherName || ""),
-                teacherEmail: String(adTeacherEmail || ""),
-                course: adSchedInfo ? String(adSchedInfo.course) : "",
-                room: adSchedInfo ? String(adSchedInfo.room) : "",
-                assignedSub: String(adRow[getSubColumnIndex(pd) - 1] || "").trim(),
-                reason: String(adRow[5] || "").trim(),
-                duration: String(adRow[6] || "").trim(),
-                instructions: String(adRow[8] || "").trim(),
-                subPlanUrl: extractSubPlanUrl(adRow)
-              });
-            }
-          }
-        }
-        adminData.sort(function(a, b) {
-          if (a.date < b.date) return -1;
-          if (a.date > b.date) return 1;
-          return getPeriodSortValue(a.period) - getPeriodSortValue(b.period);
-        });
-        payload.adminData = adminData;
-      }
+    if (wantQuickCover) {
+      quickCover.sort(sortJobs);
+      payload.quickCover = quickCover;
     }
-
+    if (wantAdminData) {
+      adminData.sort(function(a, b) {
+        if (a.date < b.date) return -1;
+        if (a.date > b.date) return 1;
+        return getPeriodSortValue(a.period) - getPeriodSortValue(b.period);
+      });
+      payload.adminData = adminData;
+    }
 
     // --- 5. Extract HR data if applicable ---
     if (want("subAvailability") && lowerRole === 'substitute') {
       payload.subAvailability = getSubstituteAvailability(email);
     }
 
-    if (want("hrData") && permissions["HR Dashboard"]) {
-      var hrData = [];
+    if (wantHrData) {
       var payPeriods = [];
 
       for (let p = 0; p < payPeriodsData.length; p++) {
@@ -677,10 +675,10 @@ function getInitialPayload(clientEmail, requestedComponents) {
         if (isHeader) continue;
 
         if (periodNum && startDateRaw && endDateRaw) {
-          var startFormatted = startDateRaw instanceof Date ? Utilities.formatDate(startDateRaw, Session.getScriptTimeZone(), "yyyy-MM-dd") :
-            (function(){ try { return Utilities.formatDate(new Date(startDateRaw), Session.getScriptTimeZone(), "yyyy-MM-dd"); } catch(e) { console.error("Error formatting date: " + e.message); return String(startDateRaw); } })();
-          var endFormatted = endDateRaw instanceof Date ? Utilities.formatDate(endDateRaw, Session.getScriptTimeZone(), "yyyy-MM-dd") :
-            (function(){ try { return Utilities.formatDate(new Date(endDateRaw), Session.getScriptTimeZone(), "yyyy-MM-dd"); } catch(e) { console.error("Error formatting date: " + e.message); return String(endDateRaw); } })();
+          var startFormatted = startDateRaw instanceof Date ? Utilities.formatDate(startDateRaw, tz, "yyyy-MM-dd") :
+            (function(){ try { return Utilities.formatDate(new Date(startDateRaw), tz, "yyyy-MM-dd"); } catch(e) { return String(startDateRaw); } })();
+          var endFormatted = endDateRaw instanceof Date ? Utilities.formatDate(endDateRaw, tz, "yyyy-MM-dd") :
+            (function(){ try { return Utilities.formatDate(new Date(endDateRaw), tz, "yyyy-MM-dd"); } catch(e) { return String(endDateRaw); } })();
           var approved = String(payPeriodsData[p][3] || "").toLowerCase().trim() === "true";
 
           payPeriods.push({
@@ -691,47 +689,6 @@ function getInitialPayload(clientEmail, requestedComponents) {
           });
         }
       }
-
-      for (var hrIdx = 1; hrIdx < absenceData.length; hrIdx++) {
-        var hrRow = absenceData[hrIdx];
-        if (!hrRow || hrRow.length < 4) continue;
-        if (String(hrRow[19] || "").trim() === "Canceled") continue;
-
-        var hrDateStr = hrRow[3];
-        var hrDateObj = new Date(hrDateStr);
-        if (!isNaN(hrDateObj.getTime()) && hrDateObj < cutoffDate) continue;
-
-        var hrTeacherEmail = String(hrRow[2]).toLowerCase().trim();
-        var hrTeacherName = nameLookup[hrTeacherEmail] || hrTeacherEmail;
-        var hrDateFormatted = !isNaN(hrDateObj.getTime()) ? Utilities.formatDate(hrDateObj, Session.getScriptTimeZone(), "yyyy-MM-dd") : hrDateStr;
-
-        var hrPeriodsStr = String(hrRow[4]);
-        var hrPeriods = hrPeriodsStr.split(',').map(function(p) { return p.trim(); });
-        var assignedSubs = [];
-
-        for (var hrPIdx = 0; hrPIdx < hrPeriods.length; hrPIdx++) {
-          var pStr = hrPeriods[hrPIdx];
-          let p = pStr; // Keep as string for getSubColumnIndex
-          if (p) {
-            var hrAssignedSub = hrRow[getSubColumnIndex(p) - 1];
-            if (hrAssignedSub && String(hrAssignedSub).trim() !== "") {
-              var hrSchedInfo = lookupTeacherScheduleInfo(scheduleLookup, hrTeacherEmail, p, hrDateFormatted, settings);
-              var hrCourseStr = hrSchedInfo ? String(hrSchedInfo.course) : "No Class Assigned";
-              assignedSubs.push({ name: String(hrAssignedSub).trim(), period: String(p), course: hrCourseStr });
-            }
-          }
-        }
-
-        hrData.push({
-          id: String(hrRow[0] || ""),
-          date: String(hrDateFormatted || ""),
-          teacherName: String(hrTeacherName || ""),
-          reason: String(hrRow[5]).trim(),
-          duration: String(hrRow[6]).trim(),
-          assignedSubs: assignedSubs
-        });
-      }
-
 
       payload.hrData = {
         requests: hrData,

@@ -1244,6 +1244,30 @@ function runTests() {
       assert(compatRead.absenceData[1][9] === "Kelley, Ethan" && compatRead.absenceData[1][10] === "Tappel, Tim" && compatRead.absenceData[1][18] === "No Sub Needed", "Expected reconstructed period sub columns to match");
       assert(compatRead.snapshottedScheduleLookup["abrooks@gocathedral.com-1"].course === "AP BIOLOGY (X)", "Expected snapshottedScheduleLookup to pre-populate course and room without Master Schedule Cache read");
 
+      // Test 11: Multi-chunk Master Schedule CacheService storage (>100KB) and SubstituteAvailability caching
+      var chunkStore = {};
+      var mockChunkCache = {
+        get: function(k) { return chunkStore[k] !== undefined ? chunkStore[k] : null; },
+        put: function(k, v) { chunkStore[k] = String(v); },
+        remove: function(k) { delete chunkStore[k]; }
+      };
+      var bigScheduleRows = [["LASTFIRST", "EMAIL_ADDR", "PERIOD", "ROOM", "COURSE_NAMES", "TERM", "EMAIL_PERIOD_JOIN"]];
+      for (var bs = 0; bs < 1200; bs++) {
+        bigScheduleRows.push([
+          "Teacher, Number " + bs,
+          "teacher" + bs + "@gocathedral.com",
+          String((bs % 8) + 1),
+          "430" + (bs % 9),
+          "AP ADVANCED PLACEMENT COURSE SECTION NUMBER " + bs,
+          bs % 2 === 0 ? "3601" : "3603",
+          "teacher" + bs + "@gocathedral.com-" + String((bs % 8) + 1)
+        ]);
+      }
+      _writeMasterScheduleToScriptCache(mockChunkCache, bigScheduleRows);
+      assert(chunkStore["master_schedule_chunks"] !== undefined && parseInt(chunkStore["master_schedule_chunks"], 10) >= 2, "Expected >100KB Master Schedule to be split into >= 2 CacheService chunks");
+      var rehydratedSched = _readMasterScheduleFromScriptCache(mockChunkCache);
+      assert(rehydratedSched && rehydratedSched.length === 1201 && rehydratedSched[1200][1] === "teacher1199@gocathedral.com", "Expected multi-chunk Master Schedule to rehydrate all 1201 rows intact");
+
       getSettings = origGetSettings;
       if (origUrlFetchApp !== undefined) global.UrlFetchApp = origUrlFetchApp;
 

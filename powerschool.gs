@@ -173,9 +173,83 @@ function fetchMasterScheduleFromAPI() {
   return scheduleData;
 }
 
+const MASTER_SCHEDULE_CACHE_CHUNK_SIZE = 90000;
+const MASTER_SCHEDULE_CACHE_MAX_CHUNKS = 10;
+
+function _readMasterScheduleFromScriptCache(cache) {
+  if (!cache || typeof cache.get !== "function") return null;
+  try {
+    const chunkCountStr = cache.get("master_schedule_chunks");
+    if (chunkCountStr) {
+      const count = parseInt(chunkCountStr, 10);
+      if (!isNaN(count) && count > 0 && count <= MASTER_SCHEDULE_CACHE_MAX_CHUNKS) {
+        let combined = "";
+        for (let i = 0; i < count; i++) {
+          const part = cache.get("master_schedule_chunk_" + i);
+          if (!part) return null;
+          combined += part;
+        }
+        return JSON.parse(combined);
+      }
+    }
+    const legacySingle = cache.get("master_schedule_data");
+    if (legacySingle) {
+      return JSON.parse(legacySingle);
+    }
+  } catch (e) {
+    Logger.log("Failed to parse cached Master Schedule data.");
+  }
+  return null;
+}
+
+function _writeMasterScheduleToScriptCache(cache, data) {
+  if (!cache || typeof cache.put !== "function" || !data) return;
+  try {
+    const compact = [];
+    for (let i = 0; i < data.length; i++) {
+      const r = data[i];
+      if (!r) continue;
+      const sliced = r.slice(0, 7);
+      const hasAny = sliced.some(c => c !== undefined && c !== null && String(c).trim() !== "");
+      if (i === 0 || hasAny) {
+        compact.push(sliced);
+      }
+    }
+    const stringified = JSON.stringify(compact);
+    if (stringified.length < MASTER_SCHEDULE_CACHE_CHUNK_SIZE) {
+      cache.put("master_schedule_data", stringified, 1800);
+      if (typeof cache.remove === "function") cache.remove("master_schedule_chunks");
+      return;
+    }
+    const numChunks = Math.ceil(stringified.length / MASTER_SCHEDULE_CACHE_CHUNK_SIZE);
+    if (numChunks <= MASTER_SCHEDULE_CACHE_MAX_CHUNKS) {
+      for (let c = 0; c < numChunks; c++) {
+        const chunkStr = stringified.substring(c * MASTER_SCHEDULE_CACHE_CHUNK_SIZE, (c + 1) * MASTER_SCHEDULE_CACHE_CHUNK_SIZE);
+        cache.put("master_schedule_chunk_" + c, chunkStr, 1800);
+      }
+      cache.put("master_schedule_chunks", String(numChunks), 1800);
+    }
+  } catch (e) {
+    /* ignored */
+  }
+}
+
+function _clearMasterScheduleFromScriptCache(cache) {
+  if (!cache || typeof cache.remove !== "function") return;
+  try {
+    cache.remove("master_schedule_data");
+    cache.remove("master_schedule_chunks");
+    for (let c = 0; c < MASTER_SCHEDULE_CACHE_MAX_CHUNKS; c++) {
+      cache.remove("master_schedule_chunk_" + c);
+    }
+  } catch (e) {
+    /* ignored */
+  }
+}
+
 /**
- * Gets the Master Schedule data by reading directly from the "Master Schedule Cache" sheet.
- * This completely avoids API calls during normal app usage.
+ * Gets the Master Schedule data by reading from CacheService (with multi-chunk support)
+ * or falling back to the "Master Schedule Cache" sheet.
  * Uses a global variable to avoid repeated sheet reads in the same execution context.
  */
 function getMasterScheduleData() {
@@ -184,14 +258,10 @@ function getMasterScheduleData() {
   }
 
   const cache = CacheService.getScriptCache();
-  const cachedData = cache.get("master_schedule_data");
+  const cachedData = _readMasterScheduleFromScriptCache(cache);
   if (cachedData) {
-    try {
-      global_master_schedule_cache = JSON.parse(cachedData);
-      return global_master_schedule_cache;
-    } catch (e) {
-      Logger.log("Failed to parse cached Master Schedule data.");
-    }
+    global_master_schedule_cache = cachedData;
+    return global_master_schedule_cache;
   }
 
   try {
@@ -207,16 +277,7 @@ function getMasterScheduleData() {
     const data = sheet.getDataRange().getValues();
     if (data && data.length > 1) {
       global_master_schedule_cache = data;
-
-      try {
-        const stringified = JSON.stringify(data);
-        if (stringified.length < 100000) { // Max 100KB cache
-           cache.put("master_schedule_data", stringified, 1800); // 30 mins
-        }
-      } catch (e) {
-        /* ignored */
-      }
-
+      _writeMasterScheduleToScriptCache(cache, data);
       return data;
     }
 
@@ -240,7 +301,7 @@ function getMasterScheduleData() {
 function warmMasterScheduleCache() {
   // Clear the global in-memory variable
   global_master_schedule_cache = null;
-  CacheService.getScriptCache().remove("master_schedule_data");
+  _clearMasterScheduleFromScriptCache(CacheService.getScriptCache());
 
   // Fetch from API
   const scheduleData = fetchMasterScheduleFromAPI();
@@ -256,14 +317,7 @@ function warmMasterScheduleCache() {
     sheet.clearContents();
     sheet.getRange(1, 1, scheduleData.length, scheduleData[0].length).setValues(scheduleData);
     global_master_schedule_cache = scheduleData;
-    try {
-      const stringified = JSON.stringify(scheduleData);
-      if (stringified.length < 100000) {
-        CacheService.getScriptCache().put("master_schedule_data", stringified, 1800);
-      }
-    } catch (e) {
-      /* ignored */
-    }
+    _writeMasterScheduleToScriptCache(CacheService.getScriptCache(), scheduleData);
 
     Logger.log("Master Schedule Cache sheet updated successfully with " + scheduleData.length + " rows.");
 
