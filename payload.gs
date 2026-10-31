@@ -167,6 +167,7 @@ function getInitialPayload(clientEmail, requestedComponents) {
 
     var needDates = want("dateColors") || want("hrData");
     var dateColors = needDates ? getDateColorsCached(ss) : {};
+    var dateBellScheduleNames = (needDates && typeof getDateBellScheduleNamesCached === "function") ? getDateBellScheduleNamesCached(ss) : {};
 
 
 
@@ -593,6 +594,7 @@ function getInitialPayload(clientEmail, requestedComponents) {
       todaysAbsences: todaysAbsences,
       permissions: permissions,
       dateColors: dateColors,
+      dateBellScheduleNames: dateBellScheduleNames,
       settings: safeSettings
     };
 

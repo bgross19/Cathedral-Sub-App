@@ -1325,7 +1325,7 @@ function runTests() {
       };
       var publicSafe = sanitizeSettingsForClient(sampleSettingsBlob, false);
       assert(publicSafe["Email Mode"] === "Live", "Expected Email Mode in public settings");
-      assert(publicSafe["Date Bell Schedule Names"] === undefined && publicSafe["Period Bell Times"] === undefined, "Expected server-only bell schedule blobs stripped from public payload settings");
+      assert(publicSafe["Date Bell Schedule Names"] === undefined && publicSafe["Period Bell Times"] !== undefined, "Expected Date Bell Schedule Names stripped from public payload settings while Period Bell Times is preserved");
       var adminSafe = sanitizeSettingsForClient(sampleSettingsBlob, true);
       assert(adminSafe["Date Bell Schedule Names"] !== undefined && adminSafe["Period Bell Times"] !== undefined, "Expected server-only bell schedule blobs preserved in admin settings");
 
