@@ -348,13 +348,13 @@
           "0":  { start: "07:00", end: "07:45" },
           "1":  { start: "07:50", end: "08:35" },
           "10": { start: "08:40", end: "09:05" },
-          "2":  { start: "09:10", end: "09:50" },
-          "3":  { start: "09:55", end: "10:35" },
-          "4":  { start: "10:40", end: "11:20" },
-          "5":  { start: "11:25", end: "12:05" },
-          "6":  { start: "12:10", end: "12:50" },
-          "7":  { start: "12:55", end: "13:35" },
-          "8":  { start: "13:40", end: "14:20" }
+          "2":  { start: "09:10", end: "09:55" },
+          "3":  { start: "10:00", end: "10:45" },
+          "4":  { start: "10:50", end: "11:35" },
+          "5":  { start: "11:40", end: "12:55" },
+          "6":  { start: "13:00", end: "13:45" },
+          "7":  { start: "13:50", end: "14:35" },
+          "8":  { start: "14:40", end: "15:25" }
         },
         Blue: {
           "9":  { start: "07:00", end: "07:45" },
@@ -362,12 +362,12 @@
           "1":  { start: "07:50", end: "09:15" },
           "10": { start: "09:20", end: "09:50" },
           "2":  { start: "09:55", end: "11:20" },
-          "3":  { start: "11:25", end: "12:50" },
-          "4":  { start: "12:55", end: "14:20" },
+          "3":  { start: "11:25", end: "13:25" },
+          "4":  { start: "13:30", end: "14:55" },
           "5":  { start: "07:50", end: "09:15" },
           "6":  { start: "09:55", end: "11:20" },
-          "7":  { start: "11:25", end: "12:50" },
-          "8":  { start: "12:55", end: "14:20" }
+          "7":  { start: "11:25", end: "13:25" },
+          "8":  { start: "13:30", end: "14:55" }
         },
         Gold: {
           "9":  { start: "07:00", end: "07:45" },
@@ -375,12 +375,12 @@
           "5":  { start: "07:50", end: "09:15" },
           "10": { start: "09:20", end: "09:50" },
           "6":  { start: "09:55", end: "11:20" },
-          "7":  { start: "11:25", end: "12:50" },
-          "8":  { start: "12:55", end: "14:20" },
+          "7":  { start: "11:25", end: "13:25" },
+          "8":  { start: "13:30", end: "14:55" },
           "1":  { start: "07:50", end: "09:15" },
           "2":  { start: "09:55", end: "11:20" },
-          "3":  { start: "11:25", end: "12:50" },
-          "4":  { start: "12:55", end: "14:20" }
+          "3":  { start: "11:25", end: "13:25" },
+          "4":  { start: "13:30", end: "14:55" }
         }
       };
 
@@ -950,6 +950,7 @@ const data = payload.userData;
             email: document.getElementById('staffEmailInput').value,
             duty: document.getElementById('staffDutyInput').value
           };
+        } else if (isRequestModalOpen) {
           const periodCbs = document.querySelectorAll('.period-cb');
           const checkedPeriods = [];
           periodCbs.forEach(cb => { if(cb.checked) checkedPeriods.push(cb.value) });

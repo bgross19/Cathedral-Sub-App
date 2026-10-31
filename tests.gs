@@ -814,8 +814,17 @@ function runTests() {
         }
       };
       global.Utilities = {
-        formatDate: function(d) { return "2026-10-28 12:00:00"; },
-        base64Encode: function(s) { return s; }
+        formatDate: function(d, tz, fmt) {
+          if (fmt === "yyyy-MM-dd" && d instanceof Date && !isNaN(d.getTime())) {
+            var yyyy = d.getFullYear();
+            var mm = ("0" + (d.getMonth() + 1)).slice(-2);
+            var dd = ("0" + d.getDate()).slice(-2);
+            return yyyy + "-" + mm + "-" + dd;
+          }
+          return "2026-10-28 12:00:00";
+        },
+        base64Encode: function(s) { return s; },
+        newBlob: function(content, contentType, name) { return { content: content, contentType: contentType, name: name }; }
       };
 
       var datesRows = [
@@ -1053,17 +1062,26 @@ function runTests() {
         }
       };
 
+      // Verify getAbsenceDetailsLocal populates isoDate via getStandardizedDateString
+      var localDetails = getAbsenceDetailsLocal(
+        ["ABS-999", new Date(), "jdoe@gocathedral.com", new Date(2026, 9, 30), "2", "Personal", "Full Day", "Standard", "Read Ch. 4"],
+        "2",
+        { "jdoe@gocathedral.com-2": { room: "101", course: "AP US History" } },
+        { "jdoe@gocathedral.com": "Jane Doe" }
+      );
+      assert(localDetails.isoDate === "2026-10-30", "Expected getAbsenceDetailsLocal to populate isoDate as 2026-10-30, got: " + localDetails.isoDate);
+
       var createSyncRes = syncSubDutyCalendarEvent("sub1@gocathedral.com", "Assigned", {
-        absenceId: "ABS-999",
-        teacherName: "Jane Doe",
+        absenceId: localDetails.id,
+        teacherName: localDetails.teacherName,
         teacherEmail: "jdoe@gocathedral.com",
-        date: "Oct 30, 2026",
-        isoDate: "2026-10-30",
+        date: localDetails.date,
+        isoDate: localDetails.isoDate,
         period: "2",
-        room: "101",
-        course: "AP US History",
-        instructions: "Read Ch. 4"
-      }, { "Auto Sync Sub Calendar": "TRUE", "Term ID": "3601" });
+        room: localDetails.room,
+        course: localDetails.course,
+        instructions: localDetails.instructions
+      }, { "Auto Sync Google Calendar": "TRUE", "Term ID": "3601" });
       assert(createSyncRes.synced === true && createSyncRes.action === "created" && mockEventsStore.length === 1, "Expected Assigned sync to create 1 calendar event");
       assert(mockEventsStore[0].getTag("subapp_key") === "ABS-999_P2", "Expected created calendar event to have subapp_key tag ABS-999_P2");
 
@@ -1077,7 +1095,7 @@ function runTests() {
         room: "204",
         course: "AP Macroeconomics",
         instructions: "Updated room"
-      }, { "Auto Sync Sub Calendar": "TRUE", "Term ID": "3601" });
+      }, { "Auto Sync Google Calendar": "TRUE", "Term ID": "3601" });
       assert(updateSyncRes.synced === true && updateSyncRes.action === "updated" && mockEventsStore.length === 1, "Expected Modified sync to update existing calendar event in place");
       assert(mockEventsStore[0].location.indexOf("Room 204") !== -1, "Expected updated calendar event location to reflect Room 204");
 
@@ -1087,9 +1105,90 @@ function runTests() {
         date: "Oct 30, 2026",
         isoDate: "2026-10-30",
         period: "2"
-      }, { "Auto Sync Sub Calendar": "TRUE", "Term ID": "3601" });
+      }, { "Auto Sync Google Calendar": "TRUE", "Term ID": "3601" });
       assert(cancelSyncRes.synced === true && cancelSyncRes.action === "deleted" && mockEventsStore.length === 0, "Expected Canceled sync to delete calendar event");
       if (origCalendarApp !== undefined) global.CalendarApp = origCalendarApp;
+
+      // Test 9: approvePayPeriod writes and appends snapshots to the Payroll sheet on approval and re-approval
+      var mockPayPeriodsRows = [
+        ["Period Number", "Start Date", "End Date", "Approved"],
+        ["5", "2026-10-16", "2026-10-31", "FALSE"]
+      ];
+      var mockPayrollRows = [];
+      var mockSheetsForPayroll = {
+        "Staff Roster": {
+          getDataRange: function() {
+            return {
+              getValues: function() {
+                return [
+                  ["Name", "Email", "Role", "Duty"],
+                  ["Admin User", "admin@gocathedral.com", "Admin", ""],
+                  ["HR Manager", "hr@gocathedral.com", "HR", ""]
+                ];
+              }
+            };
+          }
+        },
+        "PayPeriods": {
+          getDataRange: function() {
+            return { getValues: function() { return mockPayPeriodsRows; } };
+          },
+          getRange: function(r, c) {
+            return {
+              setValue: function(val) {
+                mockPayPeriodsRows[r - 1][c - 1] = val;
+              }
+            };
+          }
+        },
+        "Payroll": {
+          getLastRow: function() { return mockPayrollRows.length; },
+          getRange: function(startRow, startCol, numRows, numCols) {
+            return {
+              setValues: function(vals) {
+                for (var idx = 0; idx < vals.length; idx++) {
+                  mockPayrollRows[startRow - 1 + idx] = vals[idx];
+                }
+              },
+              setFontWeight: function() {}
+            };
+          }
+        },
+        "Audit Log": {
+          appendRow: function() {}
+        }
+      };
+
+      getSS = function() {
+        return {
+          getSheetByName: function(name) { return mockSheetsForPayroll[name] || null; },
+          insertSheet: function(name) {
+            mockSheetsForPayroll[name] = mockSheetsForPayroll["Payroll"];
+            return mockSheetsForPayroll[name];
+          }
+        };
+      };
+      if (typeof clearRosterCache === "function") clearRosterCache();
+
+      var samplePayrollCsv1 =
+        '"Teacher Name","Duties","Extras","Extra (Pay)","Totals"\n' +
+        '"Sub One","1","2","$30.00 (1 Green, 1 Blue/Gold)","3"\n' +
+        '"Sub Two","0","1","$20.00 (0 Green, 1 Blue/Gold)","1"\n';
+
+      var approveRes1 = approvePayPeriod("5", "2026-10-16 to 2026-10-31", samplePayrollCsv1, "admin@gocathedral.com");
+      assert(approveRes1 && approveRes1.success === true && approveRes1.reapproved === false && approveRes1.rowsWritten === 2, "Expected initial approvePayPeriod to succeed and write 2 payroll rows");
+      assert(mockPayPeriodsRows[1][3] === true, "Expected PayPeriods Approved column to be set to true");
+      assert(mockPayrollRows.length === 3, "Expected Payroll sheet to have 1 header row + 2 data rows after first approval, got: " + mockPayrollRows.length);
+      assert(mockPayrollRows[1][0] === "5" && mockPayrollRows[1][2] === "Sub One" && mockPayrollRows[1][5] === "$30.00 (1 Green, 1 Blue/Gold)", "Expected Payroll row 1 to match Sub One summary");
+
+      var samplePayrollCsv2 =
+        '"Teacher Name","Duties","Extras","Extra (Pay)","Totals"\n' +
+        '"Sub One","1","3","$50.00 (1 Green, 2 Blue/Gold)","4"\n';
+
+      var approveRes2 = approvePayPeriod("5", "2026-10-16 to 2026-10-31", samplePayrollCsv2, "admin@gocathedral.com");
+      assert(approveRes2 && approveRes2.success === true && approveRes2.reapproved === true && approveRes2.rowsWritten === 1, "Expected re-approving Pay Period 5 to succeed with reapproved=true and write 1 row");
+      assert(mockPayrollRows.length === 4, "Expected Payroll sheet to append new snapshot below existing rows (total 4 rows), got: " + mockPayrollRows.length);
+      assert(mockPayrollRows[3][0] === "5" && mockPayrollRows[3][2] === "Sub One" && mockPayrollRows[3][5] === "$50.00 (1 Green, 2 Blue/Gold)", "Expected appended re-approval row to have updated $50.00 pay");
 
       getSettings = origGetSettings;
       if (origUrlFetchApp !== undefined) global.UrlFetchApp = origUrlFetchApp;
