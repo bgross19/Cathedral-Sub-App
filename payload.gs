@@ -158,7 +158,7 @@ function getInitialPayload(clientEmail, requestedComponents) {
     var mainSheet = (needAbsenceData && !v2Compat) ? getSheetOrThrow(ss, "Absence Requests") : null;
     var absenceData = v2Compat ? v2Compat.absenceData : (mainSheet ? mainSheet.getDataRange().getValues() : []);
 
-    var needScheduleData = (!rosterHasPrecomputedSchedules && (wantAll || want("userData") || want("staffList"))) || (!v2Compat && (want("mySubDuties") || want("myPastSubDuties") || want("todaysAbsences") || want("quickCover") || want("adminData") || want("hrData")));
+    var needScheduleData = (!rosterHasPrecomputedSchedules && (wantAll || want("userData") || want("staffList"))) || ((!v2Compat || v2Compat.hasMissingScheduleSnapshots) && (want("mySubDuties") || want("myPastSubDuties") || want("todaysAbsences") || want("quickCover") || want("adminData") || want("hrData")));
     var scheduleData = needScheduleData ? getMasterScheduleData() : [];
 
     var needPayPeriods = want("hrData");
@@ -382,7 +382,7 @@ function getInitialPayload(clientEmail, requestedComponents) {
       var rawDate = isDateValid ? Number(rowDate.getTime()) : 0;
 
       var rowId = String(row[0] || "");
-      var periodsStrRaw = String(row[4] || "");
+      var periodsStrRaw = typeof normalizePeriodsListValue === "function" ? normalizePeriodsListValue(row[4]) : String(row[4] || "");
       var reason = String(row[5] || "");
       var duration = String(row[6] || "");
       var urgencyStr = String(row[7] || "");

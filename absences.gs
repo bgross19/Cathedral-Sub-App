@@ -144,6 +144,10 @@ function submitMultipleAbsenceRequests(requestsToSubmit, clientEmail) {
 
     if (rowsToAppend.length > 0) {
       var startRow = mainSheet.getLastRow() + 1;
+      var periodsBatchRange = mainSheet.getRange(startRow, 5, rowsToAppend.length, 1);
+      if (periodsBatchRange && typeof periodsBatchRange.setNumberFormat === "function") {
+        periodsBatchRange.setNumberFormat("@");
+      }
       mainSheet.getRange(startRow, 1, rowsToAppend.length, rowsToAppend[0].length).setValues(rowsToAppend);
       if (typeof syncV2SheetsForAbsenceRows === "function") {
         syncV2SheetsForAbsenceRows(ss, rowsToAppend, null, rosterData, null, settings);
@@ -323,6 +327,11 @@ function submitAbsence(formData, clientEmail) {
       formData.reason, formData.duration, urgencyFormatted, instructions,
       "", "", "", "", "", "", "", "", "", "", "Active", subPlanUrl, "[]"
     ];
+    var nextRowIdx = mainSheet.getLastRow() + 1;
+    var singlePeriodRange = mainSheet.getRange(nextRowIdx, 5, 1, 1);
+    if (singlePeriodRange && typeof singlePeriodRange.setNumberFormat === "function") {
+      singlePeriodRange.setNumberFormat("@");
+    }
     mainSheet.appendRow(newRow);
     if (typeof syncV2SheetsForAbsenceRows === "function") {
       syncV2SheetsForAbsenceRows(ss, [newRow]);
@@ -755,8 +764,8 @@ function updateAbsence(absenceId, formData, clientEmail) {
         assertPermission(user, "Admin Dashboard", "Unauthorized to modify this absence.");
       }
 
-      var oldPeriods = String(data[i][4]).split(",").map(function(p){return parsePeriod(p);});
-      var newPeriods = String(formData.periods).split(",").map(function(p){return parsePeriod(p);});
+      var oldPeriods = normalizePeriodsListValue(data[i][4]).split(",").map(function(p){return parsePeriod(p);});
+      var newPeriods = normalizePeriodsListValue(formData.periods).split(",").map(function(p){return parsePeriod(p);});
       var oldDateRaw = data[i][3];
       var oldDateFormatted = "";
       if (oldDateRaw instanceof Date) {
@@ -848,6 +857,10 @@ function updateAbsence(absenceId, formData, clientEmail) {
       }
 
       // Single API call to update both the basic info and all sub clearing at once
+      var updatePeriodRange = sheet.getRange(i + 1, 5, 1, 1);
+      if (updatePeriodRange && typeof updatePeriodRange.setNumberFormat === "function") {
+        updatePeriodRange.setNumberFormat("@");
+      }
       sheet.getRange(i + 1, 4, 1, 16).setValues([updatedRowBlock]);
       for (var blkIdx = 0; blkIdx < updatedRowBlock.length; blkIdx++) {
         data[i][3 + blkIdx] = updatedRowBlock[blkIdx];
@@ -1017,7 +1030,7 @@ function assignSubToPeriod(absenceId, period, subName, forceOverride, clientEmai
 
     if (targetIndex !== -1) {
       i = targetIndex;
-      var periodsRequested = String(data[i][4]).split(",").map(function(p) { return parsePeriod(p); });
+      var periodsRequested = normalizePeriodsListValue(data[i][4]).split(",").map(function(p) { return parsePeriod(p); });
 
       if (periodsRequested.indexOf(parsePeriod(period)) === -1) {
           throw new Error("Period " + period + " was not requested for this absence.");

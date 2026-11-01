@@ -22,7 +22,7 @@ function getActiveUserEmail(clientEmail) {
  * Helper to normalize a period string.
  */
 function parsePeriod(period) {
-  var p = String(period).toLowerCase().trim();
+  var p = String(period === undefined || period === null ? '' : period).replace(/^'+/, '').toLowerCase().trim();
   if (p === 'a' || p === 'advisory') return '10';
   return p;
 }
@@ -33,7 +33,7 @@ function parsePeriod(period) {
 function formatPeriodDisplay(period) {
   var p = parsePeriod(period);
   if (p === '10') return 'Advisory';
-  return String(period).trim();
+  return String(period === undefined || period === null ? '' : period).replace(/^'+/, '').trim();
 }
 
 /**
@@ -42,17 +42,41 @@ function formatPeriodDisplay(period) {
 function formatPeriodLabelDisplay(period) {
   var p = parsePeriod(period);
   if (p === '10') return 'Advisory';
-  return 'Period ' + String(period).trim();
+  return 'Period ' + String(period === undefined || period === null ? '' : period).replace(/^'+/, '').trim();
+}
+
+/**
+ * Normalizes a raw `Periods` cell value (which may have a leading apostrophe `'1, 2, 3`,
+ * a 4-digit year artifact like `"5, 6, 2008"`, or even a legacy `Date` object if Google Sheets
+ * previously coerced `"1, 2, 3"` into `Jan 2, 2003`) into a clean comma-separated string.
+ */
+function normalizePeriodsListValue(rawVal) {
+  if (rawVal === undefined || rawVal === null || rawVal === "") return "";
+  if (rawVal instanceof Date && !isNaN(rawVal.getTime())) {
+    var m = rawVal.getMonth() + 1;
+    var d = rawVal.getDate();
+    var yr = rawVal.getFullYear();
+    if (yr >= 2001 && yr <= 2010) {
+      return m + ", " + d + ", " + (yr - 2000);
+    }
+    return m + ", " + d;
+  }
+  return String(rawVal)
+    .replace(/^'+/, "")
+    .replace(/\b200(\d)\b/g, "$1")
+    .replace(/\b2010\b/g, "10")
+    .trim();
 }
 
 /**
  * Helper to format a comma-separated periods string (e.g. "1, 10, 2" -> "1, Advisory, 2") for user-facing display/emails.
  */
 function formatPeriodsListDisplay(periodsStr) {
-  if (!periodsStr) return "";
-  return String(periodsStr)
+  var normalized = normalizePeriodsListValue(periodsStr);
+  if (!normalized) return "";
+  return normalized
     .split(",")
-    .map(function(p) { return p.trim(); })
+    .map(function(p) { return p.replace(/^'+/, "").trim(); })
     .filter(function(p) { return p !== ""; })
     .map(function(p) { return formatPeriodDisplay(p); })
     .join(", ");
@@ -80,7 +104,7 @@ function getScheduleJoinPeriod(period) {
   var p = parsePeriod(period);
   if (p === '0') return '9';
   if (p === '10') return '10';
-  return String(period);
+  return p;
 }
 
 /**
@@ -234,7 +258,7 @@ function convertLegacyAbsenceRowToV2(row, rosterLookups, scheduleLookup, dateCol
     isoDate = isoDate.split(",")[0].trim();
   }
 
-  var rawPeriods = String(row[4] || "").trim();
+  var rawPeriods = normalizePeriodsListValue(row[4]);
   var reason = String(row[5] || "").trim();
   var duration = String(row[6] || "Full Day").trim();
   var urgency = String(row[7] || "Standard (Advanced Notice)").trim();
@@ -379,7 +403,7 @@ function convertLegacyAbsenceRowToV2(row, rosterLookups, scheduleLookup, dateCol
       absenceId + "_P" + pKey,
       absenceId,
       isoDate,
-      "'" + pKey,
+      pKey,
       teacherEmail,
       teacherName,
       courseStr,
@@ -557,6 +581,7 @@ function readV2AbsenceDataCompat(ss) {
 
   var assignmentsByAbsenceId = {};
   var snapshottedScheduleLookup = {};
+  var hasMissingScheduleSnapshots = false;
 
   for (var g = 1; g < asgValues.length; g++) {
     var gRow = asgValues[g];
@@ -568,15 +593,20 @@ function readV2AbsenceDataCompat(ss) {
     assignmentsByAbsenceId[parentId].push(gRow);
 
     var gEmail = String(gRow[4] || "").toLowerCase().trim();
-    var gPeriod = parsePeriod(String(gRow[3] || "").replace(/^'/, ""));
+    var gPeriod = parsePeriod(String(gRow[3] || "").replace(/^'+/, ""));
     var gCourse = String(gRow[6] || "").trim();
     var gRoom = String(gRow[7] || "").trim();
     var gDate = getStandardizedDateString(gRow[2]) || String(gRow[2] || "").trim();
-    if (gEmail && gPeriod && (gCourse || gRoom)) {
+    var hasValidCourse = gCourse !== "" && gCourse.toLowerCase() !== "no class assigned";
+    var hasValidRoom = gRoom !== "" && gRoom.toLowerCase() !== "no class assigned";
+    if (!hasValidCourse || !hasValidRoom) {
+      hasMissingScheduleSnapshots = true;
+    }
+    if (gEmail && gPeriod && (hasValidCourse || hasValidRoom)) {
       var joinKey = gEmail + "-" + getScheduleJoinPeriod(gPeriod);
       var entry = {
-        room: gRoom || "No Class Assigned",
-        course: gCourse || "No Class Assigned"
+        room: hasValidRoom ? gRoom : "No Class Assigned",
+        course: hasValidCourse ? gCourse : "No Class Assigned"
       };
       snapshottedScheduleLookup[joinKey] = entry;
       if (gDate && typeof resolveTermIdForDate === "function") {
@@ -676,6 +706,7 @@ function readV2AbsenceDataCompat(ss) {
   return {
     absenceData: compatRows,
     snapshottedScheduleLookup: snapshottedScheduleLookup,
+    hasMissingScheduleSnapshots: hasMissingScheduleSnapshots,
     rawAbsences: absValues,
     rawAssignments: asgValues
   };
@@ -1052,7 +1083,8 @@ function getStandardizedDateString(dateRaw) {
 }
 
 /**
- * Normalizes a bell schedule color / day type string to "Green", "Blue", "Gold", "Red", or "".
+ * Normalizes a bell schedule color / day type string to "Green", "Blue", "Gold", "No School",
+ * or the exact Bell Schedule Name for special schedules (e.g. "FINALS 1-2").
  */
 function normalizeBellScheduleColor(colorRaw) {
   if (!colorRaw) return "";
@@ -1061,9 +1093,8 @@ function normalizeBellScheduleColor(colorRaw) {
   if (c === "green" || c === "green day" || c === "g") return "Green";
   if (c === "blue" || c === "blue day" || c === "b") return "Blue";
   if (c === "gold" || c === "gold day" || c === "y") return "Gold";
-  if (c === "red" || c === "red day" || c === "no school" || c === "holiday" || c === "r") return "Red";
-  var rawTrim = String(colorRaw).trim();
-  return rawTrim.charAt(0).toUpperCase() + rawTrim.slice(1);
+  if (c === "no school" || c === "holiday" || c === "break" || c === "n") return "No School";
+  return String(colorRaw).trim();
 }
 
 /**
@@ -1150,7 +1181,7 @@ function getPeriodTimeRangeForDate(dateStr, period, optionalDateColors, optional
   var settings = optionalSettings || (typeof getSettings === "function" ? getSettings() : {});
   var dateColors = optionalDateColors || (typeof getDateColorsCached === "function" ? getDateColorsCached() : {});
   var dayColor = (dateColors && dateColors[isoDate]) ? String(dateColors[isoDate]).trim() : "Green";
-  if (dayColor === "Red") return null;
+  if (dayColor === "No School") return null;
 
   var bellTimesMap = DEFAULT_PERIOD_BELL_TIMES;
   if (settings && settings["Period Bell Times"]) {

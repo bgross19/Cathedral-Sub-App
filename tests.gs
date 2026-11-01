@@ -929,7 +929,7 @@ function runTests() {
         { date: "8/20/2026", color: "No School" }
       ], false, "admin@gocathedral.com");
       assert(bulkRes.success === true && bulkRes.total === 3, "Expected merge bulk upsert to result in 3 total dates");
-      assert(bulkRes.dateColors["2026-08-20"] === "Red", "Expected 'No School' to normalize to 'Red'");
+      assert(bulkRes.dateColors["2026-08-20"] === "No School", "Expected 'No School' to normalize to 'No School'");
 
       // 3. Test Email Queue status, clear failed, and retry failed
       var qStatus = getEmailQueueStatus("admin@gocathedral.com");
@@ -941,10 +941,11 @@ function runTests() {
       assert(retryRes.status.pendingCount === 0 && retryRes.status.failedCount === 0, "Expected queue to be empty after retry and processEmailQueue");
 
       // 4. Test PowerSchool Bell Schedule record color mapping & sync
-      assert(resolveBellScheduleColorFromPSRecord({ insession: "0", cycle_day_name: "Green" }) === "Red", "Expected insession=0 to override cycle day as Red");
+      assert(resolveBellScheduleColorFromPSRecord({ insession: "0", cycle_day_name: "Green" }) === "No School", "Expected insession=0 to override cycle day as No School");
       assert(resolveBellScheduleColorFromPSRecord({ insession: "1", cycle_day_name: "Green Day" }) === "Green", "Expected Green Day cycle name to map to Green");
       assert(resolveBellScheduleColorFromPSRecord({ insession: "1", bell_schedule_name: "Blue (All Mass)" }) === "Blue", "Expected Blue bell schedule name to map to Blue");
       assert(resolveBellScheduleColorFromPSRecord({ insession: "1", cycle_day_name: "Gold", bell_schedule_name: "Late Start" }) === "Gold", "Expected Gold cycle day to map to Gold");
+      assert(resolveBellScheduleColorFromPSRecord({ insession: "1", cycle_day_name: "A", bell_schedule_name: "FINALS 1-2" }) === "FINALS 1-2", "Expected non-Green/Blue/Gold bell schedule to use bell_schedule_name");
 
       var origUrlFetchApp = global.UrlFetchApp;
       var origGetSettings = getSettings;
@@ -982,7 +983,7 @@ function runTests() {
 
       var psSyncRes = syncBellScheduleFromPowerSchool(true, "admin@gocathedral.com");
       assert(psSyncRes.success === true && psSyncRes.updated === 4 && psSyncRes.total === 4, "Expected PowerSchool bell schedule sync to replace with 4 dates");
-      assert(psSyncRes.dateColors["2026-08-24"] === "Green" && psSyncRes.dateColors["2026-09-07"] === "Red", "Expected synced PowerSchool dates to map Green and Labor Day Red");
+      assert(psSyncRes.dateColors["2026-08-24"] === "Green" && psSyncRes.dateColors["2026-09-07"] === "No School", "Expected synced PowerSchool dates to map Green and Labor Day No School");
 
       // 5. Test Add to Google Calendar URL builder with exact period clock times & deferred placeholder preservation
       var calUrl = buildSubDutyGoogleCalendarUrl({
@@ -1328,6 +1329,26 @@ function runTests() {
       assert(publicSafe["Date Bell Schedule Names"] === undefined && publicSafe["Period Bell Times"] !== undefined, "Expected Date Bell Schedule Names stripped from public payload settings while Period Bell Times is preserved");
       var adminSafe = sanitizeSettingsForClient(sampleSettingsBlob, true);
       assert(adminSafe["Date Bell Schedule Names"] !== undefined && adminSafe["Period Bell Times"] !== undefined, "Expected server-only bell schedule blobs preserved in admin settings");
+
+      // Verify apostrophe-prefixed and Date-coerced periods are normalized cleanly for Master Schedule lookups
+      assert(parsePeriod("'1") === "1" && getScheduleJoinPeriod("'1") === "1", "Expected parsePeriod and getScheduleJoinPeriod to strip leading apostrophes");
+      assert(normalizePeriodsListValue("'1, 4, 5, 6, 8") === "1, 4, 5, 6, 8", "Expected normalizePeriodsListValue to strip leading apostrophe");
+      assert(normalizePeriodsListValue("5, 6, 2008") === "5, 6, 8", "Expected normalizePeriodsListValue to recover 4-digit year artifact");
+      assert(normalizePeriodsListValue(new Date(2003, 0, 2, 12, 0, 0)) === "1, 2, 3", "Expected normalizePeriodsListValue to recover 3-period Date object");
+      var kqScheduleLookup = {
+        "kquenichet@gocathedral.com-1": { room: "4239", course: "FAITH IN FILMS (A)" },
+        "kquenichet@gocathedral.com-1-3601": { room: "4239", course: "FAITH IN FILMS (A)" }
+      };
+      var kqLegacyRow = [
+        "96eeb4db-05b0-4657-bfe7-7967580116a4", new Date(), "kquenichet@gocathedral.com", "2026-11-02",
+        "'1, 4", "PTO", "Full Day", "Standard (Advanced Notice)", "Not feeling well",
+        "", "", "", "", "", "", "", "", "", "", "Active", "", "[]"
+      ];
+      var kqV2 = convertLegacyAbsenceRowToV2(kqLegacyRow, { emailToName: { "kquenichet@gocathedral.com": "Quenichet, Karrie A" }, nameToEmail: {}, nameToDuty: {}, nameToRole: {} }, kqScheduleLookup, {}, { "Term ID": "3601" });
+      assert(kqV2 && kqV2.assignmentRows && kqV2.assignmentRows.length === 2, "Expected 2 assignment rows for Karrie Quenichet test");
+      assert(kqV2.assignmentRows[0][0] === "96eeb4db-05b0-4657-bfe7-7967580116a4_P1", "Expected Period 1 Assignment ID without apostrophe");
+      assert(kqV2.assignmentRows[0][3] === "1", "Expected Period 1 value to be '1'");
+      assert(kqV2.assignmentRows[0][6] === "FAITH IN FILMS (A)" && kqV2.assignmentRows[0][7] === "4239", "Expected Period 1 to resolve FAITH IN FILMS (A) and room 4239");
 
       getSettings = origGetSettings;
       if (origUrlFetchApp !== undefined) global.UrlFetchApp = origUrlFetchApp;

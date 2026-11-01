@@ -1415,7 +1415,7 @@
         buttons.forEach(btn => {
           btn.classList.remove('ring-2', 'ring-offset-1', 'ring-[#002147]', 'scale-105');
         });
-        const targetId = brush === '' ? 'bellBrush-Clear' : ('bellBrush-' + brush);
+        const targetId = brush === '' ? 'bellBrush-Clear' : (brush === 'No School' ? 'bellBrush-NoSchool' : ('bellBrush-' + brush));
         const activeBtn = document.getElementById(targetId);
         if (activeBtn) {
           activeBtn.classList.add('ring-2', 'ring-offset-1', 'ring-[#002147]', 'scale-105');
@@ -1437,7 +1437,7 @@
         let nextColor = '';
 
         if (currentBellScheduleBrush === 'cycle') {
-          const cycleOrder = ['Green', 'Blue', 'Gold', 'Red', ''];
+          const cycleOrder = ['Green', 'Blue', 'Gold', 'No School', ''];
           const idx = cycleOrder.indexOf(prevColor);
           nextColor = cycleOrder[(idx + 1) % cycleOrder.length];
         } else {
@@ -1520,10 +1520,10 @@
             cellClasses = "bg-yellow-100 border-yellow-400 text-yellow-900 hover:bg-yellow-200";
             badgeText = "Gold";
             badgeClasses = "text-yellow-800 font-bold";
-          } else if (color === 'Red') {
-            cellClasses = "bg-red-100 border-red-400 text-red-900 hover:bg-red-200";
-            badgeText = "Red";
-            badgeClasses = "text-red-800 font-bold";
+          } else if (color === 'No School') {
+            cellClasses = "bg-slate-100 border-slate-300 text-slate-700 hover:bg-slate-200";
+            badgeText = "No School";
+            badgeClasses = "text-slate-600 font-bold";
           } else if (color) {
             cellClasses = "bg-purple-100 border-purple-400 text-purple-900 hover:bg-purple-200";
             badgeText = color;
