@@ -1330,6 +1330,26 @@ function runTests() {
       var adminSafe = sanitizeSettingsForClient(sampleSettingsBlob, true);
       assert(adminSafe["Date Bell Schedule Names"] !== undefined && adminSafe["Period Bell Times"] !== undefined, "Expected server-only bell schedule blobs preserved in admin settings");
 
+      // Verify apostrophe-prefixed and Date-coerced periods are normalized cleanly for Master Schedule lookups
+      assert(parsePeriod("'1") === "1" && getScheduleJoinPeriod("'1") === "1", "Expected parsePeriod and getScheduleJoinPeriod to strip leading apostrophes");
+      assert(normalizePeriodsListValue("'1, 4, 5, 6, 8") === "1, 4, 5, 6, 8", "Expected normalizePeriodsListValue to strip leading apostrophe");
+      assert(normalizePeriodsListValue("5, 6, 2008") === "5, 6, 8", "Expected normalizePeriodsListValue to recover 4-digit year artifact");
+      assert(normalizePeriodsListValue(new Date(2003, 0, 2, 12, 0, 0)) === "1, 2, 3", "Expected normalizePeriodsListValue to recover 3-period Date object");
+      var kqScheduleLookup = {
+        "kquenichet@gocathedral.com-1": { room: "4239", course: "FAITH IN FILMS (A)" },
+        "kquenichet@gocathedral.com-1-3601": { room: "4239", course: "FAITH IN FILMS (A)" }
+      };
+      var kqLegacyRow = [
+        "96eeb4db-05b0-4657-bfe7-7967580116a4", new Date(), "kquenichet@gocathedral.com", "2026-11-02",
+        "'1, 4", "PTO", "Full Day", "Standard (Advanced Notice)", "Not feeling well",
+        "", "", "", "", "", "", "", "", "", "", "Active", "", "[]"
+      ];
+      var kqV2 = convertLegacyAbsenceRowToV2(kqLegacyRow, { emailToName: { "kquenichet@gocathedral.com": "Quenichet, Karrie A" }, nameToEmail: {}, nameToDuty: {}, nameToRole: {} }, kqScheduleLookup, {}, { "Term ID": "3601" });
+      assert(kqV2 && kqV2.assignmentRows && kqV2.assignmentRows.length === 2, "Expected 2 assignment rows for Karrie Quenichet test");
+      assert(kqV2.assignmentRows[0][0] === "96eeb4db-05b0-4657-bfe7-7967580116a4_P1", "Expected Period 1 Assignment ID without apostrophe");
+      assert(kqV2.assignmentRows[0][3] === "1", "Expected Period 1 value to be '1'");
+      assert(kqV2.assignmentRows[0][6] === "FAITH IN FILMS (A)" && kqV2.assignmentRows[0][7] === "4239", "Expected Period 1 to resolve FAITH IN FILMS (A) and room 4239");
+
       getSettings = origGetSettings;
       if (origUrlFetchApp !== undefined) global.UrlFetchApp = origUrlFetchApp;
 
