@@ -504,8 +504,10 @@ function fetchAbsenceRequestsForDate(ss, dateStr) {
 
 function batchAssignSubs(assignments, clientEmail) {
   var lock = LockService.getScriptLock();
+  var lockHeld = false;
   try {
-    lock.waitLock(15000);
+    lock.waitLock(30000);
+    lockHeld = true;
     var ss = getSS();
     var email = getActiveUserEmail(typeof clientEmail !== 'undefined' ? clientEmail : undefined);
     var user = getUserData(ss, email);
@@ -662,6 +664,10 @@ function batchAssignSubs(assignments, clientEmail) {
             syncV2SheetsForAbsenceRows(ss, modifiedRows, null, rosterData, null, settings);
         }
     }
+    if (lockHeld) {
+        lock.releaseLock();
+        lockHeld = false;
+    }
 
     // Log audit
     logAuditAction("Batch Assign", "Multiple", "Assigned " + successCount + " subs", clientEmail);
@@ -682,6 +688,6 @@ function batchAssignSubs(assignments, clientEmail) {
     console.error("batchAssignSubs Error: " + e.stack);
     return { success: false, error: e.toString() };
   } finally {
-    lock.releaseLock();
+    if (lockHeld) lock.releaseLock();
   }
 }

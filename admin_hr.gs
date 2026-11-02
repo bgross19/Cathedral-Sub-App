@@ -212,7 +212,7 @@ function clearRosterCache() {
 function updateStaffRoleInlineAdmin(email, newRole, clientEmail) {
   var lock = LockService.getScriptLock();
   try {
-    lock.waitLock(10000);
+    lock.waitLock(30000);
   } catch (e) {
     notifyAdminOfError("updateStaffRoleInlineAdmin_lock", e);
     return { success: false, error: "The server is currently busy. Please try again." };
@@ -262,7 +262,7 @@ function updateStaffRoleInlineAdmin(email, newRole, clientEmail) {
 function updateStaffDutyInlineAdmin(email, newDuty, clientEmail) {
   var lock = LockService.getScriptLock();
   try {
-    lock.waitLock(10000);
+    lock.waitLock(30000);
   } catch (e) {
     notifyAdminOfError("updateStaffDutyInlineAdmin_lock", e);
     return { success: false, error: "The server is currently busy. Please try again." };
@@ -312,7 +312,7 @@ function updateStaffDutyInlineAdmin(email, newDuty, clientEmail) {
 function saveStaffMemberAdmin(staffData, clientEmail) {
   var lock = LockService.getScriptLock();
   try {
-    lock.waitLock(10000);
+    lock.waitLock(30000);
   } catch (e) {
     notifyAdminOfError("saveStaffMemberAdmin_lock", e);
     return {
@@ -387,7 +387,7 @@ function saveStaffMemberAdmin(staffData, clientEmail) {
 function deleteStaffMemberAdmin(email, clientEmail) {
   var lock = LockService.getScriptLock();
   try {
-    lock.waitLock(10000);
+    lock.waitLock(30000);
   } catch (e) {
     notifyAdminOfError("deleteStaffMemberAdmin_lock", e);
     return {
@@ -437,7 +437,7 @@ function deleteStaffMemberAdmin(email, clientEmail) {
 function clearAllStaffDuties(clientEmail) {
   var lock = LockService.getScriptLock();
   try {
-    lock.waitLock(10000);
+    lock.waitLock(30000);
   } catch (e) {
     notifyAdminOfError("clearAllStaffDuties_lock", e);
     return {
@@ -477,7 +477,7 @@ function clearAllStaffDuties(clientEmail) {
 function bulkUpsertStaffRoster(updates, clientEmail) {
   var lock = LockService.getScriptLock();
   try {
-    lock.waitLock(10000);
+    lock.waitLock(30000);
   } catch (e) {
     notifyAdminOfError("bulkUpsertStaffRoster_lock", e);
     return {
@@ -745,7 +745,7 @@ function exportAllAbsenceRequests(clientEmail) {
 function archiveAbsenceRequests(cutoffDateStr, clientEmail) {
   var lock = LockService.getScriptLock();
   try {
-    lock.waitLock(10000);
+    lock.waitLock(30000);
   } catch (e) {
     notifyAdminOfError("archiveAbsenceRequests_lock", e);
     return {
@@ -929,7 +929,7 @@ function _appendPayrollSheetSnapshot(ss, periodNumber, rangeString, csvString, a
 function approvePayPeriod(periodNumber, rangeString, csvString, clientEmail) {
   var lock = LockService.getScriptLock();
   try {
-    lock.waitLock(10000);
+    lock.waitLock(30000);
   } catch (e) {
     notifyAdminOfError("approvePayPeriod_lock", e);
     return { success: false, error: "The server is currently busy. Please try again." };
@@ -1006,7 +1006,7 @@ function approvePayPeriod(periodNumber, rangeString, csvString, clientEmail) {
 function bulkUpsertPayPeriods(updates, clientEmail) {
   var lock = LockService.getScriptLock();
   try {
-    lock.waitLock(10000);
+    lock.waitLock(30000);
   } catch (e) {
     notifyAdminOfError("bulkUpsertPayPeriods_lock", e);
     return {
@@ -1054,7 +1054,7 @@ function bulkUpsertPayPeriods(updates, clientEmail) {
 function deleteAllPayPeriods(clientEmail) {
   var lock = LockService.getScriptLock();
   try {
-    lock.waitLock(10000);
+    lock.waitLock(30000);
   } catch (e) {
     notifyAdminOfError("deleteAllPayPeriods_lock", e);
     return {
@@ -1291,7 +1291,7 @@ function getBellScheduleDatesAdmin(clientEmail) {
 function saveBellScheduleDateAdmin(dateStr, color, clientEmail) {
   var lock = LockService.getScriptLock();
   try {
-    lock.waitLock(10000);
+    lock.waitLock(30000);
   } catch (e) {
     notifyAdminOfError("saveBellScheduleDateAdmin_lock", e);
     return { success: false, error: "The server is currently busy. Please try again." };
@@ -1352,7 +1352,7 @@ function saveBellScheduleDateAdmin(dateStr, color, clientEmail) {
 function bulkUpsertBellScheduleDates(updates, replaceAll, clientEmail) {
   var lock = LockService.getScriptLock();
   try {
-    lock.waitLock(10000);
+    lock.waitLock(30000);
   } catch (e) {
     notifyAdminOfError("bulkUpsertBellScheduleDates_lock", e);
     return { success: false, error: "The server is currently busy. Please try again." };
@@ -1432,7 +1432,7 @@ function bulkUpsertBellScheduleDates(updates, replaceAll, clientEmail) {
 function clearAllBellScheduleDates(clientEmail) {
   var lock = LockService.getScriptLock();
   try {
-    lock.waitLock(10000);
+    lock.waitLock(30000);
   } catch (e) {
     notifyAdminOfError("clearAllBellScheduleDates_lock", e);
     return { success: false, error: "The server is currently busy. Please try again." };

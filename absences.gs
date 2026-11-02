@@ -60,8 +60,10 @@ function submitMultipleAbsenceRequests(requestsToSubmit, clientEmail) {
   }
 
   var lock = LockService.getScriptLock();
+  var lockHeld = false;
   try {
-    lock.waitLock(15000);
+    lock.waitLock(30000);
+    lockHeld = true;
   } catch (e) {
     notifyAdminOfError("submitMultipleAbsenceRequests", e);
     return { success: false, error: "The server is currently busy. Please try again in a few moments." };
@@ -151,6 +153,10 @@ function submitMultipleAbsenceRequests(requestsToSubmit, clientEmail) {
       mainSheet.getRange(startRow, 1, rowsToAppend.length, rowsToAppend[0].length).setValues(rowsToAppend);
       if (typeof syncV2SheetsForAbsenceRows === "function") {
         syncV2SheetsForAbsenceRows(ss, rowsToAppend, null, rosterData, null, settings);
+      }
+      if (lockHeld) {
+        lock.releaseLock();
+        lockHeld = false;
       }
 
       for (var a = 0; a < postWriteActions.length; a++) {
@@ -263,14 +269,16 @@ function submitMultipleAbsenceRequests(requestsToSubmit, clientEmail) {
     notifyAdminOfError("submitMultipleAbsenceRequests", err);
     return { success: false, error: err.message };
   } finally {
-    lock.releaseLock();
+    if (lockHeld) lock.releaseLock();
   }
 }
 
 function submitAbsence(formData, clientEmail) {
   var lock = LockService.getScriptLock();
+  var lockHeld = false;
   try {
-    lock.waitLock(10000);
+    lock.waitLock(30000);
+    lockHeld = true;
   } catch (e) {
     notifyAdminOfError("submitAbsence", e);
     return {
@@ -284,6 +292,8 @@ function submitAbsence(formData, clientEmail) {
     var timestamp = new Date();
     var submitterEmail = getActiveUserEmail(typeof clientEmail !== 'undefined' ? clientEmail : undefined);
     var submitterData = getUserData(ss, typeof clientEmail !== 'undefined' ? clientEmail : undefined);
+    var rosterData = getRosterDataCached(ss);
+    var settings = getSettings(ss);
 
     var targetEmail = submitterEmail;
     var teacherName = submitterData.name;
@@ -295,8 +305,6 @@ function submitAbsence(formData, clientEmail) {
       assertPermission(submitterData, "Add Request on Behalf", "Unauthorized to submit absence requests on behalf of another teacher.");
 
       // Find the teacher's email based on the provided name
-      var rosterData = getRosterDataCached(ss);
-
       var foundEmail = null;
       var targetName = formData.onBehalfTeacher.trim().toLowerCase();
 
@@ -334,7 +342,11 @@ function submitAbsence(formData, clientEmail) {
     }
     mainSheet.appendRow(newRow);
     if (typeof syncV2SheetsForAbsenceRows === "function") {
-      syncV2SheetsForAbsenceRows(ss, [newRow]);
+      syncV2SheetsForAbsenceRows(ss, [newRow], null, rosterData, null, settings);
+    }
+    if (lockHeld) {
+      lock.releaseLock();
+      lockHeld = false;
     }
 
     var isMarkedUrgent = urgencyFormatted === 'Urgent (Less than 24 hr notice)';
@@ -347,7 +359,6 @@ function submitAbsence(formData, clientEmail) {
     }
     
     // Check Settings to see if HR or Principal needs to be notified
-    var settings = getSettings();
     var appUrl = settings["App URL"] || DEFAULT_APP_URL;
     var reasons = [];
     try {
@@ -454,7 +465,7 @@ function submitAbsence(formData, clientEmail) {
     return {
       success: false, error: err.message };
   } finally {
-    lock.releaseLock();
+    if (lockHeld) lock.releaseLock();
   }
 }
 
@@ -463,8 +474,10 @@ function submitAbsence(formData, clientEmail) {
  */
 function cancelMySubDuty(absenceId, period, clientEmail) {
   var lock = LockService.getScriptLock();
+  var lockHeld = false;
   try {
-    lock.waitLock(10000);
+    lock.waitLock(30000);
+    lockHeld = true;
   } catch (e) {
     notifyAdminOfError("cancelMySubDuty", e);
     return {
@@ -491,6 +504,7 @@ function cancelMySubDuty(absenceId, period, clientEmail) {
           var coordinatorEmail = getCoordinatorEmail(ss);
 
           var rosterData = getRosterDataCached(ss);
+          var settings = getSettings(ss);
           var nameLookup = buildNameLookup(rosterData);
           var scheduleLookup = null; // Deferred to email queue to save time
           var details = getAbsenceDetailsLocal(data[i], period, scheduleLookup, nameLookup);
@@ -498,13 +512,17 @@ function cancelMySubDuty(absenceId, period, clientEmail) {
           sheet.getRange(i + 1, subColumnIndex).setValue("");
           data[i][subColumnIndex - 1] = "";
           if (typeof syncV2SheetsForAbsenceRows === "function") {
-            syncV2SheetsForAbsenceRows(ss, [data[i]], null, rosterData);
+            syncV2SheetsForAbsenceRows(ss, [data[i]], null, rosterData, null, settings);
+          }
+          if (lockHeld) {
+            lock.releaseLock();
+            lockHeld = false;
           }
           logAuditAction("SUB_DUTY_CANCELLED", absenceId, "Cancelled coverage for period " + period, clientEmail);
 
           if (details && typeof syncSubDutyCalendarEvent === "function") {
             try {
-              syncSubDutyCalendarEvent(userEmail, "Canceled", details);
+              syncSubDutyCalendarEvent(userEmail, "Canceled", details, settings);
             } catch (calErr) {
               console.warn("Calendar removal on cancelMySubDuty failed: " + calErr.message);
             }
@@ -512,7 +530,6 @@ function cancelMySubDuty(absenceId, period, clientEmail) {
 
           if (coordinatorEmail && details) {
             var subject = "SUB CANCELLATION: " + userName + " cancelled coverage";
-            var settings = getSettings();
             var appUrl = settings["App URL"] || DEFAULT_APP_URL;
 
             var displayCancelPeriod = formatPeriodDisplay(details.period);
@@ -549,7 +566,7 @@ function cancelMySubDuty(absenceId, period, clientEmail) {
     return {
       success: false, error: err.message };
   } finally {
-    lock.releaseLock();
+    if (lockHeld) lock.releaseLock();
   }
 }
 
@@ -613,8 +630,10 @@ function getAbsenceDetailsLocal(row, period, scheduleLookup, nameLookup) {
 
 function cancelAbsence(absenceId, clientEmail) {
   var lock = LockService.getScriptLock();
+  var lockHeld = false;
   try {
-    lock.waitLock(10000);
+    lock.waitLock(30000);
+    lockHeld = true;
   } catch (e) {
     notifyAdminOfError("cancelAbsence", e);
     return {
@@ -626,10 +645,10 @@ function cancelAbsence(absenceId, clientEmail) {
     var sheet = getSheetOrThrow(ss, "Absence Requests");
 
     var rosterData = getRosterDataCached(ss);
+    var settings = getSettings(ss);
 
     var subEmailLookup = {};
     for (var r = 1; r < rosterData.length; r++) {
-      if (!rosterData[r]) continue;
       if (!rosterData[r]) continue;
       subEmailLookup[String(rosterData[r][0]).trim()] = String(rosterData[r][1]).trim();
     }
@@ -660,7 +679,11 @@ function cancelAbsence(absenceId, clientEmail) {
       sheet.getRange(i + 1, 20).setValue("Canceled");
       data[i][19] = "Canceled";
       if (typeof syncV2SheetsForAbsenceRows === "function") {
-        syncV2SheetsForAbsenceRows(ss, [data[i]], null, rosterData);
+        syncV2SheetsForAbsenceRows(ss, [data[i]], null, rosterData, null, settings);
+      }
+      if (lockHeld) {
+        lock.releaseLock();
+        lockHeld = false;
       }
       logAuditAction("ABSENCE_CANCELLED", absenceId, "Cancelled entire absence request", clientEmail);
 
@@ -711,7 +734,7 @@ function cancelAbsence(absenceId, clientEmail) {
     return {
       success: false, error: err.message };
   } finally {
-    lock.releaseLock();
+    if (lockHeld) lock.releaseLock();
   }
 }
 
@@ -720,8 +743,10 @@ function cancelAbsence(absenceId, clientEmail) {
  */
 function updateAbsence(absenceId, formData, clientEmail) {
   var lock = LockService.getScriptLock();
+  var lockHeld = false;
   try {
-    lock.waitLock(10000);
+    lock.waitLock(30000);
+    lockHeld = true;
   } catch (e) {
     notifyAdminOfError("updateAbsence", e);
     return {
@@ -733,10 +758,10 @@ function updateAbsence(absenceId, formData, clientEmail) {
     var sheet = getSheetOrThrow(ss, "Absence Requests");
 
     var rosterData = getRosterDataCached(ss);
+    var settings = getSettings(ss);
 
     var subEmailLookup = {};
     for (var r = 1; r < rosterData.length; r++) {
-      if (!rosterData[r]) continue;
       if (!rosterData[r]) continue;
       subEmailLookup[String(rosterData[r][0]).trim()] = String(rosterData[r][1]).trim();
     }
@@ -870,7 +895,11 @@ function updateAbsence(absenceId, formData, clientEmail) {
         data[i][20] = newSubPlanUrl;
       }
       if (typeof syncV2SheetsForAbsenceRows === "function") {
-        syncV2SheetsForAbsenceRows(ss, [data[i]], null, rosterData);
+        syncV2SheetsForAbsenceRows(ss, [data[i]], null, rosterData, null, settings);
+      }
+      if (lockHeld) {
+        lock.releaseLock();
+        lockHeld = false;
       }
       logAuditAction("ABSENCE_UPDATED", absenceId, "Updated absence details (Date: " + formData.date + ", Periods: " + formData.periods + ")", clientEmail);
 
@@ -913,7 +942,7 @@ function updateAbsence(absenceId, formData, clientEmail) {
     return {
       success: false, error: err.message };
   } finally {
-    lock.releaseLock();
+    if (lockHeld) lock.releaseLock();
   }
 }
 
@@ -983,8 +1012,10 @@ function getAbsenceDetails(absenceId, period, optionalData, clientEmail) {
  */
 function assignSubToPeriod(absenceId, period, subName, forceOverride, clientEmail) {
   var lock = LockService.getScriptLock();
+  var lockHeld = false;
   try {
-    lock.waitLock(10000);
+    lock.waitLock(30000);
+    lockHeld = true;
   } catch (e) {
     notifyAdminOfError("assignSubToPeriod", e);
     return {
@@ -1236,6 +1267,10 @@ function assignSubToPeriod(absenceId, period, subName, forceOverride, clientEmai
       if (typeof syncV2SheetsForAbsenceRows === "function") {
         syncV2SheetsForAbsenceRows(ss, [data[i]], null, rosterData, null, settingsForPerm);
       }
+      if (lockHeld) {
+        lock.releaseLock();
+        lockHeld = false;
+      }
       logAuditAction("SUB_ASSIGNED", absenceId, "Assigned " + (newSub || "NO ONE") + " to period " + period, clientEmail);
 
       // Notify new sub if there is one
@@ -1260,14 +1295,16 @@ function assignSubToPeriod(absenceId, period, subName, forceOverride, clientEmai
     return {
       success: false, error: err.message };
   } finally {
-    lock.releaseLock();
+    if (lockHeld) lock.releaseLock();
   }
 }
 
 function saveSubFeedback(absenceId, period, rating, note, clientEmail) {
   var lock = LockService.getScriptLock();
+  var lockHeld = false;
   try {
-    lock.waitLock(10000);
+    lock.waitLock(30000);
+    lockHeld = true;
   } catch (e) {
     notifyAdminOfError("saveSubFeedback", e);
     return { success: false, error: "The server is currently busy. Please try again in a few moments." };
@@ -1346,6 +1383,10 @@ function saveSubFeedback(absenceId, period, rating, note, clientEmail) {
     if (typeof syncV2SheetsForAbsenceRows === "function") {
       syncV2SheetsForAbsenceRows(ss, [row], null, rosterData);
     }
+    if (lockHeld) {
+      lock.releaseLock();
+      lockHeld = false;
+    }
 
     var teacherEmail = String(row[2]).toLowerCase().trim();
     var absenceDateVal = row[3];
@@ -1389,7 +1430,7 @@ function saveSubFeedback(absenceId, period, rating, note, clientEmail) {
     notifyAdminOfError("saveSubFeedback", err);
     return { success: false, error: err.message };
   } finally {
-    lock.releaseLock();
+    if (lockHeld) lock.releaseLock();
   }
 }
 

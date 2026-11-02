@@ -438,76 +438,197 @@ function syncV2SheetsForAbsenceRows(ss, legacyRows, optionalScheduleLookup, opti
     var rosterData = optionalRosterData || (typeof getRosterDataCached === "function" ? getRosterDataCached(ss) : []);
     var settings = optionalSettings || (typeof getSettings === "function" ? getSettings(ss) : {});
     var dateColors = optionalDateColors || (typeof getDateColorsCached === "function" ? getDateColorsCached(ss) : {});
+
+    var existingAbsRaw = absSheet.getDataRange().getValues();
+    var existingAsgRaw = asgSheet.getDataRange().getValues();
+
+    var preliminaryTargetIds = {};
+    for (var pIdx = 0; pIdx < legacyRows.length; pIdx++) {
+      if (legacyRows[pIdx] && legacyRows[pIdx][0]) {
+        preliminaryTargetIds[String(legacyRows[pIdx][0])] = true;
+      }
+    }
+
     var scheduleLookup = optionalScheduleLookup;
-    if (!scheduleLookup && typeof getMasterScheduleData === "function" && typeof buildScheduleLookup === "function") {
-      var schedData = getMasterScheduleData();
-      var activeTerm = String(settings["Term ID"] || "3601").trim();
-      scheduleLookup = buildScheduleLookup(schedData, activeTerm);
+    if (!scheduleLookup) {
+      // Check if existing Coverage_Assignments already has snapshotted course/room for all target rows & periods
+      var snapshottedByAbsPeriod = {};
+      if (existingAsgRaw && existingAsgRaw.length > 1) {
+        for (var sIdx = 1; sIdx < existingAsgRaw.length; sIdx++) {
+          var sRow = existingAsgRaw[sIdx];
+          if (!sRow || !sRow[1]) continue;
+          var sAbsId = String(sRow[1]);
+          if (preliminaryTargetIds[sAbsId]) {
+            var sPd = getScheduleJoinPeriod(sRow[3]);
+            var sCourse = String(sRow[6] || "").trim();
+            var sRoom = String(sRow[7] || "").trim();
+            if (sPd) {
+              snapshottedByAbsPeriod[sAbsId + "|" + sPd] = { course: sCourse || "No Class Assigned", room: sRoom || "No Class Assigned" };
+            }
+          }
+        }
+      }
+
+      var allPeriodsSnapshotted = true;
+      var syntheticLookup = {};
+      for (var lIdx = 0; lIdx < legacyRows.length; lIdx++) {
+        var lRow = legacyRows[lIdx];
+        if (!lRow || !lRow[0]) continue;
+        var lAbsId = String(lRow[0]);
+        var lEmail = String(lRow[2] || "").trim().toLowerCase();
+        var lPds = normalizePeriodsListValue(lRow[4]).split(",").map(function(p) { return p.trim(); }).filter(function(p) { return p !== ""; });
+        for (var lp = 0; lp < lPds.length; lp++) {
+          var joinPd = getScheduleJoinPeriod(parsePeriod(lPds[lp]));
+          var snap = snapshottedByAbsPeriod[lAbsId + "|" + joinPd];
+          if (snap && lEmail) {
+            syntheticLookup[lEmail + "-" + joinPd] = snap;
+          } else {
+            allPeriodsSnapshotted = false;
+            break;
+          }
+        }
+        if (!allPeriodsSnapshotted) break;
+      }
+
+      if (allPeriodsSnapshotted && Object.keys(syntheticLookup).length > 0) {
+        scheduleLookup = syntheticLookup;
+      } else if (typeof getMasterScheduleData === "function" && typeof buildScheduleLookup === "function") {
+        var schedData = getMasterScheduleData();
+        var activeTerm = String(settings["Term ID"] || "3601").trim();
+        scheduleLookup = buildScheduleLookup(schedData, activeTerm);
+      }
     }
 
     var rosterLookups = buildV2RosterLookups(rosterData);
 
     var targetIds = {};
     var convertedById = {};
+    var convertedIdCount = 0;
     for (var i = 0; i < legacyRows.length; i++) {
       var conv = convertLegacyAbsenceRowToV2(legacyRows[i], rosterLookups, scheduleLookup, dateColors, settings);
       if (conv && conv.absenceRow && conv.absenceRow[0]) {
         var idKey = String(conv.absenceRow[0]);
+        if (!targetIds[idKey]) convertedIdCount++;
         targetIds[idKey] = true;
         convertedById[idKey] = conv;
       }
     }
 
-    var existingAbs = absSheet.getDataRange().getValues();
-    if (!existingAbs || existingAbs.length === 0) {
-      existingAbs = [V2_ABSENCES_HEADERS];
-    }
+    var hasValidAbsHeader = Boolean(existingAbsRaw && existingAbsRaw.length >= 1 && existingAbsRaw[0] && existingAbsRaw[0][0]);
+    var existingAbs = hasValidAbsHeader ? existingAbsRaw : [V2_ABSENCES_HEADERS];
     var updatedAbs = [existingAbs[0]];
     var seenAbsIds = {};
+    var hadDuplicateOrBlankAbs = false;
+    var inPlaceAbsUpdates = [];
     for (var a = 1; a < existingAbs.length; a++) {
-      if (!existingAbs[a] || !existingAbs[a][0]) continue;
+      if (!existingAbs[a] || !existingAbs[a][0]) {
+        hadDuplicateOrBlankAbs = true;
+        continue;
+      }
       var rowAbsId = String(existingAbs[a][0]);
       if (targetIds[rowAbsId]) {
         if (!seenAbsIds[rowAbsId]) {
           updatedAbs.push(convertedById[rowAbsId].absenceRow);
           seenAbsIds[rowAbsId] = true;
+          inPlaceAbsUpdates.push({ rowNumber: a + 1, rowValues: convertedById[rowAbsId].absenceRow });
+        } else {
+          hadDuplicateOrBlankAbs = true;
         }
       } else {
         updatedAbs.push(existingAbs[a]);
       }
     }
+    var appendedAbsRows = [];
     for (var newId in convertedById) {
       if (Object.prototype.hasOwnProperty.call(convertedById, newId) && !seenAbsIds[newId]) {
         updatedAbs.push(convertedById[newId].absenceRow);
+        appendedAbsRows.push(convertedById[newId].absenceRow);
       }
     }
 
-    var existingAsg = asgSheet.getDataRange().getValues();
-    if (!existingAsg || existingAsg.length === 0) {
-      existingAsg = [V2_ASSIGNMENTS_HEADERS];
+    // Use targeted row updates/appends for Absences when possible to avoid clearing and rewriting the entire sheet
+    if (hasValidAbsHeader && !hadDuplicateOrBlankAbs && convertedIdCount <= 10) {
+      for (var uIdx = 0; uIdx < inPlaceAbsUpdates.length; uIdx++) {
+        absSheet.getRange(inPlaceAbsUpdates[uIdx].rowNumber, 1, 1, V2_ABSENCES_HEADERS.length).setValues([inPlaceAbsUpdates[uIdx].rowValues]);
+      }
+      if (appendedAbsRows.length > 0) {
+        absSheet.getRange(existingAbs.length + 1, 1, appendedAbsRows.length, V2_ABSENCES_HEADERS.length).setValues(appendedAbsRows);
+      }
+    } else {
+      if (typeof absSheet.clearContents === "function") absSheet.clearContents();
+      absSheet.getRange(1, 1, updatedAbs.length, V2_ABSENCES_HEADERS.length).setValues(updatedAbs);
     }
+
+    var hasValidAsgHeader = Boolean(existingAsgRaw && existingAsgRaw.length >= 1 && existingAsgRaw[0] && existingAsgRaw[0][0]);
+    var existingAsg = hasValidAsgHeader ? existingAsgRaw : [V2_ASSIGNMENTS_HEADERS];
     var updatedAsg = [existingAsg[0]];
+    var matchedExistingAsgIndices = [];
+    var hadBlankAsgRow = false;
     for (var g = 1; g < existingAsg.length; g++) {
-      if (!existingAsg[g] || !existingAsg[g][0]) continue;
+      if (!existingAsg[g] || !existingAsg[g][0]) {
+        hadBlankAsgRow = true;
+        continue;
+      }
       var parentAbsId = String(existingAsg[g][1] || "");
       if (!targetIds[parentAbsId]) {
         updatedAsg.push(existingAsg[g]);
+      } else {
+        matchedExistingAsgIndices.push(g);
       }
     }
+    var allNewAsgRows = [];
+    var newAsgById = {};
     for (var cId in convertedById) {
       if (Object.prototype.hasOwnProperty.call(convertedById, cId)) {
         var asgRows = convertedById[cId].assignmentRows;
         for (var k = 0; k < asgRows.length; k++) {
           updatedAsg.push(asgRows[k]);
+          allNewAsgRows.push(asgRows[k]);
+          newAsgById[String(asgRows[k][0])] = asgRows[k];
         }
       }
     }
 
-    if (typeof absSheet.clearContents === "function") absSheet.clearContents();
-    absSheet.getRange(1, 1, updatedAbs.length, V2_ABSENCES_HEADERS.length).setValues(updatedAbs);
+    var canUpdateAsgInPlace = false;
+    if (hasValidAsgHeader && !hadBlankAsgRow && matchedExistingAsgIndices.length > 0 &&
+        matchedExistingAsgIndices.length === allNewAsgRows.length && allNewAsgRows.length <= 15) {
+      canUpdateAsgInPlace = true;
+      for (var mIdx = 0; mIdx < matchedExistingAsgIndices.length; mIdx++) {
+        var exAsgId = String(existingAsg[matchedExistingAsgIndices[mIdx]][0] || "");
+        if (!newAsgById[exAsgId]) {
+          canUpdateAsgInPlace = false;
+          break;
+        }
+      }
+    }
 
-    if (typeof asgSheet.clearContents === "function") asgSheet.clearContents();
-    asgSheet.getRange(1, 1, updatedAsg.length, V2_ASSIGNMENTS_HEADERS.length).setValues(updatedAsg);
+    if (hasValidAsgHeader && !hadBlankAsgRow && matchedExistingAsgIndices.length === 0) {
+      // Brand-new absence(s): simply append new assignment rows at the bottom without clearing the sheet
+      if (allNewAsgRows.length > 0) {
+        asgSheet.getRange(existingAsg.length + 1, 1, allNewAsgRows.length, V2_ASSIGNMENTS_HEADERS.length).setValues(allNewAsgRows);
+      }
+    } else if (canUpdateAsgInPlace) {
+      var firstAsgIdx = matchedExistingAsgIndices[0];
+      var lastAsgIdx = matchedExistingAsgIndices[matchedExistingAsgIndices.length - 1];
+      var isContiguous = (lastAsgIdx - firstAsgIdx + 1 === matchedExistingAsgIndices.length);
+      if (isContiguous) {
+        var contiguousAsgRows = [];
+        for (var cIdx = 0; cIdx < matchedExistingAsgIndices.length; cIdx++) {
+          var rowId = String(existingAsg[matchedExistingAsgIndices[cIdx]][0]);
+          contiguousAsgRows.push(newAsgById[rowId]);
+        }
+        asgSheet.getRange(firstAsgIdx + 1, 1, contiguousAsgRows.length, V2_ASSIGNMENTS_HEADERS.length).setValues(contiguousAsgRows);
+      } else {
+        for (var nIdx = 0; nIdx < matchedExistingAsgIndices.length; nIdx++) {
+          var rIdx = matchedExistingAsgIndices[nIdx];
+          var rId = String(existingAsg[rIdx][0]);
+          asgSheet.getRange(rIdx + 1, 1, 1, V2_ASSIGNMENTS_HEADERS.length).setValues([newAsgById[rId]]);
+        }
+      }
+    } else {
+      if (typeof asgSheet.clearContents === "function") asgSheet.clearContents();
+      asgSheet.getRange(1, 1, updatedAsg.length, V2_ASSIGNMENTS_HEADERS.length).setValues(updatedAsg);
+    }
     return true;
   } catch (e) {
     console.warn("syncV2SheetsForAbsenceRows warning: " + e.message);

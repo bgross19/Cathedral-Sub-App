@@ -108,10 +108,18 @@ function enqueueEmail(to, subject, body, options) {
  * Processes the email queue. Runs periodically via a time-driven trigger.
  */
 function processEmailQueue() {
-  var lock = LockService.getScriptLock();
-  if (!lock.tryLock(30000)) {
-    console.warn("Could not obtain lock for processEmailQueue");
-    return;
+  var cache = (typeof CacheService !== "undefined" && CacheService && typeof CacheService.getScriptCache === "function")
+    ? CacheService.getScriptCache()
+    : null;
+  var mutexKey = "process_email_queue_mutex";
+  if (cache) {
+    try {
+      if (cache.get(mutexKey)) {
+        console.warn("processEmailQueue already running; skipping overlapping trigger.");
+        return;
+      }
+      cache.put(mutexKey, "1", 120);
+    } catch (cErr) {}
   }
 
   try {
@@ -122,14 +130,12 @@ function processEmailQueue() {
     var data = sheet.getDataRange().getValues();
     if (data.length <= 1) return; // Only headers
 
-    var statuses = [];
+    var hasPendingEmails = false;
     var needsScheduleLookup = false;
-    var settings = getSettings(ss);
-
-    // Check if any pending emails need schedule lookups
     for (var i = 1; i < data.length; i++) {
-    if (!data[i]) continue;
+      if (!data[i]) continue;
       if (data[i][5] === "Pending") {
+        hasPendingEmails = true;
         var body = String(data[i][3]);
         var optionsStr = String(data[i][4]);
         if (body.indexOf("{{ROOM|") !== -1 || body.indexOf("{{COURSE|") !== -1 ||
@@ -141,6 +147,11 @@ function processEmailQueue() {
         }
       }
     }
+
+    if (!hasPendingEmails) return;
+
+    var statuses = [];
+    var settings = getSettings(ss);
 
     var scheduleLookup = null;
     var snapshottedLookup = null;
@@ -264,39 +275,51 @@ function processEmailQueue() {
       }
     }
 
-    // Batch update statuses
-    sheet.getRange(1, 6, statuses.length, 1).setValues(statuses);
-
-    // Cleanup completed (Sent or Suppressed) emails while keeping Failed rows for inspection
-    var rowsToDelete = [];
-    for (let k = statuses.length - 1; k >= 1; k--) {
-      var status = String(statuses[k][0] || "");
-      if (status === "Sent" || status === "Suppressed (Off)") {
-         rowsToDelete.push(k + 1);
-      }
+    // Acquire ScriptLock ONLY for the brief sheet mutation phase (updating statuses & deleting sent rows)
+    var lock = LockService.getScriptLock();
+    var hasLock = lock.tryLock(30000);
+    if (!hasLock) {
+      console.warn("Could not obtain lock for processEmailQueue sheet cleanup");
     }
+    try {
+      // Batch update statuses
+      sheet.getRange(1, 6, statuses.length, 1).setValues(statuses);
 
-    // Delete from bottom up in contiguous batches
-    if (rowsToDelete.length > 0) {
-      var startRow = rowsToDelete[0];
-      var numRows = 1;
-
-      for (let j = 1; j < rowsToDelete.length; j++) {
-        if (rowsToDelete[j] === startRow - numRows) {
-          numRows++;
-        } else {
-          sheet.deleteRows(startRow - numRows + 1, numRows);
-          startRow = rowsToDelete[j];
-          numRows = 1;
+      // Cleanup completed (Sent or Suppressed) emails while keeping Failed rows for inspection
+      var rowsToDelete = [];
+      for (let k = statuses.length - 1; k >= 1; k--) {
+        var status = String(statuses[k][0] || "");
+        if (status === "Sent" || status === "Suppressed (Off)") {
+           rowsToDelete.push(k + 1);
         }
       }
-      sheet.deleteRows(startRow - numRows + 1, numRows);
+
+      // Delete from bottom up in contiguous batches
+      if (rowsToDelete.length > 0) {
+        var startRow = rowsToDelete[0];
+        var numRows = 1;
+
+        for (let j = 1; j < rowsToDelete.length; j++) {
+          if (rowsToDelete[j] === startRow - numRows) {
+            numRows++;
+          } else {
+            sheet.deleteRows(startRow - numRows + 1, numRows);
+            startRow = rowsToDelete[j];
+            numRows = 1;
+          }
+        }
+        sheet.deleteRows(startRow - numRows + 1, numRows);
+      }
+    } finally {
+      if (hasLock) lock.releaseLock();
     }
 
   } catch (e) {
     console.error("Error in processEmailQueue: " + e.message);
   } finally {
-    lock.releaseLock();
+    if (cache) {
+      try { cache.remove(mutexKey); } catch (cErr2) {}
+    }
   }
 }
 
@@ -365,7 +388,7 @@ function getEmailQueueStatus(clientEmail) {
 function retryFailedEmails(clientEmail) {
   var lock = LockService.getScriptLock();
   try {
-    lock.waitLock(10000);
+    lock.waitLock(30000);
   } catch (e) {
     notifyAdminOfError("retryFailedEmails_lock", e);
     return { success: false, error: "The server is currently busy. Please try again." };
@@ -425,7 +448,7 @@ function retryFailedEmails(clientEmail) {
 function clearFailedEmails(clientEmail) {
   var lock = LockService.getScriptLock();
   try {
-    lock.waitLock(10000);
+    lock.waitLock(30000);
   } catch (e) {
     notifyAdminOfError("clearFailedEmails_lock", e);
     return { success: false, error: "The server is currently busy. Please try again." };

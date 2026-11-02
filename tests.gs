@@ -1350,6 +1350,62 @@ function runTests() {
       assert(kqV2.assignmentRows[0][3] === "1", "Expected Period 1 value to be '1'");
       assert(kqV2.assignmentRows[0][6] === "FAITH IN FILMS (A)" && kqV2.assignmentRows[0][7] === "4239", "Expected Period 1 to resolve FAITH IN FILMS (A) and room 4239");
 
+      // Test 14: Incremental syncV2SheetsForAbsenceRows avoids clearContents on append and in-place sub assignment
+      var absClearCount = 0;
+      var asgClearCount = 0;
+      var incAbsData = [V2_ABSENCES_HEADERS];
+      var incAsgData = [V2_ASSIGNMENTS_HEADERS];
+      var incSS = {
+        getSheetByName: function(n) {
+          if (n === "Absences") {
+            return {
+              getDataRange: function() { return { getValues: function() { return incAbsData; } }; },
+              clearContents: function() { absClearCount++; },
+              getRange: function(r, c, nr, nc) {
+                return {
+                  setValues: function(vals) {
+                    for (var idx = 0; idx < vals.length; idx++) {
+                      incAbsData[r - 1 + idx] = vals[idx];
+                    }
+                  }
+                };
+              }
+            };
+          }
+          if (n === "Coverage_Assignments") {
+            return {
+              getDataRange: function() { return { getValues: function() { return incAsgData; } }; },
+              clearContents: function() { asgClearCount++; },
+              getRange: function(r, c, nr, nc) {
+                return {
+                  setValues: function(vals) {
+                    for (var idx = 0; idx < vals.length; idx++) {
+                      incAsgData[r - 1 + idx] = vals[idx];
+                    }
+                  }
+                };
+              }
+            };
+          }
+          return null;
+        }
+      };
+      var incRoster = [
+        ["Name", "Email", "Role", "Duty"],
+        ["Quenichet, Karrie A", "kquenichet@gocathedral.com", "Teacher", ""],
+        ["Kasberg, Cece", "ckasberg@gocathedral.com", "Teacher", ""]
+      ];
+      syncV2SheetsForAbsenceRows(incSS, [kqLegacyRow], kqScheduleLookup, incRoster, { "2026-11-02": "Green" }, { "Term ID": "3601" });
+      assert(absClearCount === 0 && asgClearCount === 0, "Expected incremental append to NOT call clearContents()");
+      assert(incAbsData.length === 2 && incAsgData.length === 3, "Expected 1 Absence row and 2 Coverage_Assignments rows appended");
+
+      // Update Period 1 sub assignment in-place without passing scheduleLookup (uses snapshotted course/room)
+      var kqUpdatedRow = kqLegacyRow.slice();
+      kqUpdatedRow[9] = "Kasberg, Cece";
+      syncV2SheetsForAbsenceRows(incSS, [kqUpdatedRow], null, incRoster, { "2026-11-02": "Green" }, { "Term ID": "3601" });
+      assert(absClearCount === 0 && asgClearCount === 0, "Expected in-place sub assignment sync to NOT call clearContents()");
+      assert(incAsgData[1][8] === "Assigned" && incAsgData[1][9] === "ckasberg@gocathedral.com" && incAsgData[1][10] === "Kasberg, Cece" && incAsgData[1][6] === "FAITH IN FILMS (A)", "Expected in-place assignment row update to preserve snapshotted course and update sub name");
+
       getSettings = origGetSettings;
       if (origUrlFetchApp !== undefined) global.UrlFetchApp = origUrlFetchApp;
 
