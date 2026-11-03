@@ -1458,14 +1458,26 @@ const data = payload.userData;
         currentConfirmCallback = null;
       }
 
-      function showDuplicateWarning(existingIndex) {
+      function showDuplicateWarning(existingIndex, adminReqId, onBehalfName) {
         const modal = document.getElementById('duplicateAbsenceModal');
+        const msgEl = modal ? modal.querySelector('p.text-gray-700') : null;
+        if (msgEl) {
+          if (adminReqId && onBehalfName) {
+            msgEl.innerText = `${onBehalfName} already has an absence request submitted for this day. Would you like to edit their existing request instead?`;
+          } else {
+            msgEl.innerText = "You already have an absence request submitted for this day. Would you like to edit your existing request instead?";
+          }
+        }
         modal.classList.remove('opacity-0', 'pointer-events-none');
         document.getElementById('duplicateModalEditBtn').onclick = () => {
           closeDuplicateWarning();
           toggleModal(); // Close the current creation form first
           setTimeout(() => {
-            editAbsence(existingIndex);
+            if (adminReqId && typeof openAdminEditModal === 'function') {
+              openAdminEditModal(adminReqId);
+            } else {
+              editAbsence(existingIndex);
+            }
           }, 100); // Give it a slight delay to allow the modal state to reset
         };
       }

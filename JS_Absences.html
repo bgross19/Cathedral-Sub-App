@@ -2178,8 +2178,9 @@
       }
 
       function openAdminEditModal(reqId) {
-         // Find the request from adminDataFiltered based on id
-         const req = adminDataFiltered.find(r => r.id === reqId);
+         // Find the request from adminDataFiltered or adminDataRaw based on id
+         const req = (Array.isArray(adminDataFiltered) && adminDataFiltered.find(r => r.id === reqId)) ||
+                     (Array.isArray(adminDataRaw) && adminDataRaw.find(r => r.id === reqId));
          if (!req) return;
 
          document.getElementById('requestModalTitle').innerText = "Edit Request (Admin)";
@@ -2412,26 +2413,70 @@
             return;
         }
 
-        // Duplicate Request Check
+        // Duplicate Request Check (check against the absent teacher, not the requester)
         if (!editId) {
             for (const req of requests) {
-                const duplicateIndex = myAbsencesData.findIndex(abs => {
-                    let existingDate = "";
-                    if (abs.formDateString) {
-                      existingDate = abs.formDateString;
-                    } else {
-                      let d = new Date(abs.rawDateString);
-                      let year = d.getFullYear();
-                      let month = String(d.getMonth() + 1).padStart(2, '0');
-                      let day = String(d.getDate()).padStart(2, '0');
-                      existingDate = `${year}-${month}-${day}`;
-                    }
-                    return existingDate === req.date;
-                });
+                const onBehalfNameTrimmed = req.onBehalfTeacher ? String(req.onBehalfTeacher).trim() : "";
+                if (onBehalfNameTrimmed !== "") {
+                    const targetTeacherLower = onBehalfNameTrimmed.toLowerCase();
+                    const matchedStaff = Array.isArray(staffList)
+                        ? staffList.find(s => s.name && (s.name.toLowerCase() === targetTeacherLower || s.name.toLowerCase().includes(targetTeacherLower)))
+                        : null;
+                    const targetEmailLower = matchedStaff && matchedStaff.email ? String(matchedStaff.email).toLowerCase().trim() : "";
+                    const targetCanonicalNameLower = matchedStaff && matchedStaff.name ? String(matchedStaff.name).toLowerCase().trim() : targetTeacherLower;
+                    const activeEmailLower = window.activeUserEmail ? String(window.activeUserEmail).toLowerCase().trim() : "";
 
-                if (duplicateIndex !== -1) {
-                    showDuplicateWarning(duplicateIndex);
-                    return;
+                    if (targetEmailLower && activeEmailLower && targetEmailLower === activeEmailLower) {
+                        const selfDupIdx = myAbsencesData.findIndex(abs => {
+                            let existingDate = "";
+                            if (abs.formDateString) {
+                              existingDate = abs.formDateString;
+                            } else {
+                              let d = new Date(abs.rawDateString);
+                              let year = d.getFullYear();
+                              let month = String(d.getMonth() + 1).padStart(2, '0');
+                              let day = String(d.getDate()).padStart(2, '0');
+                              existingDate = `${year}-${month}-${day}`;
+                            }
+                            return existingDate === req.date;
+                        });
+                        if (selfDupIdx !== -1) {
+                            showDuplicateWarning(selfDupIdx);
+                            return;
+                        }
+                    } else if (Array.isArray(adminDataRaw) && adminDataRaw.length > 0) {
+                        const adminDup = adminDataRaw.find(r => {
+                            const rDate = r.formDateString || r.date || "";
+                            if (rDate !== req.date) return false;
+                            const rEmail = String(r.teacherEmail || "").toLowerCase().trim();
+                            const rName = String(r.teacherName || "").toLowerCase().trim();
+                            if (targetEmailLower && rEmail === targetEmailLower) return true;
+                            return rName === targetCanonicalNameLower || rName.includes(targetTeacherLower);
+                        });
+                        if (adminDup && adminDup.id) {
+                            showDuplicateWarning(null, adminDup.id, adminDup.teacherName || onBehalfNameTrimmed);
+                            return;
+                        }
+                    }
+                } else {
+                    const duplicateIndex = myAbsencesData.findIndex(abs => {
+                        let existingDate = "";
+                        if (abs.formDateString) {
+                          existingDate = abs.formDateString;
+                        } else {
+                          let d = new Date(abs.rawDateString);
+                          let year = d.getFullYear();
+                          let month = String(d.getMonth() + 1).padStart(2, '0');
+                          let day = String(d.getDate()).padStart(2, '0');
+                          existingDate = `${year}-${month}-${day}`;
+                        }
+                        return existingDate === req.date;
+                    });
+
+                    if (duplicateIndex !== -1) {
+                        showDuplicateWarning(duplicateIndex);
+                        return;
+                    }
                 }
             }
         }
