@@ -2322,6 +2322,15 @@
         const isHidden = document.getElementById('onBehalfSection').classList.contains('hidden');
         const onBehalfTeacherName = isHidden ? null : document.getElementById('onBehalfTeacher').value;
 
+        const hasPickerDate = window.absDatePicker && Array.isArray(window.absDatePicker.selectedDates) && window.absDatePicker.selectedDates.length > 0;
+        const rawSingleDateVal = (document.getElementById('absDate').value || '').trim();
+        if (!hasPickerDate && !rawSingleDateVal) {
+           showToast("Please select at least 1 date for your absence request.", 'error');
+           const dateInputEl = document.getElementById('absDate');
+           if (dateInputEl) dateInputEl.focus();
+           return;
+        }
+
         if (!isHidden && !onBehalfTeacherName) {
            showToast("Please enter the teacher's name.", 'error');
            return;
@@ -2377,7 +2386,13 @@
                 selectedPeriods = "None";
             }
 
-            const newDateVal = document.getElementById('absDate').value;
+            const newDateVal = (document.getElementById('absDate').value || '').trim() ||
+                (hasPickerDate ? window.absDatePicker.formatDate(window.absDatePicker.selectedDates[0], "Y-m-d") : "");
+
+            if (!newDateVal) {
+                showToast("Please select at least 1 date for your absence request.", 'error');
+                return;
+            }
 
             requests.push({
                 date: newDateVal,
@@ -2390,6 +2405,11 @@
                 hrConfirmed: hrChecked,
                 onBehalfTeacher: onBehalfTeacherName
             });
+        }
+
+        if (requests.length === 0 || requests.some(req => !req.date || String(req.date).trim() === "")) {
+            showToast("Please select at least 1 date for your absence request.", 'error');
+            return;
         }
 
         // Duplicate Request Check

@@ -1413,6 +1413,14 @@ function runTests() {
       var v2CompatRes = readV2AbsenceDataCompat(incSS);
       assert(v2CompatRes.snapshottedScheduleLookup["kquenichet@gocathedral.com-1"].course === "FAITH IN FILMS (A)", "Expected snapshottedScheduleLookup to preserve course name");
 
+      // Test 16: Reject absence submission or update when date is missing or blank
+      var emptySingleRes = submitAbsence({ date: "   ", periods: "1, 2", reason: "PTO", duration: "Full Day" }, "kquenichet@gocathedral.com");
+      assert(emptySingleRes && emptySingleRes.success === false && emptySingleRes.error.indexOf("select at least 1 date") !== -1, "Expected submitAbsence to reject blank date");
+      var emptyMultiRes = submitMultipleAbsenceRequests([{ date: "", periods: "1", reason: "PTO", duration: "Half Day AM" }], "kquenichet@gocathedral.com");
+      assert(emptyMultiRes && emptyMultiRes.success === false && emptyMultiRes.error.indexOf("select at least 1 date") !== -1, "Expected submitMultipleAbsenceRequests to reject blank date");
+      var emptyUpdateRes = updateAbsence("96eeb4db-05b0-4657-bfe7-7967580116a4", { date: "", periods: "1", reason: "PTO", duration: "Full Day" }, "kquenichet@gocathedral.com");
+      assert(emptyUpdateRes && emptyUpdateRes.success === false && emptyUpdateRes.error.indexOf("select at least 1 date") !== -1, "Expected updateAbsence to reject blank date");
+
       getSettings = origGetSettings;
       if (origUrlFetchApp !== undefined) global.UrlFetchApp = origUrlFetchApp;
 

@@ -52,7 +52,12 @@ function calculateIsUrgentByTime(absenceDateStr, timestamp, ss) {
 
 function submitMultipleAbsenceRequests(requestsToSubmit, clientEmail) {
   if (!requestsToSubmit || requestsToSubmit.length === 0) {
-    return { success: true, count: 0 };
+    return { success: false, error: "Please select at least 1 date for your absence request." };
+  }
+  for (var vIdx = 0; vIdx < requestsToSubmit.length; vIdx++) {
+    if (!requestsToSubmit[vIdx] || !requestsToSubmit[vIdx].date || String(requestsToSubmit[vIdx].date).trim() === "") {
+      return { success: false, error: "Please select at least 1 date for your absence request." };
+    }
   }
   if (requestsToSubmit.length === 1) {
     var singleRes = submitAbsence(requestsToSubmit[0], typeof clientEmail !== 'undefined' ? clientEmail : undefined);
@@ -276,6 +281,9 @@ function submitMultipleAbsenceRequests(requestsToSubmit, clientEmail) {
 }
 
 function submitAbsence(formData, clientEmail) {
+  if (!formData || !formData.date || String(formData.date).trim() === "") {
+    return { success: false, error: "Please select at least 1 date for your absence request." };
+  }
   var lock = LockService.getScriptLock();
   var lockHeld = false;
   try {
@@ -750,6 +758,9 @@ function cancelAbsence(absenceId, clientEmail) {
  * Updates an absence request.
  */
 function updateAbsence(absenceId, formData, clientEmail) {
+  if (!formData || !formData.date || String(formData.date).trim() === "") {
+    return { success: false, error: "Please select at least 1 date for your absence request." };
+  }
   var lock = LockService.getScriptLock();
   var lockHeld = false;
   try {
