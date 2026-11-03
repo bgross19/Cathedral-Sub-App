@@ -71,7 +71,8 @@ function submitMultipleAbsenceRequests(requestsToSubmit, clientEmail) {
 
   try {
     var ss = getSS();
-    var mainSheet = getSheetOrThrow(ss, "Absence Requests");
+    var useV2Store = typeof hasV2AbsenceSheets === "function" && hasV2AbsenceSheets(ss);
+    var mainSheet = useV2Store ? null : getSheetOrThrow(ss, "Absence Requests");
     var timestamp = new Date();
     var submitterEmail = getActiveUserEmail(typeof clientEmail !== 'undefined' ? clientEmail : undefined);
     var submitterData = getUserData(ss, typeof clientEmail !== 'undefined' ? clientEmail : undefined);
@@ -145,14 +146,15 @@ function submitMultipleAbsenceRequests(requestsToSubmit, clientEmail) {
     }
 
     if (rowsToAppend.length > 0) {
-      var startRow = mainSheet.getLastRow() + 1;
-      var periodsBatchRange = mainSheet.getRange(startRow, 5, rowsToAppend.length, 1);
-      if (periodsBatchRange && typeof periodsBatchRange.setNumberFormat === "function") {
-        periodsBatchRange.setNumberFormat("@");
-      }
-      mainSheet.getRange(startRow, 1, rowsToAppend.length, rowsToAppend[0].length).setValues(rowsToAppend);
-      if (typeof syncV2SheetsForAbsenceRows === "function") {
+      if (useV2Store) {
         syncV2SheetsForAbsenceRows(ss, rowsToAppend, null, rosterData, null, settings);
+      } else {
+        var startRow = mainSheet.getLastRow() + 1;
+        var periodsBatchRange = mainSheet.getRange(startRow, 5, rowsToAppend.length, 1);
+        if (periodsBatchRange && typeof periodsBatchRange.setNumberFormat === "function") {
+          periodsBatchRange.setNumberFormat("@");
+        }
+        mainSheet.getRange(startRow, 1, rowsToAppend.length, rowsToAppend[0].length).setValues(rowsToAppend);
       }
       if (lockHeld) {
         lock.releaseLock();
@@ -287,7 +289,8 @@ function submitAbsence(formData, clientEmail) {
 
   try {
     var ss = getSS();
-    var mainSheet = getSheetOrThrow(ss, "Absence Requests");
+    var useV2Store = typeof hasV2AbsenceSheets === "function" && hasV2AbsenceSheets(ss);
+    var mainSheet = useV2Store ? null : getSheetOrThrow(ss, "Absence Requests");
     
     var timestamp = new Date();
     var submitterEmail = getActiveUserEmail(typeof clientEmail !== 'undefined' ? clientEmail : undefined);
@@ -335,14 +338,15 @@ function submitAbsence(formData, clientEmail) {
       formData.reason, formData.duration, urgencyFormatted, instructions,
       "", "", "", "", "", "", "", "", "", "", "Active", subPlanUrl, "[]"
     ];
-    var nextRowIdx = mainSheet.getLastRow() + 1;
-    var singlePeriodRange = mainSheet.getRange(nextRowIdx, 5, 1, 1);
-    if (singlePeriodRange && typeof singlePeriodRange.setNumberFormat === "function") {
-      singlePeriodRange.setNumberFormat("@");
-    }
-    mainSheet.appendRow(newRow);
-    if (typeof syncV2SheetsForAbsenceRows === "function") {
+    if (useV2Store) {
       syncV2SheetsForAbsenceRows(ss, [newRow], null, rosterData, null, settings);
+    } else {
+      var nextRowIdx = mainSheet.getLastRow() + 1;
+      var singlePeriodRange = mainSheet.getRange(nextRowIdx, 5, 1, 1);
+      if (singlePeriodRange && typeof singlePeriodRange.setNumberFormat === "function") {
+        singlePeriodRange.setNumberFormat("@");
+      }
+      mainSheet.appendRow(newRow);
     }
     if (lockHeld) {
       lock.releaseLock();
@@ -486,13 +490,14 @@ function cancelMySubDuty(absenceId, period, clientEmail) {
 
   try {
     var ss = getSS();
-    var sheet = getSheetOrThrow(ss, "Absence Requests");
+    var useV2Store = typeof hasV2AbsenceSheets === "function" && hasV2AbsenceSheets(ss);
+    var sheet = useV2Store ? null : getSheetOrThrow(ss, "Absence Requests");
 
     var userEmail = getActiveUserEmail(typeof clientEmail !== 'undefined' ? clientEmail : undefined).toLowerCase();
     var userData = getUserData(ss, typeof clientEmail !== 'undefined' ? clientEmail : undefined);
     var userName = String(userData.name).trim();
 
-    var data = sheet.getDataRange().getValues();
+    var data = useV2Store ? readAbsenceDataFromStore(ss) : sheet.getDataRange().getValues();
     var targetUserName = userName.toLowerCase();
     for (var i = 1; i < data.length; i++) {
     if (!data[i]) continue;
@@ -509,10 +514,11 @@ function cancelMySubDuty(absenceId, period, clientEmail) {
           var scheduleLookup = null; // Deferred to email queue to save time
           var details = getAbsenceDetailsLocal(data[i], period, scheduleLookup, nameLookup);
 
-          sheet.getRange(i + 1, subColumnIndex).setValue("");
           data[i][subColumnIndex - 1] = "";
-          if (typeof syncV2SheetsForAbsenceRows === "function") {
+          if (useV2Store) {
             syncV2SheetsForAbsenceRows(ss, [data[i]], null, rosterData, null, settings);
+          } else {
+            sheet.getRange(i + 1, subColumnIndex).setValue("");
           }
           if (lockHeld) {
             lock.releaseLock();
@@ -642,7 +648,8 @@ function cancelAbsence(absenceId, clientEmail) {
 
   try {
     var ss = getSS();
-    var sheet = getSheetOrThrow(ss, "Absence Requests");
+    var useV2Store = typeof hasV2AbsenceSheets === "function" && hasV2AbsenceSheets(ss);
+    var sheet = useV2Store ? null : getSheetOrThrow(ss, "Absence Requests");
 
     var rosterData = getRosterDataCached(ss);
     var settings = getSettings(ss);
@@ -656,7 +663,7 @@ function cancelAbsence(absenceId, clientEmail) {
     var scheduleLookup = null; // Deferred to email queue to save time
     var nameLookup = buildNameLookup(rosterData);
 
-    var data = sheet.getDataRange().getValues();
+    var data = useV2Store ? readAbsenceDataFromStore(ss) : sheet.getDataRange().getValues();
     var targetIndex = -1;
     for (var i = 1; i < data.length; i++) {
     if (!data[i]) continue;
@@ -676,10 +683,11 @@ function cancelAbsence(absenceId, clientEmail) {
         assertPermission(user, "Admin Dashboard", "Unauthorized to cancel this absence.");
       }
 
-      sheet.getRange(i + 1, 20).setValue("Canceled");
       data[i][19] = "Canceled";
-      if (typeof syncV2SheetsForAbsenceRows === "function") {
+      if (useV2Store) {
         syncV2SheetsForAbsenceRows(ss, [data[i]], null, rosterData, null, settings);
+      } else {
+        sheet.getRange(i + 1, 20).setValue("Canceled");
       }
       if (lockHeld) {
         lock.releaseLock();
@@ -755,7 +763,8 @@ function updateAbsence(absenceId, formData, clientEmail) {
 
   try {
     var ss = getSS();
-    var sheet = getSheetOrThrow(ss, "Absence Requests");
+    var useV2Store = typeof hasV2AbsenceSheets === "function" && hasV2AbsenceSheets(ss);
+    var sheet = useV2Store ? null : getSheetOrThrow(ss, "Absence Requests");
 
     var rosterData = getRosterDataCached(ss);
     var settings = getSettings(ss);
@@ -769,7 +778,7 @@ function updateAbsence(absenceId, formData, clientEmail) {
     var scheduleLookup = null; // Deferred to email queue to save time
     var nameLookup = buildNameLookup(rosterData);
 
-    var data = sheet.getDataRange().getValues();
+    var data = useV2Store ? readAbsenceDataFromStore(ss) : sheet.getDataRange().getValues();
     var targetIndex = -1;
     for (var i = 1; i < data.length; i++) {
     if (!data[i]) continue;
@@ -881,21 +890,24 @@ function updateAbsence(absenceId, formData, clientEmail) {
          updatedRowBlock[subClearUpdates[s] - 3] = "";
       }
 
-      // Single API call to update both the basic info and all sub clearing at once
-      var updatePeriodRange = sheet.getRange(i + 1, 5, 1, 1);
-      if (updatePeriodRange && typeof updatePeriodRange.setNumberFormat === "function") {
-        updatePeriodRange.setNumberFormat("@");
-      }
-      sheet.getRange(i + 1, 4, 1, 16).setValues([updatedRowBlock]);
       for (var blkIdx = 0; blkIdx < updatedRowBlock.length; blkIdx++) {
         data[i][3 + blkIdx] = updatedRowBlock[blkIdx];
       }
       if (formData.subPlanUrl !== undefined) {
-        sheet.getRange(i + 1, 21).setValue(newSubPlanUrl);
         data[i][20] = newSubPlanUrl;
       }
-      if (typeof syncV2SheetsForAbsenceRows === "function") {
+      if (useV2Store) {
         syncV2SheetsForAbsenceRows(ss, [data[i]], null, rosterData, null, settings);
+      } else {
+        // Single API call to update both the basic info and all sub clearing at once
+        var updatePeriodRange = sheet.getRange(i + 1, 5, 1, 1);
+        if (updatePeriodRange && typeof updatePeriodRange.setNumberFormat === "function") {
+          updatePeriodRange.setNumberFormat("@");
+        }
+        sheet.getRange(i + 1, 4, 1, 16).setValues([updatedRowBlock]);
+        if (formData.subPlanUrl !== undefined) {
+          sheet.getRange(i + 1, 21).setValue(newSubPlanUrl);
+        }
       }
       if (lockHeld) {
         lock.releaseLock();
@@ -964,9 +976,8 @@ function getAbsenceDetails(absenceId, period, optionalData, clientEmail) {
   if (optionalData && Array.isArray(optionalData) && optionalData.length > 0) {
     data = optionalData;
   } else {
-    var sheet = getSheetOrThrow(ss, "Absence Requests");
-    if (!sheet) return null;
-    data = sheet.getDataRange().getValues();
+    data = readAbsenceDataFromStore(ss);
+    if (!data || data.length === 0) return null;
   }
 
   if (!_cachedNameLookup) {
@@ -1024,7 +1035,8 @@ function assignSubToPeriod(absenceId, period, subName, forceOverride, clientEmai
 
   try {
     var ss = getSS();
-    var sheet = getSheetOrThrow(ss, "Absence Requests");
+    var useV2Store = typeof hasV2AbsenceSheets === "function" && hasV2AbsenceSheets(ss);
+    var sheet = useV2Store ? null : getSheetOrThrow(ss, "Absence Requests");
     var callerUser = getUserData(ss, typeof clientEmail !== 'undefined' ? clientEmail : undefined);
     var callerRoleLower = String(callerUser.role || "").toLowerCase().trim();
     var settingsForPerm = getSettings(ss);
@@ -1048,7 +1060,7 @@ function assignSubToPeriod(absenceId, period, subName, forceOverride, clientEmai
     var nameLookup = buildNameLookup(rosterData);
 
     // Re-read data under lock
-    var data = sheet.getDataRange().getValues();
+    var data = useV2Store ? readAbsenceDataFromStore(ss) : sheet.getDataRange().getValues();
 
     var targetIndex = -1;
     for (var i = 1; i < data.length; i++) {
@@ -1262,10 +1274,11 @@ function assignSubToPeriod(absenceId, period, subName, forceOverride, clientEmai
       }
 
       // Write the subname
-      sheet.getRange(i + 1, subColumnIndex).setValue(newSub);
       data[i][subColumnIndex - 1] = newSub;
-      if (typeof syncV2SheetsForAbsenceRows === "function") {
+      if (useV2Store) {
         syncV2SheetsForAbsenceRows(ss, [data[i]], null, rosterData, null, settingsForPerm);
+      } else {
+        sheet.getRange(i + 1, subColumnIndex).setValue(newSub);
       }
       if (lockHeld) {
         lock.releaseLock();
@@ -1312,7 +1325,8 @@ function saveSubFeedback(absenceId, period, rating, note, clientEmail) {
 
   try {
     var ss = getSS();
-    var sheet = getSheetOrThrow(ss, "Absence Requests");
+    var useV2Store = typeof hasV2AbsenceSheets === "function" && hasV2AbsenceSheets(ss);
+    var sheet = useV2Store ? null : getSheetOrThrow(ss, "Absence Requests");
 
     var email = getActiveUserEmail(typeof clientEmail !== 'undefined' ? clientEmail : undefined);
     var targetEmail = String(email).toLowerCase();
@@ -1328,7 +1342,7 @@ function saveSubFeedback(absenceId, period, rating, note, clientEmail) {
        }
     }
 
-    var data = sheet.getDataRange().getValues();
+    var data = useV2Store ? readAbsenceDataFromStore(ss) : sheet.getDataRange().getValues();
     var targetIndex = -1;
     for (var i = 1; i < data.length; i++) {
     if (!data[i]) continue;
@@ -1374,14 +1388,17 @@ function saveSubFeedback(absenceId, period, rating, note, clientEmail) {
     }
 
     // Write Sub Feedback to Column 22 (index 21), keeping Column 21 (index 20) for Sub Plan URL
-    sheet.getRange(targetIndex + 1, 22).setValue(JSON.stringify(subFeedbackParsed));
     row[21] = JSON.stringify(subFeedbackParsed);
     if (row.length > 20 && String(row[20] || "").trim().indexOf("[") === 0) {
-       sheet.getRange(targetIndex + 1, 21).setValue("");
        row[20] = "";
     }
-    if (typeof syncV2SheetsForAbsenceRows === "function") {
+    if (useV2Store) {
       syncV2SheetsForAbsenceRows(ss, [row], null, rosterData);
+    } else {
+      sheet.getRange(targetIndex + 1, 22).setValue(JSON.stringify(subFeedbackParsed));
+      if (row.length > 20 && row[20] === "") {
+         sheet.getRange(targetIndex + 1, 21).setValue("");
+      }
     }
     if (lockHeld) {
       lock.releaseLock();

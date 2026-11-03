@@ -526,9 +526,10 @@ function batchAssignSubs(assignments, clientEmail) {
         return { success: false, error: "Insufficient permissions to assign substitutes." };
     }
 
-    var reqSheet = getSheetOrThrow(ss, "Absence Requests");
-    if (!reqSheet) return { success: false, error: "Absence Requests sheet not found." };
-    var data = reqSheet.getDataRange().getValues();
+    var useV2Store = typeof hasV2AbsenceSheets === "function" && hasV2AbsenceSheets(ss);
+    var reqSheet = useV2Store ? null : getSheetOrThrow(ss, "Absence Requests");
+    if (!useV2Store && !reqSheet) return { success: false, error: "Absence Requests sheet not found." };
+    var data = useV2Store ? readAbsenceDataFromStore(ss) : reqSheet.getDataRange().getValues();
 
     var rosterSheet = getSheetOrThrow(ss, "Staff Roster");
     if (!rosterSheet) return { success: false, error: "Staff Roster sheet not found." };
@@ -657,11 +658,14 @@ function batchAssignSubs(assignments, clientEmail) {
        }
     }
 
-    // Apply all updates at once with a single setValues call
+    // Apply all updates at once
     if (hasChanges && data.length > 0) {
-        reqSheet.getRange(1, 1, data.length, data[0].length).setValues(data);
-        if (typeof syncV2SheetsForAbsenceRows === "function" && modifiedRows.length > 0) {
-            syncV2SheetsForAbsenceRows(ss, modifiedRows, null, rosterData, null, settings);
+        if (useV2Store) {
+            if (modifiedRows.length > 0) {
+                syncV2SheetsForAbsenceRows(ss, modifiedRows, null, rosterData, null, settings);
+            }
+        } else {
+            reqSheet.getRange(1, 1, data.length, data[0].length).setValues(data);
         }
     }
     if (lockHeld) {

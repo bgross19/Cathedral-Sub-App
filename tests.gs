@@ -1406,6 +1406,13 @@ function runTests() {
       assert(absClearCount === 0 && asgClearCount === 0, "Expected in-place sub assignment sync to NOT call clearContents()");
       assert(incAsgData[1][8] === "Assigned" && incAsgData[1][9] === "ckasberg@gocathedral.com" && incAsgData[1][10] === "Kasberg, Cece" && incAsgData[1][6] === "FAITH IN FILMS (A)", "Expected in-place assignment row update to preserve snapshotted course and update sub name");
 
+      // Test 15: V2-Only Store (when "Absence Requests" sheet does NOT exist)
+      var v2OnlyReadData = readAbsenceDataFromStore(incSS);
+      assert(v2OnlyReadData && v2OnlyReadData.length === 2, "Expected readAbsenceDataFromStore to read 1 absence row + header from V2 sheets without 'Absence Requests'");
+      assert(v2OnlyReadData[1][0] === "96eeb4db-05b0-4657-bfe7-7967580116a4" && v2OnlyReadData[1][9] === "Kasberg, Cece", "Expected compatibility row from V2 store to include Period 1 sub 'Kasberg, Cece'");
+      var v2CompatRes = readV2AbsenceDataCompat(incSS);
+      assert(v2CompatRes.snapshottedScheduleLookup["kquenichet@gocathedral.com-1"].course === "FAITH IN FILMS (A)", "Expected snapshottedScheduleLookup to preserve course name");
+
       getSettings = origGetSettings;
       if (origUrlFetchApp !== undefined) global.UrlFetchApp = origUrlFetchApp;
 

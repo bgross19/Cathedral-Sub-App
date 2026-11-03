@@ -729,8 +729,7 @@ function exportAllAbsenceRequests(clientEmail) {
     var user = getUserData(ss, typeof clientEmail !== 'undefined' ? clientEmail : undefined);
     assertRole(user, "admin");
 
-    var sheet = getSheetOrThrow(ss, "Absence Requests");
-    var data = sheet.getDataRange().getValues();
+    var data = readAbsenceDataFromStore(ss);
 
     return JSON.stringify(data);
   } catch (err) {
@@ -757,15 +756,17 @@ function archiveAbsenceRequests(cutoffDateStr, clientEmail) {
     var user = getUserData(ss, typeof clientEmail !== 'undefined' ? clientEmail : undefined);
     assertRole(user, "admin");
 
-    var mainSheet = getSheetOrThrow(ss, "Absence Requests");
+    var useV2Store = typeof hasV2AbsenceSheets === "function" && hasV2AbsenceSheets(ss);
+    var mainSheet = useV2Store ? null : getSheetOrThrow(ss, "Absence Requests");
+    var data = useV2Store ? readAbsenceDataFromStore(ss) : mainSheet.getDataRange().getValues();
+
     var archiveSheet = ss.getSheetByName("Archived Data");
     if (!archiveSheet) {
       archiveSheet = ss.insertSheet("Archived Data");
-      var headersRow = mainSheet.getRange(1, 1, 1, mainSheet.getLastColumn()).getValues()[0];
+      var headersRow = (data && data.length > 0) ? data[0] : mainSheet.getRange(1, 1, 1, mainSheet.getLastColumn()).getValues()[0];
       archiveSheet.getRange(1, 1, 1, headersRow.length).setValues([headersRow]);
     }
 
-    var data = mainSheet.getDataRange().getValues();
     if (data.length <= 1) {
       return {
       success: true, count: 0 };
@@ -777,6 +778,7 @@ function archiveAbsenceRequests(cutoffDateStr, clientEmail) {
 
     var rowsToKeep = [headers];
     var rowsToArchive = [];
+    var archivedIds = {};
 
     for (var i = 1; i < data.length; i++) {
     if (!data[i]) continue;
@@ -785,6 +787,7 @@ function archiveAbsenceRequests(cutoffDateStr, clientEmail) {
 
       if (!isNaN(rowDate.getTime()) && rowDate < cutoffDate) {
         rowsToArchive.push(row);
+        archivedIds[String(row[0] || "").trim()] = true;
       } else {
         rowsToKeep.push(row);
       }
@@ -794,10 +797,37 @@ function archiveAbsenceRequests(cutoffDateStr, clientEmail) {
       var startRow = archiveSheet.getLastRow() + 1;
       archiveSheet.getRange(startRow, 1, rowsToArchive.length, rowsToArchive[0].length).setValues(rowsToArchive);
 
-      mainSheet.clearContents();
-      mainSheet.getRange(1, 1, rowsToKeep.length, rowsToKeep[0].length).setValues(rowsToKeep);
-      if (typeof hasV2AbsenceSheets === "function" && hasV2AbsenceSheets(ss) && typeof rebuildAllV2AbsenceSheets === "function") {
-        rebuildAllV2AbsenceSheets(ss);
+      if (useV2Store) {
+        var absSheet = ss.getSheetByName("Absences");
+        var asgSheet = ss.getSheetByName("Coverage_Assignments");
+        var absData = absSheet.getDataRange().getValues();
+        var absKeep = [absData[0] || V2_ABSENCES_HEADERS];
+        for (var ai = 1; ai < absData.length; ai++) {
+          var aId = String(absData[ai][0] || "").trim();
+          if (aId && !archivedIds[aId]) {
+            absKeep.push(absData[ai]);
+          }
+        }
+        absSheet.clearContents();
+        absSheet.getRange(1, 1, absKeep.length, absKeep[0].length).setValues(absKeep);
+
+        var asgData = asgSheet.getDataRange().getValues();
+        var asgKeep = [asgData[0] || V2_ASSIGNMENTS_HEADERS];
+        for (var gi = 1; gi < asgData.length; gi++) {
+          var gAbsId = String(asgData[gi][1] || "").trim();
+          if (gAbsId && !archivedIds[gAbsId]) {
+            asgKeep.push(asgData[gi]);
+          }
+        }
+        asgSheet.clearContents();
+        var asgPdRange = asgSheet.getRange(1, 4, asgKeep.length, 1);
+        if (asgPdRange && typeof asgPdRange.setNumberFormat === "function") {
+          asgPdRange.setNumberFormat("@");
+        }
+        asgSheet.getRange(1, 1, asgKeep.length, asgKeep[0].length).setValues(asgKeep);
+      } else {
+        mainSheet.clearContents();
+        mainSheet.getRange(1, 1, rowsToKeep.length, rowsToKeep[0].length).setValues(rowsToKeep);
       }
 
       logAuditAction("ARCHIVE_DATA", "N/A", "Archived " + rowsToArchive.length + " absence requests older than " + cutoffDateStr, clientEmail);

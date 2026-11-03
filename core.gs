@@ -451,7 +451,7 @@ function syncV2SheetsForAbsenceRows(ss, legacyRows, optionalScheduleLookup, opti
 
     var scheduleLookup = optionalScheduleLookup;
     if (!scheduleLookup) {
-      // Check if existing Coverage_Assignments already has snapshotted course/room for all target rows & periods
+      // Check if existing Coverage_Assignments already has snapshotted course/room for all target rows, dates & periods
       var snapshottedByAbsPeriod = {};
       if (existingAsgRaw && existingAsgRaw.length > 1) {
         for (var sIdx = 1; sIdx < existingAsgRaw.length; sIdx++) {
@@ -459,11 +459,12 @@ function syncV2SheetsForAbsenceRows(ss, legacyRows, optionalScheduleLookup, opti
           if (!sRow || !sRow[1]) continue;
           var sAbsId = String(sRow[1]);
           if (preliminaryTargetIds[sAbsId]) {
+            var sDate = getStandardizedDateString(sRow[2]) || String(sRow[2] || "").trim();
             var sPd = getScheduleJoinPeriod(sRow[3]);
             var sCourse = String(sRow[6] || "").trim();
             var sRoom = String(sRow[7] || "").trim();
             if (sPd) {
-              snapshottedByAbsPeriod[sAbsId + "|" + sPd] = { course: sCourse || "No Class Assigned", room: sRoom || "No Class Assigned" };
+              snapshottedByAbsPeriod[sAbsId + "|" + sDate + "|" + sPd] = { course: sCourse || "No Class Assigned", room: sRoom || "No Class Assigned" };
             }
           }
         }
@@ -476,10 +477,15 @@ function syncV2SheetsForAbsenceRows(ss, legacyRows, optionalScheduleLookup, opti
         if (!lRow || !lRow[0]) continue;
         var lAbsId = String(lRow[0]);
         var lEmail = String(lRow[2] || "").trim().toLowerCase();
-        var lPds = normalizePeriodsListValue(lRow[4]).split(",").map(function(p) { return p.trim(); }).filter(function(p) { return p !== ""; });
+        var lDate = getStandardizedDateString(lRow[3]) || String(lRow[3] || "").trim();
+        var lPds = normalizePeriodsListValue(lRow[4]).split(",").map(function(p) { return p.trim(); }).filter(function(p) { return p !== "" && p.toLowerCase() !== "none"; });
+        if (lPds.length === 0) {
+          allPeriodsSnapshotted = false;
+          break;
+        }
         for (var lp = 0; lp < lPds.length; lp++) {
           var joinPd = getScheduleJoinPeriod(parsePeriod(lPds[lp]));
-          var snap = snapshottedByAbsPeriod[lAbsId + "|" + joinPd];
+          var snap = snapshottedByAbsPeriod[lAbsId + "|" + lDate + "|" + joinPd];
           if (snap && lEmail) {
             syntheticLookup[lEmail + "-" + joinPd] = snap;
           } else {
@@ -698,7 +704,7 @@ function readV2AbsenceDataCompat(ss) {
 
   var absValues = absSheet.getDataRange().getValues();
   var asgValues = asgSheet.getDataRange().getValues();
-  if (!absValues || absValues.length <= 1) return null;
+  if (!absValues || absValues.length === 0) return null;
 
   var assignmentsByAbsenceId = {};
   var snapshottedScheduleLookup = {};
@@ -831,6 +837,29 @@ function readV2AbsenceDataCompat(ss) {
     rawAbsences: absValues,
     rawAssignments: asgValues
   };
+}
+
+/**
+ * Primary read helper for absence records across the application.
+ * Reads directly from the normalized v2 tables (`Absences` + `Coverage_Assignments`),
+ * falling back to legacy `Absence Requests` only if the v2 sheets are absent (e.g. in legacy test mocks).
+ */
+function readAbsenceDataFromStore(ss) {
+  ss = ss || getSS();
+  var v2Compat = readV2AbsenceDataCompat(ss);
+  if (v2Compat && Array.isArray(v2Compat.absenceData)) {
+    return v2Compat.absenceData;
+  }
+  var legacySheet = ss && typeof ss.getSheetByName === "function" ? ss.getSheetByName("Absence Requests") : null;
+  if (legacySheet && typeof legacySheet.getDataRange === "function") {
+    return legacySheet.getDataRange().getValues();
+  }
+  return [[
+    "ID", "Timestamp", "Email", "Date", "Periods", "Reason", "Duration",
+    "Urgency", "Instructions", "Period 1 Sub", "Period 2 Sub", "Period 3 Sub",
+    "Period 4 Sub", "Period 5 Sub", "Period 6 Sub", "Period 7 Sub", "Period 8 Sub",
+    "Period 0 Sub", "Advisory Sub", "Status", "Sub Plan URL", "Sub Feedback"
+  ]];
 }
 
 /**
