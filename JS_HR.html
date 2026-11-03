@@ -64,7 +64,7 @@
               const ppSelect = document.getElementById('hrPayPeriodSelect');
               ppContainer.classList.remove('hidden');
 
-              let html = `<option value="custom">Custom Range</option>`;
+              let html = `<option value="custom">Custom Range</option><option value="ytd">School Year to Date</option>`;
               let selectedIdx = -1;
 
               // Find the most recently completed pay period
@@ -162,7 +162,13 @@
       function applyPayPeriodSelection() {
          const ppSelect = document.getElementById('hrPayPeriodSelect');
          const val = ppSelect.value;
-         if (val !== "custom" && hrPayPeriods[val]) {
+         if (val === "ytd" && hrPayPeriods.length > 0) {
+             const today = new Date();
+             const offset = today.getTimezoneOffset() * 60000;
+             const todayStr = new Date(today - offset).toISOString().split('T')[0];
+             document.getElementById('hrFilterStartDate').value = hrPayPeriods[0].startDate;
+             document.getElementById('hrFilterEndDate').value = todayStr;
+         } else if (val !== "custom" && hrPayPeriods[val]) {
              document.getElementById('hrFilterStartDate').value = hrPayPeriods[val].startDate;
              document.getElementById('hrFilterEndDate').value = hrPayPeriods[val].endDate;
          }
@@ -183,7 +189,7 @@
           btn.classList.remove('hidden');
 
           const val = ppSelect.value;
-          if (val === "custom") {
+          if (val === "custom" || val === "ytd") {
               btn.disabled = true;
               btn.title = "Cannot approve a custom date range";
               btn.innerHTML = `<span>❌</span> Custom Range`;
@@ -267,8 +273,9 @@
         const startDateStr = document.getElementById('hrFilterStartDate').value;
         const endDateStr = document.getElementById('hrFilterEndDate').value;
 
-        // Filter data by date range
+        // Filter data by date range (skipping any malformed or empty-date records)
         let filteredData = hrDataRaw.filter(req => {
+          if (!req || !req.date || !/^\d{4}-\d{2}-\d{2}$/.test(String(req.date).trim())) return false;
           let match = true;
           if (startDateStr && req.date < startDateStr) match = false;
           if (endDateStr && req.date > endDateStr) match = false;
@@ -285,6 +292,7 @@
         let dynamicReasons = [...expectedReasons];
 
         if (hrCurrentView === 'absences') {
+            let teacherDateHours = {};
             filteredData.forEach(req => {
                 let teacher = req.teacherName;
                 if (!aggregated[teacher]) {
@@ -292,7 +300,12 @@
                     // Initialize all expected reasons
                     expectedReasons.forEach(r => aggregated[teacher][r] = 0);
                 }
-                let hours = (req.duration && String(req.duration).startsWith('Half Day') ? 4 : 8);
+                let rawHours = (req.duration && String(req.duration).startsWith('Half Day') ? 4 : 8);
+                let dayKey = teacher + "|" + req.date;
+                let usedDayHours = teacherDateHours[dayKey] || 0;
+                let hours = Math.min(rawHours, Math.max(0, 8 - usedDayHours));
+                if (hours <= 0) return;
+                teacherDateHours[dayKey] = usedDayHours + hours;
 
                 let reason = req.reason ? req.reason.trim() : "Other";
                 let matchedReason = null;

@@ -1176,10 +1176,10 @@ const data = payload.userData;
             if (perms["HR Dashboard"]) {
               document.getElementById('navHRBtn').classList.remove('hidden');
               if (payload.hrData) {
-                  hrDataRaw = payload.hrData.requests || [];
-                  hrPayPeriods = payload.hrData.payPeriods || [];
-                  hrDateColors = payload.dateColors || payload.hrData.dateColors || {};
-                  hrRates = payload.hrData.rates || { green: 10, blueGold: 20, special: "[]" };
+                  if (!payload.hrData.dateColors && payload.dateColors) {
+                      payload.hrData.dateColors = payload.dateColors;
+                  }
+                  renderHRDashboardData(payload.hrData);
               }
             }
 

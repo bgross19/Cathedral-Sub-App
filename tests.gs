@@ -1443,6 +1443,36 @@ function runTests() {
       var adminPayload = getInitialPayload("admin@gocathedral.com", ["staffList"]);
       assert(adminPayload && Array.isArray(adminPayload.staffList) && adminPayload.staffList.length > 0, "Expected getInitialPayload(['staffList']) to return populated staffList");
 
+      // Test 20: getInitialPayload includes historical absences older than Data Fetch Window in hrData while filtering adminData
+      mockSheetsForPayroll["Absences"] = {
+        getDataRange: function() {
+          return {
+            getValues: function() {
+              return [
+                V2_ABSENCES_HEADERS,
+                ["hist-aug-id", "8/10/2026", "2026-08-14", "kquenichet@gocathedral.com", "Quenichet, Karrie A", "Full Day", "PTO", "Standard (Advanced Notice)", "Active", "FALSE", "kquenichet@gocathedral.com", "", ""]
+              ];
+            }
+          };
+        }
+      };
+      mockSheetsForPayroll["Coverage_Assignments"] = {
+        getDataRange: function() {
+          return {
+            getValues: function() {
+              return [
+                V2_ASSIGNMENTS_HEADERS,
+                ["hist-aug-id_P1", "hist-aug-id", "2026-08-14", "1", "kquenichet@gocathedral.com", "Quenichet, Karrie A", "ALGEBRA II (H)", "2310", "Assigned", "cwillis@gocathedral.com", "Willis, Chelsea", "Green", "10", "", ""]
+              ];
+            }
+          };
+        }
+      };
+      var hrPayload = getInitialPayload("admin@gocathedral.com", ["hrData", "adminData"]);
+      assert(hrPayload && hrPayload.hrData && Array.isArray(hrPayload.hrData.requests), "Expected hrData.requests array");
+      var foundHistInHr = hrPayload.hrData.requests.some(function(r) { return r.id === "hist-aug-id" && r.date === "2026-08-14"; });
+      assert(foundHistInHr === true, "Expected hrData.requests to include historical absence older than Data Fetch Window");
+
       getSettings = origGetSettings;
       if (origUrlFetchApp !== undefined) global.UrlFetchApp = origUrlFetchApp;
 

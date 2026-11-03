@@ -509,7 +509,9 @@ function getInitialPayload(clientEmail, requestedComponents) {
       }
 
       // 3c. Admin Dashboard Data & HR Dashboard Requests (single pass)
-      if (isWithinWindow && (wantAdminData || wantHrData)) {
+      // Note: hrData intentionally includes all valid historical dates (not restricted by isWithinWindow)
+      // so HR and Admins can view and audit any pay period or full school-year totals.
+      if ((isWithinWindow && wantAdminData) || wantHrData) {
         var rawRosterTeacherName = nameLookup[rowTeacherEmail] || rowTeacherEmail;
         var pdsTokens = periodsStrRaw.split(',').map(function(p) { return p.trim(); });
         var hrAssignedSubs = wantHrData ? [] : null;
@@ -523,7 +525,7 @@ function getInitialPayload(clientEmail, requestedComponents) {
           var assignedSubVal = (subColOneBased > 0 && subColOneBased <= row.length) ? String(row[subColOneBased - 1] || "").trim() : "";
           var adSchedInfo = lookupTeacherScheduleInfo(scheduleLookup, rowTeacherEmail, !isNaN(pdNum) ? pdNum : rawPd, yyyymmdd, settings);
 
-          if (wantAdminData && !isNaN(pdNum)) {
+          if (isWithinWindow && wantAdminData && !isNaN(pdNum)) {
             adminData.push({
               id: rowId,
               originalDate: String(dateVal || ""),
@@ -550,7 +552,7 @@ function getInitialPayload(clientEmail, requestedComponents) {
           }
         }
 
-        if (wantHrData) {
+        if (wantHrData && isDateValid && yyyymmdd) {
           hrData.push({
             id: rowId,
             date: String(yyyymmdd || ""),
