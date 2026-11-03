@@ -824,12 +824,16 @@
           const datalist = document.getElementById('dynamicStaffDataList');
           if (!datalist) return;
 
-          // Find all subs currently busy at this exact date and period
+          // Find all subs currently busy or absent at this exact date and period
           const busySubs = new Set();
           adminDataRaw.forEach(req => {
-              if (req.formDateString === dateStr && String(req.period) === String(period)) {
-                  if (req.assignedSub) {
+              const rDate = req.formDateString || req.date;
+              if (rDate === dateStr) {
+                  if (String(req.period) === String(period) && req.assignedSub) {
                       busySubs.add(req.assignedSub.trim().toLowerCase());
+                  }
+                  if (req.teacherName && (String(req.period) === String(period) || String(req.duration || '').toLowerCase() === 'full day')) {
+                      busySubs.add(req.teacherName.trim().toLowerCase());
                   }
               }
           });
@@ -865,8 +869,11 @@
               if (staff.role === 'substitute') {
                   suggestionText += " - s";
               }
-              if (staff.duty) {
-                  suggestionText += " - " + staff.duty;
+              const resolvedDuty = (typeof resolveClientStaffDutyForDate === 'function')
+                  ? resolveClientStaffDutyForDate(staff.duty, dateStr)
+                  : staff.duty;
+              if (resolvedDuty) {
+                  suggestionText += " - " + resolvedDuty;
               }
               optionsHtml += `<option value="${escapeHtml(suggestionText)}"></option>`;
           });

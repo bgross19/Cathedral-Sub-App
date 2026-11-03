@@ -28,6 +28,25 @@ function parsePeriod(period) {
 }
 
 /**
+ * Parses a Date object or date string into a valid local Date object.
+ * When given an ISO "YYYY-MM-DD" string, constructs local noon (12:00:00)
+ * rather than UTC midnight (`new Date("YYYY-MM-DD")`), preventing a -1 day
+ * timezone shift in America/Indiana/Indianapolis (UTC-5 / UTC-4).
+ */
+function parseLocalDateSafe(dateRaw) {
+  if (dateRaw instanceof Date) {
+    return new Date(dateRaw.getTime());
+  }
+  var str = String(dateRaw === undefined || dateRaw === null ? "" : dateRaw).trim();
+  if (!str) return new Date(NaN);
+  var isoMatch = str.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (isoMatch) {
+    return new Date(parseInt(isoMatch[1], 10), parseInt(isoMatch[2], 10) - 1, parseInt(isoMatch[3], 10), 12, 0, 0, 0);
+  }
+  return new Date(str);
+}
+
+/**
  * Helper to format a single period value ('10' -> 'Advisory') for user-facing display/emails.
  */
 function formatPeriodDisplay(period) {
@@ -375,7 +394,10 @@ function convertLegacyAbsenceRowToV2(row, rosterLookups, scheduleLookup, dateCol
       subEmail = rLookups.nameToEmail[subName.toLowerCase()] || "";
 
       var subRole = String(rLookups.nameToRole[subName.toLowerCase()] || "").toLowerCase();
-      var dutyStr = rLookups.nameToDuty[subName.toLowerCase()] || "";
+      var rawDutyStr = rLookups.nameToDuty[subName.toLowerCase()] || "";
+      var dutyStr = (typeof resolveStaffDutyForDate === "function")
+        ? resolveStaffDutyForDate(rawDutyStr, isoDate, cfg)
+        : rawDutyStr;
       var dutyArr = dutyStr ? dutyStr.split(",").map(function(d) { return parsePeriod(d); }) : [];
       var isDuty = dutyArr.indexOf(pKey) !== -1;
 
@@ -709,6 +731,7 @@ function readV2AbsenceDataCompat(ss) {
   var assignmentsByAbsenceId = {};
   var snapshottedScheduleLookup = {};
   var hasMissingScheduleSnapshots = false;
+  var v2Settings = typeof getSettings === "function" ? getSettings(ss) : {};
 
   for (var g = 1; g < asgValues.length; g++) {
     var gRow = asgValues[g];
@@ -737,7 +760,7 @@ function readV2AbsenceDataCompat(ss) {
       };
       snapshottedScheduleLookup[joinKey] = entry;
       if (gDate && typeof resolveTermIdForDate === "function") {
-        var termForDate = String(resolveTermIdForDate(gDate) || "").toLowerCase().trim();
+        var termForDate = String(resolveTermIdForDate(gDate, v2Settings) || "").toLowerCase().trim();
         if (termForDate) {
           snapshottedScheduleLookup[joinKey + "-" + termForDate] = entry;
         }
@@ -1166,9 +1189,9 @@ function getAuditLogs(startDateStr, endDateStr, clientEmail) {
     }
     var logs = [];
 
-    var startDate = new Date(startDateStr);
+    var startDate = parseLocalDateSafe(startDateStr);
     startDate.setHours(0,0,0,0);
-    var endDate = new Date(endDateStr);
+    var endDate = parseLocalDateSafe(endDateStr);
     endDate.setHours(23,59,59,999);
 
     // Skip header
@@ -1314,6 +1337,58 @@ function resolveTermIdForDate(dateStr, optionalSettings) {
     return sem2Term;
   }
   return sem1Term;
+}
+
+/**
+ * Resolves a staff member's sub duty period(s) for a specific date (or active semester term if dateRaw is omitted).
+ * Supports both plain duty strings (e.g. "3" or "2, 5") and semester-prefixed strings
+ * (e.g. "S1:2 | S2:7", "S1: | S2:7", "3601:2 | 3603:7").
+ */
+function resolveStaffDutyForDate(rawDutyStr, dateRaw, optionalSettings) {
+  var raw = String(rawDutyStr === undefined || rawDutyStr === null ? "" : rawDutyStr).trim();
+  if (!raw) return "";
+  if (!/(?:^|[|;/])\s*(?:S[12]|Sem(?:ester)?\s*[12]|\d{4})\s*[:=]/i.test(raw)) {
+    return raw;
+  }
+  var settings = optionalSettings || (typeof getSettings === "function" ? getSettings() : {});
+  var targetTerm = (typeof resolveTermIdForDate === "function")
+    ? String(resolveTermIdForDate(dateRaw, settings) || "").trim()
+    : String(settings["Term ID"] || "3601").trim();
+  var termNum = parseInt(targetTerm, 10);
+  var isSem2 = (!isNaN(termNum) && (termNum % 100 === 2 || termNum % 100 === 3));
+  var targetSemKey = isSem2 ? "S2" : "S1";
+
+  var segments = raw.split(/[|;/]+/);
+  var parsedByKey = {};
+  for (var i = 0; i < segments.length; i++) {
+    var seg = String(segments[i] || "").trim();
+    var m = seg.match(/^(S1|S2|Sem(?:ester)?\s*1|Sem(?:ester)?\s*2|\d{4})\s*[:=]\s*(.*)$/i);
+    if (m) {
+      var keyRaw = m[1].replace(/\s+/g, "").toUpperCase();
+      var val = String(m[2] || "").trim();
+      if (keyRaw === "S1" || keyRaw === "SEM1" || keyRaw === "SEMESTER1") {
+        parsedByKey["S1"] = val;
+      } else if (keyRaw === "S2" || keyRaw === "SEM2" || keyRaw === "SEMESTER2") {
+        parsedByKey["S2"] = val;
+      } else {
+        parsedByKey[keyRaw] = val;
+      }
+    }
+  }
+
+  if (targetTerm && Object.prototype.hasOwnProperty.call(parsedByKey, targetTerm)) {
+    return parsedByKey[targetTerm];
+  }
+  if (Object.prototype.hasOwnProperty.call(parsedByKey, targetSemKey)) {
+    return parsedByKey[targetSemKey];
+  }
+  if (Object.prototype.hasOwnProperty.call(parsedByKey, "S1")) {
+    return parsedByKey["S1"];
+  }
+  if (Object.prototype.hasOwnProperty.call(parsedByKey, "S2")) {
+    return parsedByKey["S2"];
+  }
+  return "";
 }
 
 /**

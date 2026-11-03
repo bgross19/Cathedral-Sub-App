@@ -347,8 +347,11 @@
                         aggregated[subName] = { duties: 0, extras: 0, total: 0, greenExtras: 0, blueGoldExtras: 0, specialPayTotal: 0, details: [] };
                     }
 
-                    let teacherDuty = dutyLookup[subName];
-                    let teacherDutyArr = teacherDuty ? String(teacherDuty).split(',').map(d => d.trim()) : [];
+                    let rawTeacherDuty = dutyLookup[subName];
+                    let teacherDuty = (typeof resolveClientStaffDutyForDate === 'function')
+                        ? resolveClientStaffDutyForDate(rawTeacherDuty, req.date)
+                        : rawTeacherDuty;
+                    let teacherDutyArr = teacherDuty ? String(teacherDuty).split(',').map(d => d.trim()).filter(Boolean) : [];
                     let isDuty = teacherDutyArr.includes(String(coveredPeriod));
 
                     let dateColor = hrDateColors[req.date] || "Gold";

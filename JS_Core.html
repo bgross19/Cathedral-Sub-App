@@ -97,6 +97,39 @@
           return (month >= 1 && month <= 7) ? sem2Term : sem1Term;
       }
 
+      function resolveClientStaffDutyForDate(rawDutyStr, dateStr) {
+          const raw = String(rawDutyStr || '').trim();
+          if (!raw) return '';
+          if (!/(?:^|[|;/])\s*(?:S[12]|Sem(?:ester)?\s*[12]|\d{4})\s*[:=]/i.test(raw)) {
+              return raw;
+          }
+          const targetTerm = resolveClientTermIdForDate(dateStr);
+          const termNum = parseInt(targetTerm, 10);
+          const isSem2 = (!isNaN(termNum) && (termNum % 100 === 2 || termNum % 100 === 3));
+          const targetSemKey = isSem2 ? 'S2' : 'S1';
+          const segments = raw.split(/[|;/]+/);
+          const parsedByKey = {};
+          segments.forEach(seg => {
+              const m = String(seg || '').trim().match(/^(S1|S2|Sem(?:ester)?\s*1|Sem(?:ester)?\s*2|\d{4})\s*[:=]\s*(.*)$/i);
+              if (m) {
+                  const keyRaw = m[1].replace(/\s+/g, '').toUpperCase();
+                  const val = String(m[2] || '').trim();
+                  if (keyRaw === 'S1' || keyRaw === 'SEM1' || keyRaw === 'SEMESTER1') {
+                      parsedByKey['S1'] = val;
+                  } else if (keyRaw === 'S2' || keyRaw === 'SEM2' || keyRaw === 'SEMESTER2') {
+                      parsedByKey['S2'] = val;
+                  } else {
+                      parsedByKey[keyRaw] = val;
+                  }
+              }
+          });
+          if (targetTerm && Object.prototype.hasOwnProperty.call(parsedByKey, targetTerm)) return parsedByKey[targetTerm];
+          if (Object.prototype.hasOwnProperty.call(parsedByKey, targetSemKey)) return parsedByKey[targetSemKey];
+          if (Object.prototype.hasOwnProperty.call(parsedByKey, 'S1')) return parsedByKey['S1'];
+          if (Object.prototype.hasOwnProperty.call(parsedByKey, 'S2')) return parsedByKey['S2'];
+          return '';
+      }
+
       // Return the schedule to use for pre-selection (date-aware across Semester 1 / Semester 2)
       function getActiveTeacherSchedule(dateStr) {
           const targetTerm = dateStr ? resolveClientTermIdForDate(dateStr) : "";
@@ -1132,7 +1165,7 @@ const data = payload.userData;
                document.getElementById('newSubAvailabilityOnBehalfBtn').classList.add('flex');
             }
 
-            if (perms["Admin Dashboard"] || perms["HR Dashboard"] || perms["Today at a Glance"]) {
+            if (perms["Admin Dashboard"] || perms["HR Dashboard"] || perms["Today at a Glance"] || perms["Add Request on Behalf"]) {
                if (payload.staffList) renderStaffList(payload.staffList);
             }
 

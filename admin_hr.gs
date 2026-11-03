@@ -773,7 +773,7 @@ function archiveAbsenceRequests(cutoffDateStr, clientEmail) {
     }
 
     var headers = data[0];
-    var cutoffDate = new Date(cutoffDateStr);
+    var cutoffDate = typeof parseLocalDateSafe === "function" ? parseLocalDateSafe(cutoffDateStr) : new Date(cutoffDateStr);
     cutoffDate.setHours(0, 0, 0, 0);
 
     var rowsToKeep = [headers];
@@ -783,7 +783,7 @@ function archiveAbsenceRequests(cutoffDateStr, clientEmail) {
     for (var i = 1; i < data.length; i++) {
     if (!data[i]) continue;
       var row = data[i];
-      var rowDate = new Date(row[3]);
+      var rowDate = typeof parseLocalDateSafe === "function" ? parseLocalDateSafe(row[3]) : new Date(row[3]);
 
       if (!isNaN(rowDate.getTime()) && rowDate < cutoffDate) {
         rowsToArchive.push(row);
@@ -1350,18 +1350,21 @@ function saveBellScheduleDateAdmin(dateStr, color, clientEmail) {
       }
     }
 
+    var isStandardOrNoSchool = (normalizedColor === "Green" || normalizedColor === "Blue" || normalizedColor === "Gold" || normalizedColor === "No School");
+    var schedNameVal = isStandardOrNoSchool ? "" : normalizedColor;
+
     if (!normalizedColor) {
       // Delete matching rows bottom-up if clearing the date
       for (var d = matchingRows.length - 1; d >= 0; d--) {
         sheet.deleteRow(matchingRows[d]);
       }
     } else if (matchingRows.length > 0) {
-      sheet.getRange(matchingRows[0], 1, 1, 2).setValues([[normalizedDate, normalizedColor]]);
+      sheet.getRange(matchingRows[0], 1, 1, 3).setValues([[normalizedDate, normalizedColor, schedNameVal]]);
       for (var k = matchingRows.length - 1; k > 0; k--) {
         sheet.deleteRow(matchingRows[k]);
       }
     } else {
-      sheet.appendRow([normalizedDate, normalizedColor]);
+      sheet.appendRow([normalizedDate, normalizedColor, schedNameVal]);
     }
 
     clearDatesCache();
@@ -1476,7 +1479,7 @@ function clearAllBellScheduleDates(clientEmail) {
     var sheet = _getOrCreateDatesSheet(ss);
     var lastRow = sheet.getLastRow();
     if (lastRow > 1) {
-      sheet.getRange(2, 1, lastRow - 1, 2).clearContent();
+      sheet.getRange(2, 1, lastRow - 1, 3).clearContent();
     }
 
     clearDatesCache();

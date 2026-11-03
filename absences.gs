@@ -600,7 +600,8 @@ function getAbsenceDetailsLocal(row, period, scheduleLookup, nameLookup) {
     formattedDate = Utilities.formatDate(dateVal, Session.getScriptTimeZone(), "MMM d, yyyy");
   } else {
     try {
-      formattedDate = Utilities.formatDate(new Date(dateVal), Session.getScriptTimeZone(), "MMM d, yyyy");
+      var parsedDateVal = typeof parseLocalDateSafe === "function" ? parseLocalDateSafe(dateVal) : new Date(dateVal);
+      formattedDate = Utilities.formatDate(parsedDateVal, Session.getScriptTimeZone(), "MMM d, yyyy");
     } catch(e) {
       console.error("Error formatting date: " + e.message);
       // ignore
@@ -723,7 +724,8 @@ function cancelAbsence(absenceId, clientEmail) {
           formattedDateForEmail = Utilities.formatDate(rawDate, Session.getScriptTimeZone(), "MMM d, yyyy");
       } else {
           try {
-              formattedDateForEmail = Utilities.formatDate(new Date(rawDate), Session.getScriptTimeZone(), "MMM d, yyyy");
+              var parsedRawCancelDate = typeof parseLocalDateSafe === "function" ? parseLocalDateSafe(rawDate) : new Date(rawDate);
+              formattedDateForEmail = Utilities.formatDate(parsedRawCancelDate, Session.getScriptTimeZone(), "MMM d, yyyy");
           } catch(e) { console.error("Error formatting date: " + e.message); }
       }
 
@@ -817,7 +819,8 @@ function updateAbsence(absenceId, formData, clientEmail) {
         oldDateFormatted = Utilities.formatDate(oldDateRaw, Session.getScriptTimeZone(), "yyyy-MM-dd");
       } else {
         try {
-           oldDateFormatted = Utilities.formatDate(new Date(oldDateRaw), Session.getScriptTimeZone(), "yyyy-MM-dd");
+           var parsedOldDate = typeof parseLocalDateSafe === "function" ? parseLocalDateSafe(oldDateRaw) : new Date(oldDateRaw);
+           oldDateFormatted = Utilities.formatDate(parsedOldDate, Session.getScriptTimeZone(), "yyyy-MM-dd");
         } catch(e) {
            console.error("Error formatting date: " + e.message);
            oldDateFormatted = String(oldDateRaw);
@@ -849,7 +852,8 @@ function updateAbsence(absenceId, formData, clientEmail) {
              if (dateChanged || !isPeriodStillNeeded) {
                var cancelDetails = getAbsenceDetailsLocal(data[i], p, scheduleLookup, nameLookup);
                if (cancelDetails) {
-                  cancelDetails.date = Utilities.formatDate(new Date(oldDateRaw), Session.getScriptTimeZone(), "MMM d, yyyy");
+                  var parsedOldCancelDate = typeof parseLocalDateSafe === "function" ? parseLocalDateSafe(oldDateRaw) : new Date(oldDateRaw);
+                  cancelDetails.date = Utilities.formatDate(parsedOldCancelDate, Session.getScriptTimeZone(), "MMM d, yyyy");
                   sendSubNotification(email, "Canceled", cancelDetails);
                }
                subClearUpdates.push(subIndex);
@@ -933,7 +937,8 @@ function updateAbsence(absenceId, formData, clientEmail) {
           formattedDateForEmail = Utilities.formatDate(rawDate, Session.getScriptTimeZone(), "MMM d, yyyy");
       } else {
           try {
-              formattedDateForEmail = Utilities.formatDate(new Date(rawDate), Session.getScriptTimeZone(), "MMM d, yyyy");
+              var parsedRawCancelDate = typeof parseLocalDateSafe === "function" ? parseLocalDateSafe(rawDate) : new Date(rawDate);
+              formattedDateForEmail = Utilities.formatDate(parsedRawCancelDate, Session.getScriptTimeZone(), "MMM d, yyyy");
           } catch(e) { console.error("Error formatting date: " + e.message); }
       }
 

@@ -1421,6 +1421,24 @@ function runTests() {
       var emptyUpdateRes = updateAbsence("96eeb4db-05b0-4657-bfe7-7967580116a4", { date: "", periods: "1", reason: "PTO", duration: "Full Day" }, "kquenichet@gocathedral.com");
       assert(emptyUpdateRes && emptyUpdateRes.success === false && emptyUpdateRes.error.indexOf("select at least 1 date") !== -1, "Expected updateAbsence to reject blank date");
 
+      // Test 17: parseLocalDateSafe avoids UTC-midnight -1 day shift on ISO "YYYY-MM-DD" strings
+      var localParsed = parseLocalDateSafe("2026-11-05");
+      assert(localParsed.getFullYear() === 2026 && localParsed.getMonth() === 10 && localParsed.getDate() === 5 && localParsed.getHours() === 12, "Expected parseLocalDateSafe('2026-11-05') to construct Nov 5, 2026 at 12:00 local time");
+
+      // Test 18: convertLegacyAbsenceRowToV2 resolves semester-aware duties ("S1:2 | S2:7") accurately
+      var semRosterLookups = buildV2RosterLookups([
+        ["Name", "Email", "Role", "Duty"],
+        ["Quenichet, Karrie A", "kquenichet@gocathedral.com", "Teacher", ""],
+        ["Kasberg, Cece", "ckasberg@gocathedral.com", "Teacher", "S1:2 | S2:7"]
+      ]);
+      var semTestRow = kqLegacyRow.slice();
+      semTestRow[4] = "'1, 2";
+      semTestRow[9] = "Kasberg, Cece";  // Period 1 (not her S1 duty, should be Paid Green $10, not misparsed as '1' from 'S1')
+      semTestRow[10] = "Kasberg, Cece"; // Period 2 (her S1 duty, should be Duty $0)
+      var semConv = convertLegacyAbsenceRowToV2(semTestRow, semRosterLookups, kqScheduleLookup, { "2026-11-02": "Green" }, { "Term ID": "3601", "Semester 2 Start Date": "2027-01-05" });
+      assert(semConv.assignmentRows[0][11] === "Green" && semConv.assignmentRows[0][12] === "10", "Expected Period 1 coverage by teacher with 'S1:2 | S2:7' to be paid Green ($10), not Duty");
+      assert(semConv.assignmentRows[1][11] === "Duty" && semConv.assignmentRows[1][12] === "0", "Expected Period 2 coverage by teacher with 'S1:2 | S2:7' in Semester 1 to be unpaid Duty ($0)");
+
       getSettings = origGetSettings;
       if (origUrlFetchApp !== undefined) global.UrlFetchApp = origUrlFetchApp;
 

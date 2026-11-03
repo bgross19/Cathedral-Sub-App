@@ -372,7 +372,9 @@ function getInitialPayload(clientEmail, requestedComponents) {
       var dateVal = row[3];
       if (!dateVal) continue;
 
-      var rowDate = (dateVal instanceof Date) ? dateVal : new Date(dateVal);
+      var rowDate = (typeof parseLocalDateSafe === "function")
+        ? parseLocalDateSafe(dateVal)
+        : ((dateVal instanceof Date) ? dateVal : new Date(dateVal));
       var isDateValid = !isNaN(rowDate.getTime());
       var isWithinWindow = !isDateValid || rowDate >= cutoffDate;
 
@@ -600,7 +602,7 @@ function getInitialPayload(clientEmail, requestedComponents) {
 
 
     // --- 4. Extract Admin / Sub Coordinator data if applicable ---
-    if (want("staffList") && (permissions["Admin Dashboard"] || permissions["HR Dashboard"] || permissions["Today at a Glance"])) {
+    if (want("staffList") && (permissions["Admin Dashboard"] || permissions["HR Dashboard"] || permissions["Today at a Glance"] || permissions["Add Request on Behalf"])) {
       // Staff List
       var staffList = [];
       var allSubAvail = getAllSubstituteAvailability();
@@ -653,9 +655,12 @@ function getInitialPayload(clientEmail, requestedComponents) {
         var staffEmail = String(rosterData[rsIdx][1]).toLowerCase().trim();
         var staffRole = String(rosterData[rsIdx][2]).toLowerCase().trim();
         var duty = String(rosterData[rsIdx][3] || "").trim();
+        var activeDuty = (typeof resolveStaffDutyForDate === "function")
+          ? resolveStaffDutyForDate(duty, todayFormatted, settings)
+          : duty;
         if (staffName) {
           var display = staffName;
-          if (duty) display = staffName + " - " + duty;
+          if (activeDuty) display = staffName + " - " + activeDuty;
 
           var department = rosterData[rsIdx].length > 4 ? String(rosterData[rsIdx][4] || "").trim() : "";
           var homebase = rosterData[rsIdx].length > 5 ? String(rosterData[rsIdx][5] || "").trim() : "";
@@ -719,9 +724,9 @@ function getInitialPayload(clientEmail, requestedComponents) {
 
         if (periodNum && startDateRaw && endDateRaw) {
           var startFormatted = startDateRaw instanceof Date ? Utilities.formatDate(startDateRaw, tz, "yyyy-MM-dd") :
-            (function(){ try { return Utilities.formatDate(new Date(startDateRaw), tz, "yyyy-MM-dd"); } catch(e) { return String(startDateRaw); } })();
+            (function(){ try { var d = typeof parseLocalDateSafe === "function" ? parseLocalDateSafe(startDateRaw) : new Date(startDateRaw); return Utilities.formatDate(d, tz, "yyyy-MM-dd"); } catch(e) { return String(startDateRaw); } })();
           var endFormatted = endDateRaw instanceof Date ? Utilities.formatDate(endDateRaw, tz, "yyyy-MM-dd") :
-            (function(){ try { return Utilities.formatDate(new Date(endDateRaw), tz, "yyyy-MM-dd"); } catch(e) { return String(endDateRaw); } })();
+            (function(){ try { var d = typeof parseLocalDateSafe === "function" ? parseLocalDateSafe(endDateRaw) : new Date(endDateRaw); return Utilities.formatDate(d, tz, "yyyy-MM-dd"); } catch(e) { return String(endDateRaw); } })();
           var approved = String(payPeriodsData[p][3] || "").toLowerCase().trim() === "true";
 
           payPeriods.push({

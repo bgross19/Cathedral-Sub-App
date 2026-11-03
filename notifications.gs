@@ -1215,7 +1215,7 @@ function generatePrincipalsDigestPreview(dateStr, clientEmail) {
   if (!isAuthorized) {
     throw new Error("Unauthorized to preview Principal's Digest.");
   }
-  var dateObj = dateStr ? new Date(dateStr) : new Date();
+  var dateObj = dateStr ? (typeof parseLocalDateSafe === "function" ? parseLocalDateSafe(dateStr) : new Date(dateStr)) : new Date();
   return generatePrincipalsDigestHTML(dateObj);
 }
 
@@ -1253,7 +1253,7 @@ function sendDailySubFeedbackRequests() {
       var dateVal = row[3];
       if (!dateVal) continue;
 
-      var rowDate = new Date(dateVal);
+      var rowDate = typeof parseLocalDateSafe === "function" ? parseLocalDateSafe(dateVal) : new Date(dateVal);
       rowDate.setHours(0, 0, 0, 0);
 
       if (rowDate.getTime() === today.getTime()) {

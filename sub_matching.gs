@@ -265,11 +265,16 @@ function getSuggestedSubs(dateStr, clientEmail) {
     if (!row || !row[1]) continue;
 
     var email = String(row[1]).toLowerCase().trim();
+    var rawDuty = String(row[3] || "").trim();
+    var resolvedDuty = (typeof resolveStaffDutyForDate === "function")
+      ? resolveStaffDutyForDate(rawDuty, dateStr, settings)
+      : rawDuty;
     var staff = {
       name: String(row[0] || "").trim(),
       email: email,
       role: String(row[2] || "").trim().toLowerCase(),
-      duty: String(row[3] || "").trim(),
+      duty: resolvedDuty,
+      rawDuty: rawDuty,
       department: String(row[4] || "").trim(),
       homebase: String(row[5] || "").trim(),
       building: String(row[6] || "").trim(),
@@ -288,10 +293,16 @@ function getSuggestedSubs(dateStr, clientEmail) {
   for (var i = 0; i < requests.length; i++) {
     var req = requests[i];
 
-    // Mark the absent teacher as unavailable for this period
+    // Mark the absent teacher as unavailable for this period (or all periods if out for Full Day)
     var absentEmail = String(req.email).toLowerCase().trim();
-    if (staffMap[absentEmail]) {
+    if (req.status === 'Active' && staffMap[absentEmail]) {
        staffMap[absentEmail].absentPeriods[req.period] = true;
+       if (String(req.type || '').trim().toLowerCase() === 'full day') {
+          var fullDayPds = ['1', '2', '3', '4', '5', '6', '7', '8', '0', '10'];
+          for (var fp = 0; fp < fullDayPds.length; fp++) {
+             staffMap[absentEmail].absentPeriods[fullDayPds[fp]] = true;
+          }
+       }
     }
 
     if (req.status === 'Active' && (!req.assignedSub || req.assignedSub === "")) {
@@ -341,7 +352,8 @@ function getSuggestedSubs(dateStr, clientEmail) {
       if (assignedByPeriod[period] && assignedByPeriod[period][candidateCleanName]) continue;
 
       // Check if candidate has duty this period
-      var duties = candidate.duty.split(',').map(function(s) { return parsePeriod(s); });
+      if (!candidate.duty) continue;
+      var duties = candidate.duty.split(',').map(function(s) { return parsePeriod(s); }).filter(function(s) { return s !== ""; });
       if (duties.indexOf(parsePeriod(period)) === -1) continue;
 
       // Calculate score based on priority:
@@ -452,13 +464,10 @@ function fetchAbsenceRequestsForDate(ss, dateStr) {
      var row = data[i];
      if (!row || row.length === 0 || !row[idxId]) continue;
 
-     // Note: Date parsing in GS can be tricky. We assume row[idxDate] is a Date object or string
-     var reqDateObj;
-     if (row[idxDate] instanceof Date) {
-        reqDateObj = row[idxDate];
-     } else {
-        reqDateObj = new Date(row[idxDate]);
-     }
+     // Note: Date parsing in GS can be tricky. Use parseLocalDateSafe so ISO "YYYY-MM-DD" strings do not shift back 1 day
+     var reqDateObj = (typeof parseLocalDateSafe === "function")
+        ? parseLocalDateSafe(row[idxDate])
+        : ((row[idxDate] instanceof Date) ? row[idxDate] : new Date(row[idxDate]));
 
      if (isNaN(reqDateObj.getTime())) continue;
 
