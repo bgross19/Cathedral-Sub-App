@@ -656,7 +656,7 @@ function getInitialPayload(clientEmail, requestedComponents) {
         var staffRole = String(rosterData[rsIdx][2]).toLowerCase().trim();
         var duty = String(rosterData[rsIdx][3] || "").trim();
         var activeDuty = (typeof resolveStaffDutyForDate === "function")
-          ? resolveStaffDutyForDate(duty, todayFormatted, settings)
+          ? resolveStaffDutyForDate(duty, today, settings)
           : duty;
         if (staffName) {
           var display = staffName;

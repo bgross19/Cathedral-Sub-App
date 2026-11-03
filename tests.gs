@@ -1439,6 +1439,10 @@ function runTests() {
       assert(semConv.assignmentRows[0][11] === "Green" && semConv.assignmentRows[0][12] === "10", "Expected Period 1 coverage by teacher with 'S1:2 | S2:7' to be paid Green ($10), not Duty");
       assert(semConv.assignmentRows[1][11] === "Duty" && semConv.assignmentRows[1][12] === "0", "Expected Period 2 coverage by teacher with 'S1:2 | S2:7' in Semester 1 to be unpaid Duty ($0)");
 
+      // Test 19: getInitialPayload populates staffList with resolved activeDuty display without throwing ReferenceError
+      var adminPayload = getInitialPayload("admin@gocathedral.com", ["staffList"]);
+      assert(adminPayload && Array.isArray(adminPayload.staffList) && adminPayload.staffList.length > 0, "Expected getInitialPayload(['staffList']) to return populated staffList");
+
       getSettings = origGetSettings;
       if (origUrlFetchApp !== undefined) global.UrlFetchApp = origUrlFetchApp;
 
