@@ -618,11 +618,17 @@ function runTests() {
       };
       assert(getActiveUserEmail("admin@gocathedral.com") === "teacher1@gocathedral.com", "Must prefer verified Session email over spoofed clientEmail");
 
-      // 2. Falls back to clientEmail only when Session email is empty
+      // 2. When Session email is empty, rejects unsigned plain-text clientEmail and only accepts valid signed tokens
       global.Session = {
         getActiveUser: function() { return { getEmail: function() { return ""; } }; }
       };
-      assert(getActiveUserEmail("SubUser@example.com") === "subuser@example.com", "Should fall back to clientEmail when Session email is empty");
+      assert(getActiveUserEmail("SubUser@example.com") === "", "Must reject unsigned plain-text clientEmail when Session email is empty");
+      var validToken = createSignedAuthToken("SubUser@example.com");
+      assert(getActiveUserEmail(validToken) === "subuser@example.com", "Should accept valid signed auth token when Session email is empty");
+      var tamperedToken = validToken.replace("subuser@example.com", "admin@gocathedral.com");
+      assert(getActiveUserEmail(tamperedToken) === "", "Must reject tampered auth token");
+      var expiredToken = createSignedAuthToken("SubUser@example.com", -1000);
+      assert(getActiveUserEmail(expiredToken) === "", "Must reject expired auth token");
 
       if (origSession !== undefined) global.Session = origSession;
 
@@ -1472,6 +1478,77 @@ function runTests() {
       assert(hrPayload && hrPayload.hrData && Array.isArray(hrPayload.hrData.requests), "Expected hrData.requests array");
       var foundHistInHr = hrPayload.hrData.requests.some(function(r) { return r.id === "hist-aug-id" && r.date === "2026-08-14"; });
       assert(foundHistInHr === true, "Expected hrData.requests to include historical absence older than Data Fetch Window");
+
+      // Test 21: 2-Step Email OTP Login & Admin Google Workspace SSO Enforcement
+      var otpStore = {};
+      global.CacheService = {
+        getScriptCache: function() {
+          return {
+            get: function(k) { return otpStore[k] !== undefined ? otpStore[k] : null; },
+            put: function(k, v) { otpStore[k] = String(v); },
+            remove: function(k) { delete otpStore[k]; }
+          };
+        }
+      };
+      mockSheetsForPayroll["Staff Roster"] = {
+        getDataRange: function() {
+          return {
+            getValues: function() {
+              return [
+                ["Name", "Email", "Role", "Duty"],
+                ["Admin User", "admin@gocathedral.com", "Admin", ""],
+                ["HR Manager", "hr@gocathedral.com", "HR", ""],
+                ["Quenichet, Karrie A", "kquenichet@gocathedral.com", "Teacher", ""]
+              ];
+            }
+          };
+        }
+      };
+      if (typeof clearRosterCache === "function") clearRosterCache();
+
+      // Simulate non-SSO session (empty Session email)
+      global.Session = {
+        getActiveUser: function() { return { getEmail: function() { return ""; } }; },
+        getScriptTimeZone: function() { return "America/Indiana/Indianapolis"; }
+      };
+
+      // 21a. Admin account is blocked from requesting an OTP code
+      var adminOtpReq = requestLoginVerificationCode("admin@gocathedral.com");
+      assert(adminOtpReq.success === false && adminOtpReq.error.indexOf("Google Workspace SSO") !== -1, "Expected Admin OTP request to be blocked with SSO requirement message");
+
+      // 21b. Even if an Admin had a signed token, getUserData and getInitialPayload block Admin when not on Google SSO
+      var forgedAdminToken = createSignedAuthToken("admin@gocathedral.com");
+      var adminBlockedInUserData = false;
+      try {
+        getUserData(getSS(), forgedAdminToken);
+      } catch (adminErr) {
+        adminBlockedInUserData = adminErr.message.indexOf("Google Workspace SSO") !== -1;
+      }
+      assert(adminBlockedInUserData === true, "Expected getUserData to block Admin account when Session SSO is inactive");
+
+      // 21c. Teacher account can request a 6-digit OTP, verify it, and receive a valid signed session token
+      var lastOtpEmailSubject = "";
+      sendEmailHelper = function(to, subj) {
+        lastOtpEmailSubject = subj;
+        return "SENT";
+      };
+      var teacherOtpReq = requestLoginVerificationCode("kquenichet@gocathedral.com");
+      assert(teacherOtpReq.success === true, "Expected Teacher OTP request to succeed");
+      var otpMatch = lastOtpEmailSubject.match(/\((\d{6})\)/);
+      assert(otpMatch && otpMatch[1], "Expected 6-digit OTP code in email subject");
+      var realCode = otpMatch[1];
+
+      var wrongVerify = verifyLoginCode("kquenichet@gocathedral.com", "000000");
+      assert(wrongVerify.success === false && wrongVerify.error.indexOf("4 attempts remaining") !== -1, "Expected wrong OTP code to fail and decrement remaining attempts");
+
+      var rightVerify = verifyLoginCode("kquenichet@gocathedral.com", realCode);
+      assert(rightVerify.success === true && rightVerify.authToken && rightVerify.authToken.indexOf("auth1|") === 0, "Expected correct OTP code to return a signed authToken");
+
+      var replayVerify = verifyLoginCode("kquenichet@gocathedral.com", realCode);
+      assert(replayVerify.success === false, "Expected OTP code to be single-use and rejected on replay");
+
+      var verifiedTeacherUser = getUserData(getSS(), rightVerify.authToken);
+      assert(verifiedTeacherUser && verifiedTeacherUser.name === "Quenichet, Karrie A" && verifiedTeacherUser.role === "Teacher", "Expected signed authToken to authenticate Teacher in getUserData");
 
       getSettings = origGetSettings;
       if (origUrlFetchApp !== undefined) global.UrlFetchApp = origUrlFetchApp;

@@ -234,7 +234,7 @@ function pruneSubstituteAvailabilitySheet(ss) {
 function getSuggestedSubs(dateStr, clientEmail) {
   var ss = getSS();
   var email = getActiveUserEmail(typeof clientEmail !== 'undefined' ? clientEmail : undefined);
-  var user = getUserData(ss, email);
+  var user = getUserData(ss, typeof clientEmail !== 'undefined' ? clientEmail : undefined);
   var roleLower = user && user.role ? String(user.role).toLowerCase().trim() : "";
   var settings = getSettings(ss);
   var rolePermissionsStr = settings["RolePermissions"] || "{}";
@@ -519,7 +519,7 @@ function batchAssignSubs(assignments, clientEmail) {
     lockHeld = true;
     var ss = getSS();
     var email = getActiveUserEmail(typeof clientEmail !== 'undefined' ? clientEmail : undefined);
-    var user = getUserData(ss, email);
+    var user = getUserData(ss, typeof clientEmail !== 'undefined' ? clientEmail : undefined);
 
     // Ensure permission using role and configured RolePermissions
     var roleLower = user && user.role ? String(user.role).toLowerCase().trim() : "";

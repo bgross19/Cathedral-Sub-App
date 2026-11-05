@@ -4,6 +4,17 @@
 <script>
       // === Globals ===
       window.activeUserEmail = "";
+      window.pendingLoginEmail = "";
+
+      function getCleanActiveUserEmail() {
+          const raw = String(window.activeUserEmail || "").trim();
+          if (!raw) return "";
+          if (raw.toLowerCase().startsWith("auth1|")) {
+              const parts = raw.split("|");
+              return (parts[1] || "").trim().toLowerCase();
+          }
+          return raw.toLowerCase();
+      }
       
       function reloadApp() {
           if (window.globalAppUrl) {
@@ -14,38 +25,161 @@
       }
 
       function handleLogout() {
+          localStorage.removeItem('subAppAuthToken');
           localStorage.removeItem('subAppEmail');
           reloadApp();
       }
+
+      function showLoginMessage(errorMsg, infoMsg) {
+          const errBox = document.getElementById('loginErrorBox');
+          const infoBox = document.getElementById('loginInfoBox');
+          if (errBox) {
+              if (errorMsg) {
+                  errBox.innerText = errorMsg;
+                  errBox.classList.remove('hidden');
+              } else {
+                  errBox.innerText = '';
+                  errBox.classList.add('hidden');
+              }
+          }
+          if (infoBox) {
+              if (infoMsg) {
+                  infoBox.innerText = infoMsg;
+                  infoBox.classList.remove('hidden');
+              } else {
+                  infoBox.innerText = '';
+                  infoBox.classList.add('hidden');
+              }
+          }
+      }
+
+      function resetLoginToEmailStep() {
+          const stepEmail = document.getElementById('loginStepEmail');
+          const stepCode = document.getElementById('loginStepCode');
+          const codeInput = document.getElementById('loginCodeInput');
+          if (stepEmail) stepEmail.classList.remove('hidden');
+          if (stepCode) stepCode.classList.add('hidden');
+          if (codeInput) codeInput.value = '';
+          showLoginMessage(null, null);
+      }
       
-      function handleCustomLogin(e) {
-          e.preventDefault();
-          const emailInput = document.getElementById('loginEmailInput').value.trim().toLowerCase();
+      function handleCustomLogin(e, isResend) {
+          if (e && typeof e.preventDefault === 'function') e.preventDefault();
+          const emailEl = document.getElementById('loginEmailInput');
+          const emailInput = (isResend && window.pendingLoginEmail)
+              ? window.pendingLoginEmail
+              : (emailEl ? emailEl.value.trim().toLowerCase() : '');
           if (!emailInput) return;
           
-          const btn = document.getElementById('loginBtn');
-          const originalText = btn.innerHTML;
-          btn.disabled = true;
-          btn.innerHTML = '<span class="inline-block animate-spin mr-2">↻</span> Authenticating...';
+          showLoginMessage(null, null);
+          const btn = isResend ? document.getElementById('resendCodeBtn') : document.getElementById('loginBtn');
+          const originalText = btn ? btn.innerHTML : 'Send Verification Code';
+          if (btn) {
+              btn.disabled = true;
+              btn.innerHTML = isResend
+                  ? 'Sending...'
+                  : '<span class="inline-block animate-spin mr-2">↻</span> Sending Code...';
+          }
           
-          // Verify with backend
           google.script.run
-              .withSuccessHandler(payload => {
-                  if (payload && payload.userData && payload.userData.name) {
-                      // Success
-                      localStorage.setItem('subAppEmail', emailInput);
-                      window.activeUserEmail = emailInput;
-                      window.isManualLogin = true;
-                      document.getElementById('loginView').classList.add('hidden');
-                      finishInitApp(payload);
+              .withSuccessHandler(res => {
+                  if (btn) {
+                      btn.disabled = false;
+                      btn.innerHTML = originalText;
+                  }
+                  if (res && res.success) {
+                      window.pendingLoginEmail = emailInput;
+                      const stepEmail = document.getElementById('loginStepEmail');
+                      const stepCode = document.getElementById('loginStepCode');
+                      if (stepEmail) stepEmail.classList.add('hidden');
+                      if (stepCode) stepCode.classList.remove('hidden');
+                      showLoginMessage(null, res.message || ("A 6-digit verification code has been sent to " + emailInput + "."));
+                      const codeInput = document.getElementById('loginCodeInput');
+                      if (codeInput) {
+                          codeInput.value = '';
+                          codeInput.focus();
+                      }
+                  } else {
+                      showLoginMessage((res && res.error) ? res.error : "Unable to send verification code.", null);
                   }
               })
               .withFailureHandler(err => {
-                  alert("Access Denied: " + err.message);
-                  btn.disabled = false;
-                  btn.innerHTML = originalText;
+                  if (btn) {
+                      btn.disabled = false;
+                      btn.innerHTML = originalText;
+                  }
+                  showLoginMessage("Access Denied: " + (err && err.message ? err.message : err), null);
               })
-              .getInitialPayload(emailInput);
+              .requestLoginVerificationCode(emailInput);
+      }
+
+      function handleVerifyLoginCode(e) {
+          if (e && typeof e.preventDefault === 'function') e.preventDefault();
+          const emailInput = window.pendingLoginEmail || (document.getElementById('loginEmailInput') ? document.getElementById('loginEmailInput').value.trim().toLowerCase() : '');
+          const codeEl = document.getElementById('loginCodeInput');
+          const codeInput = codeEl ? codeEl.value.trim() : '';
+          if (!emailInput || !codeInput) {
+              showLoginMessage("Please enter the 6-digit verification code sent to your email.", null);
+              return;
+          }
+
+          showLoginMessage(null, null);
+          const btn = document.getElementById('verifyCodeBtn');
+          const originalText = btn ? btn.innerHTML : 'Verify & Sign In';
+          if (btn) {
+              btn.disabled = true;
+              btn.innerHTML = '<span class="inline-block animate-spin mr-2">↻</span> Verifying...';
+          }
+
+          google.script.run
+              .withSuccessHandler(res => {
+                  if (!res || !res.success || !res.authToken) {
+                      if (btn) {
+                          btn.disabled = false;
+                          btn.innerHTML = originalText;
+                      }
+                      showLoginMessage((res && res.error) ? res.error : "Invalid verification code.", null);
+                      return;
+                  }
+
+                  // Save signed session token and load initial payload
+                  localStorage.setItem('subAppAuthToken', res.authToken);
+                  localStorage.removeItem('subAppEmail');
+                  window.activeUserEmail = res.authToken;
+                  window.isManualLogin = true;
+
+                  google.script.run
+                      .withSuccessHandler(payload => {
+                          if (btn) {
+                              btn.disabled = false;
+                              btn.innerHTML = originalText;
+                          }
+                          if (payload && payload.userData && payload.userData.name) {
+                              resetLoginToEmailStep();
+                              document.getElementById('loginView').classList.add('hidden');
+                              finishInitApp(payload);
+                          }
+                      })
+                      .withFailureHandler(err => {
+                          if (btn) {
+                              btn.disabled = false;
+                              btn.innerHTML = originalText;
+                          }
+                          localStorage.removeItem('subAppAuthToken');
+                          window.activeUserEmail = "";
+                          resetLoginToEmailStep();
+                          showLoginMessage(err && err.message ? err.message : "Failed to load user profile.", null);
+                      })
+                      .getInitialPayload(window.activeUserEmail);
+              })
+              .withFailureHandler(err => {
+                  if (btn) {
+                      btn.disabled = false;
+                      btn.innerHTML = originalText;
+                  }
+                  showLoginMessage(err && err.message ? err.message : "Verification failed.", null);
+              })
+              .verifyLoginCode(emailInput, codeInput);
       }
 
       function parseCsvLine(text, delimiter) {
@@ -1007,7 +1141,7 @@
 
         
         let serverEmail = String(window.SERVER_USER_EMAIL || "").trim().toLowerCase();
-        let storedEmail = localStorage.getItem('subAppEmail');
+        let storedAuthToken = localStorage.getItem('subAppAuthToken');
         
         window.isManualLogin = false;
 
@@ -1022,14 +1156,18 @@
 
         if (serverEmail && serverEmail !== "undefined" && serverEmail !== "" && !serverEmail.includes("<" + "?=")) {
              window.activeUserEmail = serverEmail;
-             localStorage.setItem('subAppEmail', serverEmail);
-        } else if (storedEmail) {
-             window.activeUserEmail = storedEmail;
+             localStorage.removeItem('subAppEmail');
+        } else if (storedAuthToken && storedAuthToken.startsWith('auth1|')) {
+             window.activeUserEmail = storedAuthToken;
              window.isManualLogin = true;
+             localStorage.removeItem('subAppEmail');
+        } else {
+             localStorage.removeItem('subAppEmail');
         }
         
         if (!window.activeUserEmail) {
              // Show login
+             resetLoginToEmailStep();
              document.getElementById('loginView').classList.remove('hidden');
              return;
         }
@@ -1043,7 +1181,11 @@
               console.error("Failed initial payload", err);
               // If it fails with access denied, show login
               if (err.message && err.message.includes("Access Denied")) {
+                  localStorage.removeItem('subAppAuthToken');
                   localStorage.removeItem('subAppEmail');
+                  window.activeUserEmail = "";
+                  resetLoginToEmailStep();
+                  showLoginMessage(err.message, null);
                   document.getElementById('loginView').classList.remove('hidden');
               } else {
                   alert("Failed to load app data: " + err.message);
@@ -1102,6 +1244,10 @@ const data = payload.userData;
             document.getElementById('userName').innerText = data.name;
             document.getElementById('userName').dataset.role = data.role;
             document.getElementById('welcomeName').innerText = (data.name.split(',')[1] || data.name).trim();
+            const userEmailEl = document.getElementById('userEmail');
+            if (userEmailEl && data.email) {
+                userEmailEl.innerText = data.email;
+            }
             
             if (data.appUrl) {
                 window.globalAppUrl = data.appUrl;

@@ -2431,7 +2431,9 @@
                         : null;
                     const targetEmailLower = matchedStaff && matchedStaff.email ? String(matchedStaff.email).toLowerCase().trim() : "";
                     const targetCanonicalNameLower = matchedStaff && matchedStaff.name ? String(matchedStaff.name).toLowerCase().trim() : targetTeacherLower;
-                    const activeEmailLower = window.activeUserEmail ? String(window.activeUserEmail).toLowerCase().trim() : "";
+                    const activeEmailLower = typeof getCleanActiveUserEmail === "function"
+                        ? getCleanActiveUserEmail()
+                        : (window.activeUserEmail ? String(window.activeUserEmail).toLowerCase().trim() : "");
 
                     if (targetEmailLower && activeEmailLower && targetEmailLower === activeEmailLower) {
                         const selfDupIdx = myAbsencesData.findIndex(abs => {

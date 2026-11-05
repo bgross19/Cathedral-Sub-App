@@ -202,6 +202,10 @@ function getInitialPayload(clientEmail, requestedComponents) {
     var userName = String(name).trim().toLowerCase();
     var lowerRole = String(role).toLowerCase();
 
+    if (lowerRole === "admin" && !isGoogleSsoSessionActive()) {
+      throw new Error("Access Denied: Admin accounts must sign in using Google Workspace SSO.");
+    }
+
     // Compute teacherSchedule (default active term) and teacherScheduleByTerm (all terms)
     var teacherSchedule = rosterSchedulesByEmail[targetEmail] ? rosterSchedulesByEmail[targetEmail].slice() : [];
     var teacherScheduleByTerm = rosterSchedulesByTermByEmail[targetEmail] ? rosterSchedulesByTermByEmail[targetEmail] : {};

@@ -2,6 +2,120 @@
 // CORE.GS — Web App Entrypoint, Auth & Permissions, Period Helpers & Audit Log
 // ============================================================================
 
+var AUTH_TOKEN_PREFIX = "auth1|";
+var DEFAULT_AUTH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+var _cachedAuthTokenSecret = null;
+
+/**
+ * Returns true if the current request is authenticated via a native Google Workspace SSO session.
+ */
+function isGoogleSsoSessionActive() {
+  try {
+    var sessionEmail = Session.getActiveUser().getEmail();
+    return Boolean(sessionEmail && typeof sessionEmail === 'string' && sessionEmail.indexOf('@') > 0);
+  } catch (e) {
+    return false;
+  }
+}
+
+/**
+ * Retrieves or initializes the server-side HMAC secret used to sign manual-login session tokens.
+ */
+function getAuthTokenSecret_() {
+  if (_cachedAuthTokenSecret) return _cachedAuthTokenSecret;
+  try {
+    if (typeof PropertiesService !== 'undefined' && PropertiesService && typeof PropertiesService.getScriptProperties === 'function') {
+      var props = PropertiesService.getScriptProperties();
+      var secret = props.getProperty("AUTH_TOKEN_SECRET");
+      if (!secret) {
+        var u1 = (typeof Utilities !== 'undefined' && Utilities && typeof Utilities.getUuid === 'function') ? Utilities.getUuid() : String(Date.now());
+        var u2 = (typeof Utilities !== 'undefined' && Utilities && typeof Utilities.getUuid === 'function') ? Utilities.getUuid() : String(Math.random());
+        secret = u1 + "-" + u2;
+        props.setProperty("AUTH_TOKEN_SECRET", secret);
+      }
+      _cachedAuthTokenSecret = secret;
+      return secret;
+    }
+  } catch (e) {
+    // Fallback if PropertiesService is unavailable (e.g. local unit test harness)
+  }
+  _cachedAuthTokenSecret = "cathedral-sub-app-fallback-hmac-secret-v1";
+  return _cachedAuthTokenSecret;
+}
+
+/**
+ * Computes a lowercase hex HMAC-SHA256 signature for payloadStr using secret.
+ */
+function computeHmacHex_(payloadStr, secret) {
+  var str = String(payloadStr || "");
+  var key = String(secret || "");
+  if (typeof Utilities !== 'undefined' && Utilities && typeof Utilities.computeHmacSha256Signature === 'function') {
+    var bytes = Utilities.computeHmacSha256Signature(str, key);
+    var hex = [];
+    for (var i = 0; i < bytes.length; i++) {
+      var b = bytes[i];
+      if (b < 0) b += 256;
+      var h = b.toString(16);
+      hex.push(h.length === 1 ? "0" + h : h);
+    }
+    return hex.join("");
+  }
+  // Deterministic fallback hash for local test environments where computeHmacSha256Signature is not mocked
+  var h1 = 0xdeadbeef ^ key.length;
+  var h2 = 0x41c6ce57 ^ str.length;
+  var combined = key + "|" + str + "|" + key;
+  for (var j = 0; j < combined.length; j++) {
+    var ch = combined.charCodeAt(j);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  var p1 = (h1 >>> 0).toString(16);
+  var p2 = (h2 >>> 0).toString(16);
+  while (p1.length < 8) p1 = "0" + p1;
+  while (p2.length < 8) p2 = "0" + p2;
+  return p1 + p2 + p1 + p2 + p1 + p2 + p1 + p2;
+}
+
+/**
+ * Creates a cryptographically signed session token ("auth1|<email>|<expiresAt>|<sig>")
+ * after a manual-login user verifies their 6-digit email code.
+ */
+function createSignedAuthToken(email, ttlMs) {
+  var cleanEmail = String(email || "").trim().toLowerCase();
+  if (!cleanEmail || cleanEmail.indexOf("@") <= 0) return "";
+  var duration = (typeof ttlMs === 'number' && !isNaN(ttlMs)) ? ttlMs : DEFAULT_AUTH_TOKEN_TTL_MS;
+  var expiresAt = Date.now() + duration;
+  var payloadStr = cleanEmail + "|" + String(expiresAt);
+  var sigHex = computeHmacHex_(payloadStr, getAuthTokenSecret_());
+  return AUTH_TOKEN_PREFIX + payloadStr + "|" + sigHex;
+}
+
+/**
+ * Verifies a signed session token and returns the lowercase email if valid and unexpired, or "" otherwise.
+ */
+function verifySignedAuthToken(tokenStr) {
+  if (!tokenStr || typeof tokenStr !== 'string') return "";
+  var trimmed = tokenStr.trim();
+  if (trimmed.indexOf(AUTH_TOKEN_PREFIX) !== 0) return "";
+  var parts = trimmed.split("|");
+  if (parts.length !== 4) return "";
+  var email = String(parts[1] || "").trim().toLowerCase();
+  var expiresAt = parseInt(parts[2], 10);
+  var providedSig = String(parts[3] || "").trim().toLowerCase();
+  if (!email || email.indexOf("@") <= 0 || isNaN(expiresAt) || !providedSig) return "";
+  if (Date.now() > expiresAt) return "";
+  var payloadStr = email + "|" + String(expiresAt);
+  var expectedSig = computeHmacHex_(payloadStr, getAuthTokenSecret_()).toLowerCase();
+  if (providedSig.length !== expectedSig.length) return "";
+  var diff = 0;
+  for (var i = 0; i < expectedSig.length; i++) {
+    diff |= (providedSig.charCodeAt(i) ^ expectedSig.charCodeAt(i));
+  }
+  return diff === 0 ? email : "";
+}
+
 function getActiveUserEmail(clientEmail) {
   try {
     var sessionEmail = Session.getActiveUser().getEmail();
@@ -9,10 +123,13 @@ function getActiveUserEmail(clientEmail) {
       return sessionEmail.trim().toLowerCase();
     }
   } catch(e) {
-    // Session unavailable or restricted; fall back to clientEmail below
+    // Session unavailable or restricted; check signed clientEmail token below
   }
-  if (clientEmail && typeof clientEmail === 'string' && clientEmail.indexOf('@') > 0) {
-    return clientEmail.trim().toLowerCase();
+  if (clientEmail && typeof clientEmail === 'string') {
+    var trimmed = clientEmail.trim();
+    if (trimmed.indexOf(AUTH_TOKEN_PREFIX) === 0) {
+      return verifySignedAuthToken(trimmed);
+    }
   }
   return "";
 }
@@ -1074,7 +1191,11 @@ function getUserData(ss, clientEmail) {
   if (!name) {
     throw new Error("Access Denied: Please Contact Technology@gocathedral.com");
   }
-  
+
+  if (String(role || "").trim().toLowerCase() === "admin" && !isGoogleSsoSessionActive()) {
+    throw new Error("Access Denied: Admin accounts must sign in using Google Workspace SSO.");
+  }
+
   var settings = getSettings(ss);
   var appUrl = settings["App URL"] || DEFAULT_APP_URL;
   var urgencyCutoffTime = settings["Urgency Cutoff Time"] || "15";
@@ -1490,5 +1611,199 @@ function getPeriodTimeRangeForDate(dateStr, period, optionalDateColors, optional
     dayColor: dayColor
   };
 }
+
+/**
+ * Step 1 of 2-Step Manual Login:
+ * Validates that rawEmail belongs to an active non-Admin staff member in Staff Roster,
+ * generates a 6-digit verification code (valid for 10 minutes), stores it in ScriptCache,
+ * and emails the verification code to the staff member.
+ * Admin accounts are strictly required to sign in via Google Workspace SSO.
+ */
+function requestLoginVerificationCode(rawEmail) {
+  try {
+    var targetEmail = String(rawEmail || "").trim().toLowerCase();
+    if (!targetEmail || targetEmail.indexOf("@") <= 0) {
+      return { success: false, error: "Please enter a valid staff email address." };
+    }
+
+    var ss = getSS();
+    var rosterData = getRosterDataCached(ss);
+    var name = null;
+    var role = null;
+
+    for (var i = 1; i < rosterData.length; i++) {
+      if (!rosterData[i] || rosterData[i].length < 2) continue;
+      var rowEmail = String(rosterData[i][1] || "").trim().toLowerCase();
+      if (rowEmail === targetEmail) {
+        name = String(rosterData[i][0] || "").trim();
+        role = rosterData[i][2] ? String(rosterData[i][2]).trim() : "Teacher";
+        break;
+      }
+    }
+
+    if (!name) {
+      return { success: false, error: "Access Denied: Please Contact Technology@gocathedral.com" };
+    }
+
+    if (String(role).toLowerCase() === "admin") {
+      logAuditAction("LOGIN_OTP_BLOCKED_ADMIN", targetEmail, "Blocked manual login OTP request for Admin account.");
+      return {
+        success: false,
+        error: "Access Denied: Admin accounts must sign in using Google Workspace SSO."
+      };
+    }
+
+    var codeNum = Math.floor(100000 + Math.random() * 900000);
+    var codeStr = String(codeNum);
+    var cache = CacheService.getScriptCache();
+    var cacheKey = "LOGIN_OTP_" + targetEmail;
+    var otpPayload = JSON.stringify({
+      code: codeStr,
+      attempts: 0,
+      createdAt: Date.now()
+    });
+    cache.put(cacheKey, otpPayload, 600); // 10 minutes TTL
+
+    var settings = getSettings(ss);
+    var subject = "Cathedral Sub App - Your Login Verification Code (" + codeStr + ")";
+    var plainBody =
+      "Hello " + name + ",\n\n" +
+      "Your 6-digit verification code to sign in to the Cathedral Sub Coverage App is:\n\n" +
+      codeStr + "\n\n" +
+      "This code will expire in 10 minutes.\n\n" +
+      "If you did not request this code, you can safely ignore this email.";
+
+    var htmlBody =
+      '<div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px; border: 1px solid #e5e7eb; border-radius: 12px; color: #1f2937;">' +
+        '<h2 style="color: #002147; margin-top: 0;">Cathedral Sub Coverage</h2>' +
+        '<p>Hello <strong>' + name + '</strong>,</p>' +
+        '<p>Use the 6-digit verification code below to complete your sign-in:</p>' +
+        '<div style="background-color: #f3f4f6; border-radius: 8px; padding: 16px; text-align: center; margin: 20px 0;">' +
+          '<span style="font-size: 28px; font-weight: bold; letter-spacing: 6px; color: #002147;">' + codeStr + '</span>' +
+        '</div>' +
+        '<p style="font-size: 13px; color: #6b7280;">This code will expire in 10 minutes. If you did not request this code, please ignore this email.</p>' +
+      '</div>';
+
+    sendEmailHelper(targetEmail, subject, plainBody, { htmlBody: htmlBody }, settings);
+    logAuditAction("LOGIN_OTP_SENT", targetEmail, "Sent 6-digit login verification code.");
+
+    return {
+      success: true,
+      email: targetEmail,
+      message: "A 6-digit verification code has been sent to " + targetEmail + "."
+    };
+  } catch (e) {
+    console.error("Error in requestLoginVerificationCode: " + e.message);
+    return { success: false, error: "Failed to send verification code: " + e.message };
+  }
+}
+
+/**
+ * Step 2 of 2-Step Manual Login:
+ * Verifies the 6-digit code sent to rawEmail and returns a cryptographically signed session token.
+ * Enforces a maximum of 5 attempts per code and blocks Admin accounts from manual login.
+ */
+function verifyLoginCode(rawEmail, rawCode) {
+  try {
+    var targetEmail = String(rawEmail || "").trim().toLowerCase();
+    var submittedCode = String(rawCode || "").replace(/\s+/g, "");
+    if (!targetEmail || targetEmail.indexOf("@") <= 0) {
+      return { success: false, error: "Invalid email address." };
+    }
+    if (!/^\d{6}$/.test(submittedCode)) {
+      return { success: false, error: "Please enter a valid 6-digit verification code." };
+    }
+
+    var ss = getSS();
+    var rosterData = getRosterDataCached(ss);
+    var name = null;
+    var role = null;
+
+    for (var i = 1; i < rosterData.length; i++) {
+      if (!rosterData[i] || rosterData[i].length < 2) continue;
+      var rowEmail = String(rosterData[i][1] || "").trim().toLowerCase();
+      if (rowEmail === targetEmail) {
+        name = String(rosterData[i][0] || "").trim();
+        role = rosterData[i][2] ? String(rosterData[i][2]).trim() : "Teacher";
+        break;
+      }
+    }
+
+    if (!name) {
+      return { success: false, error: "Access Denied: Please Contact Technology@gocathedral.com" };
+    }
+
+    if (String(role).toLowerCase() === "admin") {
+      logAuditAction("LOGIN_OTP_BLOCKED_ADMIN", targetEmail, "Blocked manual login OTP verification for Admin account.");
+      return {
+        success: false,
+        error: "Access Denied: Admin accounts must sign in using Google Workspace SSO."
+      };
+    }
+
+    var cache = CacheService.getScriptCache();
+    var cacheKey = "LOGIN_OTP_" + targetEmail;
+    var rawOtpJson = cache.get(cacheKey);
+    if (!rawOtpJson) {
+      return {
+        success: false,
+        error: "Verification code expired or not found. Please request a new code."
+      };
+    }
+
+    var otpRecord = null;
+    try {
+      otpRecord = JSON.parse(rawOtpJson);
+    } catch (parseErr) {
+      cache.remove(cacheKey);
+      return {
+        success: false,
+        error: "Verification code invalid. Please request a new code."
+      };
+    }
+
+    var attempts = (otpRecord && typeof otpRecord.attempts === "number") ? otpRecord.attempts : 0;
+    if (attempts >= 5) {
+      cache.remove(cacheKey);
+      logAuditAction("LOGIN_OTP_LOCKED", targetEmail, "Exceeded maximum OTP verification attempts.");
+      return {
+        success: false,
+        error: "Too many incorrect attempts. Please request a new verification code."
+      };
+    }
+
+    if (!otpRecord || String(otpRecord.code) !== submittedCode) {
+      otpRecord.attempts = attempts + 1;
+      if (otpRecord.attempts >= 5) {
+        cache.remove(cacheKey);
+        logAuditAction("LOGIN_OTP_LOCKED", targetEmail, "Exceeded maximum OTP verification attempts.");
+        return {
+          success: false,
+          error: "Too many incorrect attempts. Please request a new verification code."
+        };
+      }
+      cache.put(cacheKey, JSON.stringify(otpRecord), 600);
+      return {
+        success: false,
+        error: "Invalid verification code (" + (5 - otpRecord.attempts) + " attempts remaining)."
+      };
+    }
+
+    // Success: consume OTP so it cannot be reused and issue a signed session token
+    cache.remove(cacheKey);
+    var authToken = createSignedAuthToken(targetEmail);
+    logAuditAction("LOGIN_OTP_VERIFIED", targetEmail, "Verified 6-digit email code for manual login.");
+
+    return {
+      success: true,
+      email: targetEmail,
+      authToken: authToken
+    };
+  } catch (e) {
+    console.error("Error in verifyLoginCode: " + e.message);
+    return { success: false, error: "Verification failed: " + e.message };
+  }
+}
+
 
 
