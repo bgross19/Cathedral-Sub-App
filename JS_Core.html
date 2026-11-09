@@ -231,6 +231,68 @@
           return (month >= 1 && month <= 7) ? sem2Term : sem1Term;
       }
 
+      function parseStaffDutyBySemester(rawDutyStr) {
+          const raw = String(rawDutyStr === undefined || rawDutyStr === null ? '' : rawDutyStr).replace(/^'+/, '').trim();
+          if (!raw) return { s1: [], s2: [] };
+          const cleanList = (str) => String(str || '')
+              .split(',')
+              .map(d => String(d || '').replace(/^'+/, '').trim())
+              .filter(Boolean);
+          if (!/(?:^|[|;/])\s*(?:S[12]|Sem(?:ester)?\s*[12]|\d{4})\s*[:=]/i.test(raw)) {
+              const both = cleanList(raw);
+              return { s1: both.slice(), s2: both.slice() };
+          }
+          const segments = raw.split(/[|;/]+/);
+          let s1 = [];
+          let s2 = [];
+          segments.forEach(seg => {
+              const m = String(seg || '').trim().match(/^(S1|S2|Sem(?:ester)?\s*1|Sem(?:ester)?\s*2|\d{4})\s*[:=]\s*(.*)$/i);
+              if (m) {
+                  const keyRaw = m[1].replace(/\s+/g, '').toUpperCase();
+                  const vals = cleanList(m[2]);
+                  if (keyRaw === 'S1' || keyRaw === 'SEM1' || keyRaw === 'SEMESTER1') {
+                      s1 = vals;
+                  } else if (keyRaw === 'S2' || keyRaw === 'SEM2' || keyRaw === 'SEMESTER2') {
+                      s2 = vals;
+                  } else if (/^\d{4}$/.test(keyRaw)) {
+                      const termNum = parseInt(keyRaw, 10);
+                      if (termNum % 100 === 2 || termNum % 100 === 3) {
+                          s2 = vals;
+                      } else {
+                          s1 = vals;
+                      }
+                  }
+              }
+          });
+          return { s1, s2 };
+      }
+
+      function formatStaffDutyBySemester(s1Input, s2Input) {
+          const normalizeArr = (input) => {
+              const arr = Array.isArray(input) ? input : (input ? String(input).split(',') : []);
+              const seen = new Set();
+              const out = [];
+              arr.forEach(item => {
+                  const v = String(item === undefined || item === null ? '' : item).replace(/^'+/, '').trim();
+                  if (v && !seen.has(v)) {
+                      seen.add(v);
+                      out.push(v);
+                  }
+              });
+              out.sort((a, b) => {
+                  const nA = parseInt(a, 10);
+                  const nB = parseInt(b, 10);
+                  if (!isNaN(nA) && !isNaN(nB)) return nA - nB;
+                  return a.localeCompare(b);
+              });
+              return out;
+          };
+          const s1Clean = normalizeArr(s1Input);
+          const s2Clean = normalizeArr(s2Input);
+          if (s1Clean.length === 0 && s2Clean.length === 0) return '';
+          return 'S1:' + s1Clean.join(', ') + ' | S2:' + s2Clean.join(', ');
+      }
+
       function resolveClientStaffDutyForDate(rawDutyStr, dateStr) {
           const raw = String(rawDutyStr || '').trim();
           if (!raw) return '';
@@ -259,8 +321,6 @@
           });
           if (targetTerm && Object.prototype.hasOwnProperty.call(parsedByKey, targetTerm)) return parsedByKey[targetTerm];
           if (Object.prototype.hasOwnProperty.call(parsedByKey, targetSemKey)) return parsedByKey[targetSemKey];
-          if (Object.prototype.hasOwnProperty.call(parsedByKey, 'S1')) return parsedByKey['S1'];
-          if (Object.prototype.hasOwnProperty.call(parsedByKey, 'S2')) return parsedByKey['S2'];
           return '';
       }
 

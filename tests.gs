@@ -1550,6 +1550,58 @@ function runTests() {
       var verifiedTeacherUser = getUserData(getSS(), rightVerify.authToken);
       assert(verifiedTeacherUser && verifiedTeacherUser.name === "Quenichet, Karrie A" && verifiedTeacherUser.role === "Teacher", "Expected signed authToken to authenticate Teacher in getUserData");
 
+      // Test 22: S1 and S2 Sub Duties parsing, formatting, date-aware resolution, and Staff Roster inline updates
+      var plainParsed = parseStaffDutyBySemester("2, 5");
+      assert(plainParsed.s1.join(",") === "2,5" && plainParsed.s2.join(",") === "2,5", "Expected legacy plain duty '2, 5' to populate both S1 and S2");
+
+      var splitFormatted = formatStaffDutyBySemester(["5", "2"], ["7"]);
+      assert(splitFormatted === "S1:2, 5 | S2:7", "Expected formatStaffDutyBySemester to sort periods and emit 'S1:2, 5 | S2:7', got: " + splitFormatted);
+
+      var splitParsed = parseStaffDutyBySemester(splitFormatted);
+      assert(splitParsed.s1.join(",") === "2,5" && splitParsed.s2.join(",") === "7", "Expected parseStaffDutyBySemester to round-trip S1 and S2 duties");
+
+      var s2OnlyFormatted = formatStaffDutyBySemester([], ["4"]);
+      assert(s2OnlyFormatted === "S1: | S2:4", "Expected S2-only duty to format as 'S1: | S2:4'");
+      assert(resolveStaffDutyForDate(s2OnlyFormatted, "2026-11-10", { "Term ID": "3601" }) === "", "Expected S2-only duty ('S1: | S2:4') to resolve to '' in Semester 1");
+      assert(resolveStaffDutyForDate("S2:4", "2026-11-10", { "Term ID": "3601" }) === "", "Expected shorthand 'S2:4' to resolve to '' in Semester 1 without bleeding across semesters");
+      assert(resolveStaffDutyForDate("S2:4", "2027-02-10", { "Term ID": "3601" }) === "4", "Expected shorthand 'S2:4' to resolve to '4' in Semester 2");
+      assert(formatStaffDutyBySemester([], []) === "", "Expected empty S1 and S2 arrays to format as empty string ''");
+
+      // Verify inline Staff Roster update writes S1/S2 duty cleanly when Admin is signed in via Google SSO
+      global.Session = {
+        getActiveUser: function() { return { getEmail: function() { return "admin@gocathedral.com"; } }; },
+        getScriptTimeZone: function() { return "America/Indiana/Indianapolis"; }
+      };
+      var mutableRosterRows = [
+        ["Name", "Email", "Role", "Duty"],
+        ["Admin User", "admin@gocathedral.com", "Admin", ""],
+        ["Quenichet, Karrie A", "kquenichet@gocathedral.com", "Teacher", "2"]
+      ];
+      mockSheetsForPayroll["Staff Roster"] = {
+        getDataRange: function() {
+          return { getValues: function() { return mutableRosterRows; } };
+        },
+        getRange: function(r, c, nr, nc) {
+          return {
+            setValues: function(vals) {
+              for (var rIdx = 0; rIdx < vals.length; rIdx++) {
+                for (var cIdx = 0; cIdx < vals[rIdx].length; cIdx++) {
+                  mutableRosterRows[r - 1 + rIdx][c - 1 + cIdx] = vals[rIdx][cIdx];
+                }
+              }
+            }
+          };
+        }
+      };
+      if (typeof clearRosterCache === "function") clearRosterCache();
+
+      var inlineDutyRes = updateStaffDutyInlineAdmin("kquenichet@gocathedral.com", formatStaffDutyBySemester(["2"], ["6"]), "admin@gocathedral.com");
+      assert(inlineDutyRes && inlineDutyRes.success === true, "Expected updateStaffDutyInlineAdmin to succeed for S1/S2 duty");
+      assert(mutableRosterRows[2][3] === "S1:2 | S2:6", "Expected Staff Roster Col D to store 'S1:2 | S2:6'");
+      var adminRosterList = getStaffRosterForAdmin("admin@gocathedral.com");
+      var kqRosterItem = adminRosterList.find(function(s) { return s.email === "kquenichet@gocathedral.com"; });
+      assert(kqRosterItem && kqRosterItem.duty === "S1:2 | S2:6", "Expected getStaffRosterForAdmin to return updated S1/S2 duty");
+
       getSettings = origGetSettings;
       if (origUrlFetchApp !== undefined) global.UrlFetchApp = origUrlFetchApp;
 

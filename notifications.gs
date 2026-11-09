@@ -1052,7 +1052,10 @@ function generatePrincipalsDigestHTML(dateObj) {
             }
             
             var isSubstituteRole = false;
-            var teacherDuty = dutyLookup[assignedSub];
+            var rawTeacherDuty = dutyLookup[assignedSub];
+            var teacherDuty = (typeof resolveStaffDutyForDate === "function")
+              ? resolveStaffDutyForDate(rawTeacherDuty, dateFormatted, settings)
+              : rawTeacherDuty;
             var teacherDutyArr = teacherDuty ? String(teacherDuty).split(',').map(function(d){return parsePeriod(d);}) : [];
             var isDuty = teacherDutyArr.includes(parsePeriod(p));
 

@@ -51,16 +51,65 @@
       // === Staff Roster Logic ===
       let currentStaffRoster = [];
 
+      function syncStaffListDutyInMemory(email, newDutyStr) {
+        const lowerEmail = String(email || '').trim().toLowerCase();
+        const rosterEntry = currentStaffRoster.find(s => String(s.email || '').trim().toLowerCase() === lowerEmail);
+        if (rosterEntry) {
+          rosterEntry.duty = newDutyStr;
+        }
+        if (typeof staffList !== 'undefined' && Array.isArray(staffList)) {
+          const globalEntry = staffList.find(s => String(s.email || '').trim().toLowerCase() === lowerEmail);
+          if (globalEntry) {
+            globalEntry.duty = newDutyStr;
+          }
+        }
+      }
+
+      function buildSemesterDutyDropdownHtml(staffEmail, semKey, selectedArr) {
+        const safeSlug = String(staffEmail || '').replace(/[^a-zA-Z0-9]/g, '-');
+        const dropdownId = `duty-dropdown-${semKey}-${safeSlug}`;
+        const dutyDisplay = selectedArr.length > 0 ? selectedArr.join(', ') : 'None';
+        const displayColorClass = selectedArr.length > 0 ? 'text-[#002147] font-semibold' : 'text-gray-400';
+        const semLabel = semKey === 's1' ? 'S1' : 'S2';
+
+        let optionsHtml = `<div class="px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-gray-400 border-b border-gray-100">${semLabel} Sub Duty</div>`;
+        for (let i = 1; i <= 8; i++) {
+          const isChecked = selectedArr.includes(String(i)) ? 'checked' : '';
+          optionsHtml += `
+            <label class="flex items-center space-x-2 px-2.5 py-1.5 hover:bg-gray-100 cursor-pointer text-sm">
+              <input type="checkbox" value="${i}" data-sem="${semKey}" ${isChecked} onchange="handleDutyCheckboxChange('${escapeJs(staffEmail)}', '${semKey}', this)" class="form-checkbox h-4 w-4 text-[#00843D]">
+              <span>Period ${i}</span>
+            </label>
+          `;
+        }
+
+        return `
+          <div class="relative inline-block text-left duty-dropdown-container">
+            <button type="button" onclick="toggleDutyDropdown('${dropdownId}')" class="inline-flex items-center justify-between min-w-[5.5rem] px-2.5 py-1 border rounded-md focus:ring-1 focus:ring-[#00843D] outline-none text-sm bg-white hover:bg-gray-50">
+              <span id="duty-display-${dropdownId}" class="${displayColorClass}">${escapeHtml(dutyDisplay)}</span>
+              <svg class="-mr-1 ml-2 h-4 w-4 text-gray-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
+              </svg>
+            </button>
+            <div id="${dropdownId}" class="hidden origin-top-left absolute left-0 mt-1 w-36 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-20">
+              <div class="py-1" role="menu" aria-orientation="vertical">
+                ${optionsHtml}
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
       function loadStaffRosterSettings() {
         const tbody = document.getElementById('staffRosterTableBody');
-        tbody.innerHTML = '<tr><td colspan="4" class="p-8 text-center text-gray-400 italic">Loading staff roster...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" class="p-8 text-center text-gray-400 italic">Loading staff roster...</td></tr>';
         google.script.run
           .withSuccessHandler(roster => {
             currentStaffRoster = roster;
             renderStaffRosterTable();
           })
           .withFailureHandler(err => {
-            tbody.innerHTML = `<tr><td colspan="4" class="p-8 text-center text-red-600 font-bold">Failed to load roster: ${escapeHtml(err.message)}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="6" class="p-8 text-center text-red-600 font-bold">Failed to load roster: ${escapeHtml(err.message)}</td></tr>`;
           })
           .getStaffRosterForAdmin(window.activeUserEmail);
       }
@@ -68,7 +117,7 @@
       function renderStaffRosterTable() {
         const tbody = document.getElementById('staffRosterTableBody');
         if (currentStaffRoster.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="4" class="p-8 text-center text-gray-400 italic">No staff found.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="6" class="p-8 text-center text-gray-400 italic">No staff found.</td></tr>';
           return;
         }
 
@@ -88,43 +137,19 @@
 
           roleHtml += `</select>`;
 
-          let dutyArr = staff.duty ? String(staff.duty).split(',').map(d => d.trim()) : [];
-          let dutyDisplay = dutyArr.length > 0 ? dutyArr.join(', ') : 'None';
-
-          let dutyOptionsHtml = '';
-          for (let i = 1; i <= 8; i++) {
-              let isChecked = dutyArr.includes(String(i)) ? 'checked' : '';
-              dutyOptionsHtml += `
-                  <label class="flex items-center space-x-2 p-1 hover:bg-gray-100 cursor-pointer text-sm">
-                      <input type="checkbox" value="${i}" ${isChecked} onchange="handleDutyCheckboxChange('${escapeJs(staff.email)}', this)" class="form-checkbox h-4 w-4 text-[#00843D]">
-                      <span>Period ${i}</span>
-                  </label>
-              `;
-          }
-
-          let dutyDropdownId = 'duty-dropdown-' + staff.email.replace(/[^a-zA-Z0-9]/g, '-');
-          let dutyHtml = `
-              <div class="relative inline-block text-left duty-dropdown-container">
-                  <button type="button" onclick="toggleDutyDropdown('${dutyDropdownId}')" class="inline-flex justify-between w-full p-1 border rounded focus:ring-1 focus:ring-[#00843D] outline-none text-sm bg-white text-gray-700 hover:bg-gray-50">
-                      <span id="duty-display-${dutyDropdownId}">${escapeHtml(dutyDisplay)}</span>
-                      <svg class="-mr-1 ml-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                          <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
-                      </svg>
-                  </button>
-                  <div id="${dutyDropdownId}" class="hidden origin-top-right absolute right-0 mt-1 w-32 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-10">
-                      <div class="py-1" role="menu" aria-orientation="vertical">
-                          ${dutyOptionsHtml}
-                      </div>
-                  </div>
-              </div>
-          `;
+          const parsedDuty = (typeof parseStaffDutyBySemester === 'function')
+              ? parseStaffDutyBySemester(staff.duty)
+              : { s1: [], s2: [] };
+          const s1DutyHtml = buildSemesterDutyDropdownHtml(staff.email, 's1', parsedDuty.s1);
+          const s2DutyHtml = buildSemesterDutyDropdownHtml(staff.email, 's2', parsedDuty.s2);
 
           html += `
-            <tr class="hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0">
+            <tr data-staff-email="${escapeHtml(staff.email)}" class="hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0">
               <td class="p-3 text-sm text-gray-800 font-medium">${escapeHtml(staff.name)}</td>
               <td class="p-3 text-sm text-gray-600">${escapeHtml(staff.email)}</td>
               <td class="p-3 text-sm text-gray-600">${roleHtml}</td>
-              <td class="p-3 text-sm text-gray-600">${dutyHtml}</td>
+              <td class="p-3 text-sm text-gray-600">${s1DutyHtml}</td>
+              <td class="p-3 text-sm text-gray-600">${s2DutyHtml}</td>
               <td class="p-3 text-right space-x-2">
                 <button onclick="openEditStaffModal('${escapeJs(staff.name)}', '${escapeJs(staff.email)}', '${escapeJs(staff.role || '')}', '${escapeJs(staff.duty || '')}')" class="text-blue-600 hover:text-blue-800 font-semibold text-sm">Edit</button>
                 <button onclick="deleteStaffMember('${escapeJs(staff.email)}')" class="text-red-600 hover:text-red-800 font-semibold text-sm">Delete</button>
@@ -157,8 +182,8 @@
           google.script.run
               .withSuccessHandler(result => {
                   if (result && result.success) {
-                      showToast("Duty updated successfully.", "success");
-                      loadStaffRosterSettings();
+                      syncStaffListDutyInMemory(email, newDuty);
+                      showToast("Sub duty updated successfully.", "success");
                   } else {
                       showToast("Failed to update duty: " + (result ? result.error : "Unknown error"), "error");
                       loadStaffRosterSettings(); // revert
@@ -184,25 +209,31 @@
           }
       }
 
-      function handleDutyCheckboxChange(email, checkbox) {
-          // Find the container for this dropdown
-          const dropdownContainer = checkbox.closest('.duty-dropdown-container');
-          const checkboxes = dropdownContainer.querySelectorAll('input[type="checkbox"]');
+      function handleDutyCheckboxChange(email, semKey, checkbox) {
+          const rowEl = checkbox.closest('tr');
+          if (!rowEl) return;
 
-          let selectedDuties = [];
-          checkboxes.forEach(cb => {
-              if (cb.checked) {
-                  selectedDuties.push(cb.value);
-              }
-          });
+          const s1Selected = [];
+          rowEl.querySelectorAll('input[data-sem="s1"]:checked').forEach(cb => s1Selected.push(cb.value));
 
-          const newDutyStr = selectedDuties.join(', ');
+          const s2Selected = [];
+          rowEl.querySelectorAll('input[data-sem="s2"]:checked').forEach(cb => s2Selected.push(cb.value));
 
-          // Update display
-          const dropdownId = dropdownContainer.querySelector('div[id^="duty-dropdown-"]').id;
-          const displaySpan = document.getElementById('duty-display-' + dropdownId);
-          displaySpan.innerText = newDutyStr || 'None';
+          const newDutyStr = formatStaffDutyBySemester(s1Selected, s2Selected);
+          const safeSlug = String(email || '').replace(/[^a-zA-Z0-9]/g, '-');
 
+          const s1Span = document.getElementById(`duty-display-duty-dropdown-s1-${safeSlug}`);
+          if (s1Span) {
+              s1Span.innerText = s1Selected.length > 0 ? s1Selected.join(', ') : 'None';
+              s1Span.className = s1Selected.length > 0 ? 'text-[#002147] font-semibold' : 'text-gray-400';
+          }
+          const s2Span = document.getElementById(`duty-display-duty-dropdown-s2-${safeSlug}`);
+          if (s2Span) {
+              s2Span.innerText = s2Selected.length > 0 ? s2Selected.join(', ') : 'None';
+              s2Span.className = s2Selected.length > 0 ? 'text-[#002147] font-semibold' : 'text-gray-400';
+          }
+
+          syncStaffListDutyInMemory(email, newDutyStr);
           updateStaffDutyInline(email, newDutyStr);
       }
 
@@ -229,13 +260,15 @@
            return text;
         }
 
-        let tsvText = "LASTFIRST\tEMAIL_ADDR\tRole\tDuty\n";
+        let tsvText = "LASTFIRST\tEMAIL_ADDR\tRole\tS1 Duty\tS2 Duty\n";
         currentStaffRoster.forEach(staff => {
            const name = sanitizeTSV(staff.name);
            const email = sanitizeTSV(staff.email);
            const role = sanitizeTSV(staff.role || 'Teacher');
-           const duty = sanitizeTSV(staff.duty || '');
-           tsvText += `${name}\t${email}\t${role}\t${duty}\n`;
+           const parsed = parseStaffDutyBySemester(staff.duty);
+           const s1Duty = sanitizeTSV(parsed.s1.join(', '));
+           const s2Duty = sanitizeTSV(parsed.s2.join(', '));
+           tsvText += `${name}\t${email}\t${role}\t${s1Duty}\t${s2Duty}\n`;
         });
         navigator.clipboard.writeText(tsvText).then(() => {
            showToast("Staff roster copied to clipboard as TSV!", 'info');
@@ -250,9 +283,11 @@
         const email = document.getElementById('staffEmailInput').value;
         const role = document.getElementById('staffRoleInput').value;
 
-        let selectedDuties = [];
-        document.querySelectorAll('.staff-duty-cb:checked').forEach(cb => selectedDuties.push(cb.value));
-        const duty = selectedDuties.join(', ');
+        const s1Duties = [];
+        document.querySelectorAll('.staff-duty-s1-cb:checked').forEach(cb => s1Duties.push(cb.value));
+        const s2Duties = [];
+        document.querySelectorAll('.staff-duty-s2-cb:checked').forEach(cb => s2Duties.push(cb.value));
+        const duty = formatStaffDutyBySemester(s1Duties, s2Duties);
 
         // Keep hidden input in sync (optional, but good for captureModalState)
         document.getElementById('staffDutyInput').value = duty;
@@ -375,19 +410,27 @@
              delimiter = '\t';
          }
 
-
-
          const firstLine = parseCsvLine(lines[0], delimiter);
-         const firstLineUpper = firstLine.map(s => s.toUpperCase());
+         const firstLineUpper = firstLine.map(s => String(s || '').trim().toUpperCase());
 
-         const hasHeaders = firstLineUpper.includes('LASTFIRST') || firstLineUpper.includes('EMAIL_ADDR') || firstLineUpper.includes('DUTY');
+         const hasHeaders = firstLineUpper.some(h =>
+             h === 'LASTFIRST' || h === 'NAME' || h === 'EMAIL_ADDR' || h === 'EMAIL' ||
+             h === 'DUTY' || h === 'S1 DUTY' || h === 'S1_DUTY' || h === 'S1 SUB DUTY' || h === 'S1' ||
+             h === 'S2 DUTY' || h === 'S2_DUTY' || h === 'S2 SUB DUTY' || h === 'S2'
+         );
          const startIndex = hasHeaders ? 1 : 0;
+
+         const hdrRoleIdx = hasHeaders ? firstLineUpper.findIndex(h => h === 'ROLE') : -1;
+         const hdrDutyIdx = hasHeaders ? firstLineUpper.findIndex(h => h === 'DUTY' || h === 'SUB DUTY') : -1;
+         const hdrS1Idx = hasHeaders ? firstLineUpper.findIndex(h => h === 'S1 DUTY' || h === 'S1_DUTY' || h === 'S1 SUB DUTY' || h === 'S1') : -1;
+         const hdrS2Idx = hasHeaders ? firstLineUpper.findIndex(h => h === 'S2 DUTY' || h === 'S2_DUTY' || h === 'S2 SUB DUTY' || h === 'S2') : -1;
 
          if (lines.length <= startIndex) {
             showToast("Data contains no data rows.", 'info');
             return;
          }
 
+         const knownRoles = ["teacher", "substitute", "admin", "hr", "principal", "sub coordinator"];
          const updates = [];
          for (let i = startIndex; i < lines.length; i++) {
             let row = parseCsvLine(lines[i], delimiter);
@@ -400,7 +443,7 @@
 
             let emailColIdx = -1;
             for (let c = row.length - 1; c >= 0; c--) {
-                if (row[c].includes('@')) {
+                if (row[c] && row[c].includes('@')) {
                     emailColIdx = c;
                     break;
                 }
@@ -410,15 +453,38 @@
                 email = row[emailColIdx];
                 name = row.slice(0, emailColIdx).join(', ');
 
-                // If there are two columns after email, assume Role then Duty
-                if (emailColIdx + 2 < row.length) {
+                if (hasHeaders && (hdrS1Idx !== -1 || hdrS2Idx !== -1)) {
+                    if (hdrRoleIdx !== -1 && hdrRoleIdx < row.length) {
+                        role = row[hdrRoleIdx] || "Teacher";
+                    }
+                    const s1Raw = (hdrS1Idx !== -1 && hdrS1Idx < row.length) ? String(row[hdrS1Idx] || '').replace(/^"|"$/g, '').trim() : "";
+                    const s2Raw = (hdrS2Idx !== -1 && hdrS2Idx < row.length) ? String(row[hdrS2Idx] || '').replace(/^"|"$/g, '').trim() : "";
+                    duty = formatStaffDutyBySemester(s1Raw, s2Raw);
+                } else if (hasHeaders && hdrDutyIdx !== -1) {
+                    if (hdrRoleIdx !== -1 && hdrRoleIdx < row.length) {
+                        role = row[hdrRoleIdx] || "Teacher";
+                    }
+                    duty = (hdrDutyIdx < row.length) ? row[hdrDutyIdx] : "";
+                } else if (emailColIdx + 3 < row.length) {
+                    // 3+ columns after email: Role, S1 Duty, S2 Duty
                     role = row[emailColIdx + 1] || "Teacher";
-                    duty = row[emailColIdx + 2];
-                }
-                // If there is only one column after email, backwards compatibility: it could be role or duty
-                else if (emailColIdx + 1 < row.length) {
+                    const s1Raw = String(row[emailColIdx + 2] || '').replace(/^"|"$/g, '').trim();
+                    const s2Raw = String(row[emailColIdx + 3] || '').replace(/^"|"$/g, '').trim();
+                    duty = formatStaffDutyBySemester(s1Raw, s2Raw);
+                } else if (emailColIdx + 2 < row.length) {
+                    const col1 = String(row[emailColIdx + 1] || '').replace(/^"|"$/g, '').trim();
+                    const col2 = String(row[emailColIdx + 2] || '').replace(/^"|"$/g, '').trim();
+                    if (knownRoles.includes(col1.toLowerCase()) || col1 === '') {
+                        role = col1 || "Teacher";
+                        duty = col2;
+                    } else {
+                        // Two non-role columns after email: treat as S1 Duty and S2 Duty
+                        role = "Teacher";
+                        duty = formatStaffDutyBySemester(col1, col2);
+                    }
+                } else if (emailColIdx + 1 < row.length) {
                     let val = row[emailColIdx + 1].trim();
-                    if (val.toLowerCase() === "teacher" || val.toLowerCase() === "substitute") {
+                    if (knownRoles.includes(val.toLowerCase())) {
                         role = val;
                         duty = "";
                     } else {
@@ -452,6 +518,11 @@
             email = email.replace(/^"|"$/g, '').trim();
             role = role.replace(/^"|"$/g, '').trim() || "Teacher";
             duty = duty.replace(/^"|"$/g, '').trim();
+            // Normalize legacy plain CSV duties into explicit S1/S2 format if non-empty
+            if (duty && !/(?:^|[|;/])\s*(?:S[12]|Sem(?:ester)?\s*[12]|\d{4})\s*[:=]/i.test(duty)) {
+                const parsedPlain = parseStaffDutyBySemester(duty);
+                duty = formatStaffDutyBySemester(parsedPlain.s1, parsedPlain.s2);
+            }
 
             if (name && email) {
                 updates.push({name: name, email: email, role: role, duty: duty});
@@ -721,9 +792,20 @@
 
       // === Staff Roster Modals ===
       function updateHiddenDutyInput() {
-        let selectedDuties = [];
-        document.querySelectorAll('.staff-duty-cb:checked').forEach(cb => selectedDuties.push(cb.value));
-        document.getElementById('staffDutyInput').value = selectedDuties.join(', ');
+        const s1Duties = [];
+        document.querySelectorAll('.staff-duty-s1-cb:checked').forEach(cb => s1Duties.push(cb.value));
+        const s2Duties = [];
+        document.querySelectorAll('.staff-duty-s2-cb:checked').forEach(cb => s2Duties.push(cb.value));
+        document.getElementById('staffDutyInput').value = formatStaffDutyBySemester(s1Duties, s2Duties);
+      }
+
+      function copyModalS1DutyToS2() {
+        const s1Set = new Set();
+        document.querySelectorAll('.staff-duty-s1-cb:checked').forEach(cb => s1Set.add(cb.value));
+        document.querySelectorAll('.staff-duty-s2-cb').forEach(cb => {
+          cb.checked = s1Set.has(cb.value);
+        });
+        updateHiddenDutyInput();
       }
 
       function openAddStaffModal() {
@@ -734,7 +816,7 @@
         document.getElementById('staffRoleInput').value = "Teacher";
         document.getElementById('staffRoleInput').disabled = false;
         document.getElementById('staffDutyInput').value = "";
-        document.querySelectorAll('.staff-duty-cb').forEach(cb => cb.checked = false);
+        document.querySelectorAll('.staff-duty-s1-cb, .staff-duty-s2-cb').forEach(cb => cb.checked = false);
 
         const modal = document.querySelector('#staffModal');
         const overlay = document.querySelector('#genericModalOverlay');
@@ -754,7 +836,8 @@
         document.getElementById('staffEmailInput').value = email;
         const roleInput = document.getElementById('staffRoleInput');
 
-        let normalizedRole = role ? role.trim() : "Teacher";
+        const rosterMatch = currentStaffRoster.find(s => String(s.email || '').trim().toLowerCase() === String(email || '').trim().toLowerCase());
+        let normalizedRole = (rosterMatch && rosterMatch.role ? rosterMatch.role : (role || "Teacher")).trim();
         // Check if the current user role allows changing
         const specialRoles = ["admin", "hr", "principal", "sub coordinator"];
         if (specialRoles.includes(normalizedRole.toLowerCase())) {
@@ -770,12 +853,15 @@
             roleInput.disabled = false;
         }
 
-        const dutyStr = duty || "";
-        document.getElementById('staffDutyInput').value = dutyStr;
-        const dutyArr = dutyStr.split(',').map(d => d.trim());
-        document.querySelectorAll('.staff-duty-cb').forEach(cb => {
-            cb.checked = dutyArr.includes(cb.value);
+        const dutyStr = (rosterMatch && rosterMatch.duty !== undefined) ? (rosterMatch.duty || "") : (duty || "");
+        const parsedDuty = parseStaffDutyBySemester(dutyStr);
+        document.querySelectorAll('.staff-duty-s1-cb').forEach(cb => {
+            cb.checked = parsedDuty.s1.includes(cb.value);
         });
+        document.querySelectorAll('.staff-duty-s2-cb').forEach(cb => {
+            cb.checked = parsedDuty.s2.includes(cb.value);
+        });
+        updateHiddenDutyInput();
 
         const modal = document.querySelector('#staffModal');
         const overlay = document.querySelector('#genericModalOverlay');

@@ -1461,6 +1461,83 @@ function resolveTermIdForDate(dateStr, optionalSettings) {
 }
 
 /**
+ * Parses a staff member's raw Duty string into separate Semester 1 (s1) and Semester 2 (s2) period arrays.
+ * Plain legacy strings without semester prefixes (e.g. "2" or "1, 5") apply to both S1 and S2.
+ */
+function parseStaffDutyBySemester(rawDutyStr) {
+  var raw = String(rawDutyStr === undefined || rawDutyStr === null ? "" : rawDutyStr).replace(/^'+/, "").trim();
+  if (!raw) return { s1: [], s2: [] };
+
+  var cleanList = function(str) {
+    return String(str || "")
+      .split(",")
+      .map(function(d) { return String(d || "").replace(/^'+/, "").trim(); })
+      .filter(function(d) { return d !== ""; });
+  };
+
+  if (!/(?:^|[|;/])\s*(?:S[12]|Sem(?:ester)?\s*[12]|\d{4})\s*[:=]/i.test(raw)) {
+    var both = cleanList(raw);
+    return { s1: both.slice(), s2: both.slice() };
+  }
+
+  var segments = raw.split(/[|;/]+/);
+  var s1 = [];
+  var s2 = [];
+  for (var i = 0; i < segments.length; i++) {
+    var seg = String(segments[i] || "").trim();
+    var m = seg.match(/^(S1|S2|Sem(?:ester)?\s*1|Sem(?:ester)?\s*2|\d{4})\s*[:=]\s*(.*)$/i);
+    if (m) {
+      var keyRaw = m[1].replace(/\s+/g, "").toUpperCase();
+      var vals = cleanList(m[2]);
+      if (keyRaw === "S1" || keyRaw === "SEM1" || keyRaw === "SEMESTER1") {
+        s1 = vals;
+      } else if (keyRaw === "S2" || keyRaw === "SEM2" || keyRaw === "SEMESTER2") {
+        s2 = vals;
+      } else if (/^\d{4}$/.test(keyRaw)) {
+        var termNum = parseInt(keyRaw, 10);
+        if (termNum % 100 === 2 || termNum % 100 === 3) {
+          s2 = vals;
+        } else {
+          s1 = vals;
+        }
+      }
+    }
+  }
+  return { s1: s1, s2: s2 };
+}
+
+/**
+ * Formats Semester 1 and Semester 2 duty period lists into the canonical Staff Roster Duty string
+ * ("S1:<periods> | S2:<periods>", or "" if both semesters have no assigned sub duties).
+ */
+function formatStaffDutyBySemester(s1Input, s2Input) {
+  var normalizeArr = function(input) {
+    var arr = Array.isArray(input) ? input : (input ? String(input).split(",") : []);
+    var seen = {};
+    var out = [];
+    for (var i = 0; i < arr.length; i++) {
+      var v = String(arr[i] === undefined || arr[i] === null ? "" : arr[i]).replace(/^'+/, "").trim();
+      if (v && !seen[v]) {
+        seen[v] = true;
+        out.push(v);
+      }
+    }
+    out.sort(function(a, b) {
+      var nA = parseInt(a, 10);
+      var nB = parseInt(b, 10);
+      if (!isNaN(nA) && !isNaN(nB)) return nA - nB;
+      return a < b ? -1 : (a > b ? 1 : 0);
+    });
+    return out;
+  };
+
+  var s1Clean = normalizeArr(s1Input);
+  var s2Clean = normalizeArr(s2Input);
+  if (s1Clean.length === 0 && s2Clean.length === 0) return "";
+  return "S1:" + s1Clean.join(", ") + " | S2:" + s2Clean.join(", ");
+}
+
+/**
  * Resolves a staff member's sub duty period(s) for a specific date (or active semester term if dateRaw is omitted).
  * Supports both plain duty strings (e.g. "3" or "2, 5") and semester-prefixed strings
  * (e.g. "S1:2 | S2:7", "S1: | S2:7", "3601:2 | 3603:7").
@@ -1502,12 +1579,6 @@ function resolveStaffDutyForDate(rawDutyStr, dateRaw, optionalSettings) {
   }
   if (Object.prototype.hasOwnProperty.call(parsedByKey, targetSemKey)) {
     return parsedByKey[targetSemKey];
-  }
-  if (Object.prototype.hasOwnProperty.call(parsedByKey, "S1")) {
-    return parsedByKey["S1"];
-  }
-  if (Object.prototype.hasOwnProperty.call(parsedByKey, "S2")) {
-    return parsedByKey["S2"];
   }
   return "";
 }
