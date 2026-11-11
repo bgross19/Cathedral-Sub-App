@@ -63,8 +63,11 @@ jobs:
           }
           ESLINT
 
-      - name: Copy code.gs to code.js for ESLint
-        run: cp code.gs code.js
+      - name: Copy .gs files to .js for ESLint
+        run: |
+          for file in *.gs; do
+            cp "$file" "${file%.gs}.js"
+          done
 
       - name: Run ESLint
-        run: npx eslint code.js Index.html || true # Allow failure to just report warnings/errors, or remove `|| true` to fail on errors.
+        run: npx eslint *.js *.html

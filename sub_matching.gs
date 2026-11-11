@@ -264,14 +264,14 @@ function getSuggestedSubs(dateStr, clientEmail) {
     var row = rosterData[r];
     if (!row || !row[1]) continue;
 
-    var email = String(row[1]).toLowerCase().trim();
+    var staffEmail = String(row[1]).toLowerCase().trim();
     var rawDuty = String(row[3] || "").trim();
     var resolvedDuty = (typeof resolveStaffDutyForDate === "function")
       ? resolveStaffDutyForDate(rawDuty, dateStr, settings)
       : rawDuty;
     var staff = {
       name: String(row[0] || "").trim(),
-      email: email,
+      email: staffEmail,
       role: String(row[2] || "").trim().toLowerCase(),
       duty: resolvedDuty,
       rawDuty: rawDuty,
@@ -280,7 +280,7 @@ function getSuggestedSubs(dateStr, clientEmail) {
       building: String(row[6] || "").trim(),
       absentPeriods: {} // Track which periods they are absent themselves
     };
-    staffMap[email] = staff;
+    staffMap[staffEmail] = staff;
     staffList.push(staff);
   }
 

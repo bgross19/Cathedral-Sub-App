@@ -1165,7 +1165,7 @@ function _normalizeScheduleDateStr(dateRaw) {
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
 
   // Support M/D/YYYY or M-D-YYYY
-  var parts = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  var parts = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
   if (parts) {
     var mm = parts[1].length < 2 ? "0" + parts[1] : parts[1];
     var dd = parts[2].length < 2 ? "0" + parts[2] : parts[2];
