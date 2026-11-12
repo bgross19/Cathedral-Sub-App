@@ -124,6 +124,12 @@ function processEmailQueue() {
 
   try {
     var ss = getSS();
+    try {
+      checkAndSendUnfilledCoverageReminders(null, ss);
+    } catch (remErr) {
+      console.error("Error in checkAndSendUnfilledCoverageReminders: " + remErr.message);
+    }
+
     var sheet = ss.getSheetByName("Email Queue");
     if (!sheet) return;
 
@@ -625,6 +631,475 @@ function sendUrgentCoverageEmail(ss, teacherName, formData, instructions) {
 
     enqueueEmail(coordinatorEmail, subject, body, { htmlBody: htmlBody });
   }
+}
+
+var _inMemoryUnfilledReminderSentMap = {};
+
+/**
+ * Checks whether the 15-minute unfilled coverage reminder has already been processed
+ * for a given `(isoDate, period)` pair today.
+ */
+function hasPeriodReminderBeenProcessed_(isoDate, period, cache) {
+  var pKey = String(period);
+  var cacheKey = "UNFILLED_REMINDER_" + isoDate + "_P" + pKey;
+  if (_inMemoryUnfilledReminderSentMap[cacheKey]) return true;
+
+  if (cache && typeof cache.get === "function") {
+    try {
+      if (cache.get(cacheKey)) {
+        _inMemoryUnfilledReminderSentMap[cacheKey] = true;
+        return true;
+      }
+    } catch (e) {}
+  }
+
+  if (typeof PropertiesService !== "undefined" && PropertiesService && typeof PropertiesService.getScriptProperties === "function") {
+    try {
+      var props = PropertiesService.getScriptProperties();
+      if (props && typeof props.getProperty === "function") {
+        var raw = props.getProperty("UNFILLED_REMINDER_SENT_MAP");
+        if (raw) {
+          var parsed = JSON.parse(raw);
+          if (parsed && parsed.date === isoDate && parsed.periods && parsed.periods[pKey]) {
+            _inMemoryUnfilledReminderSentMap[cacheKey] = true;
+            return true;
+          }
+        }
+      }
+    } catch (e2) {}
+  }
+  return false;
+}
+
+/**
+ * Marks a `(isoDate, period)` pair as processed so its reminder is not sent again today.
+ */
+function markPeriodReminderProcessed_(isoDate, period, cache) {
+  var pKey = String(period);
+  var cacheKey = "UNFILLED_REMINDER_" + isoDate + "_P" + pKey;
+  _inMemoryUnfilledReminderSentMap[cacheKey] = true;
+
+  if (cache && typeof cache.put === "function") {
+    try {
+      cache.put(cacheKey, "1", 21600); // 6 hours
+    } catch (e) {}
+  }
+
+  if (typeof PropertiesService !== "undefined" && PropertiesService && typeof PropertiesService.getScriptProperties === "function") {
+    try {
+      var props = PropertiesService.getScriptProperties();
+      if (props && typeof props.getProperty === "function" && typeof props.setProperty === "function") {
+        var raw = props.getProperty("UNFILLED_REMINDER_SENT_MAP");
+        var parsed = null;
+        if (raw) {
+          try { parsed = JSON.parse(raw); } catch (je) { parsed = null; }
+        }
+        if (!parsed || parsed.date !== isoDate || typeof parsed.periods !== "object" || !parsed.periods) {
+          parsed = { date: isoDate, periods: {} };
+        }
+        parsed.periods[pKey] = true;
+        props.setProperty("UNFILLED_REMINDER_SENT_MAP", JSON.stringify(parsed));
+      }
+    } catch (e2) {}
+  }
+}
+
+/**
+ * Clears in-memory deduplication state for unfilled coverage reminders (used in unit tests).
+ */
+function resetUnfilledCoverageReminderState_() {
+  _inMemoryUnfilledReminderSentMap = {};
+}
+
+/**
+ * Checks whether any class period is starting within the configured lead time (default 15 minutes)
+ * and sends a consolidated reminder email to all Sub Coordinators (falling back to Admins) if
+ * there are still unfilled sub coverages for that period.
+ *
+ * Designed to run inside the 1-minute `processEmailQueue` trigger with zero Google Sheet reads
+ * on 99% of ticks (only reads sheet data at the exact minute a period crosses the lead-time threshold).
+ */
+function checkAndSendUnfilledCoverageReminders(nowDateOverride, optionalSS) {
+  var now = (nowDateOverride instanceof Date && !isNaN(nowDateOverride.getTime()))
+    ? nowDateOverride
+    : new Date();
+
+  // Fast exit outside school days (Mon-Fri) or outside school hours (6 AM - 4 PM)
+  var dayOfWeek = now.getDay();
+  if (dayOfWeek === 0 || dayOfWeek === 6) return { checked: false, reason: "weekend" };
+  var hour = now.getHours();
+  if (hour < 6 || hour >= 16) return { checked: false, reason: "outside_school_hours" };
+
+  var ss = optionalSS || getSS();
+  var settings = getSettings(ss);
+  var leadMinutes = parseInt(
+    settings["Unfilled Coverage Reminder Lead Time (Minutes)"] !== undefined
+      ? settings["Unfilled Coverage Reminder Lead Time (Minutes)"]
+      : "15",
+    10
+  );
+  if (isNaN(leadMinutes) || leadMinutes <= 0) {
+    return { checked: false, reason: "disabled" };
+  }
+
+  var tz = (typeof Session !== "undefined" && Session && typeof Session.getScriptTimeZone === "function")
+    ? Session.getScriptTimeZone()
+    : "America/Indiana/Indianapolis";
+  var todayIso = (typeof Utilities !== "undefined" && Utilities && typeof Utilities.formatDate === "function")
+    ? Utilities.formatDate(now, tz, "yyyy-MM-dd")
+    : (now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0") + "-" + String(now.getDate()).padStart(2, "0"));
+
+  var dateColors = (typeof getDateColorsCached === "function") ? getDateColorsCached(ss) : {};
+  var todayColor = String((dateColors && dateColors[todayIso]) || "").trim();
+  if (todayColor.toLowerCase() === "no school") {
+    return { checked: false, reason: "no_school" };
+  }
+
+  var cache = (typeof CacheService !== "undefined" && CacheService && typeof CacheService.getScriptCache === "function")
+    ? CacheService.getScriptCache()
+    : null;
+
+  var candidatePeriods = ['0', '1', '10', '2', '3', '4', '5', '6', '7', '8'];
+  var duePeriods = [];
+
+  for (var cIdx = 0; cIdx < candidatePeriods.length; cIdx++) {
+    var p = candidatePeriods[cIdx];
+    var pRange = (typeof getPeriodTimeRangeForDate === "function")
+      ? getPeriodTimeRangeForDate(todayIso, p, dateColors, settings)
+      : null;
+    if (!pRange || !pRange.startDateObj) continue;
+
+    var diffMinutes = (pRange.startDateObj.getTime() - now.getTime()) / 60000;
+    if (diffMinutes > 0 && diffMinutes <= leadMinutes) {
+      if (!hasPeriodReminderBeenProcessed_(todayIso, p, cache)) {
+        duePeriods.push({
+          period: p,
+          periodRange: pRange,
+          diffMinutes: diffMinutes
+        });
+      }
+    }
+  }
+
+  if (duePeriods.length === 0) {
+    return { checked: true, duePeriods: 0, emailsSent: 0 };
+  }
+
+  // Mark due periods processed immediately so overlapping triggers or empty-unfilled checks don't re-read sheets every minute
+  for (var mIdx = 0; mIdx < duePeriods.length; mIdx++) {
+    markPeriodReminderProcessed_(todayIso, duePeriods[mIdx].period, cache);
+  }
+
+  // Load absence data and roster data now that at least one period has crossed the reminder threshold
+  var v2Compat = (typeof readV2AbsenceDataCompat === "function") ? readV2AbsenceDataCompat(ss) : null;
+  var absenceData = null;
+  var snapshottedScheduleLookup = null;
+  if (v2Compat && v2Compat.absenceData) {
+    absenceData = v2Compat.absenceData;
+    snapshottedScheduleLookup = v2Compat.snapshottedScheduleLookup || null;
+  } else {
+    var mainSheet = ss.getSheetByName("Absence Requests");
+    if (!mainSheet) return { checked: true, duePeriods: duePeriods.length, emailsSent: 0 };
+    absenceData = mainSheet.getDataRange().getValues();
+  }
+
+  var rosterData = (typeof getRosterDataCached === "function") ? getRosterDataCached(ss) : [];
+  var nameLookup = (typeof buildNameLookup === "function") ? buildNameLookup(rosterData) : {};
+  var fallbackScheduleLookup = null;
+  var getFallbackSchedule = function() {
+    if (fallbackScheduleLookup !== null) return fallbackScheduleLookup;
+    try {
+      var schedData = (typeof getMasterScheduleData === "function") ? getMasterScheduleData() : [];
+      fallbackScheduleLookup = (typeof buildScheduleLookup === "function")
+        ? buildScheduleLookup(schedData, settings["Term ID"] || "3601")
+        : {};
+    } catch (sErr) {
+      fallbackScheduleLookup = {};
+    }
+    return fallbackScheduleLookup;
+  };
+
+  var formatTeacherDisplayName = function(rawName) {
+    var str = String(rawName || "").trim();
+    if (str.indexOf(",") !== -1) {
+      var parts = str.split(",");
+      if (parts.length > 1) return parts[1].trim() + " " + parts[0].trim();
+    }
+    return str;
+  };
+
+  // Collect all active absences for today
+  var todayActiveRows = [];
+  for (var i = 1; i < absenceData.length; i++) {
+    var row = absenceData[i];
+    if (!row || row.length < 5) continue;
+    var status = String(row[19] || "Active").trim();
+    if (status.toLowerCase() === "canceled" || status.toLowerCase() === "cancelled") continue;
+
+    var rowIsoDate = (typeof getStandardizedDateString === "function")
+      ? getStandardizedDateString(row[3])
+      : String(row[3] || "").trim();
+    if (rowIsoDate === todayIso) {
+      todayActiveRows.push(row);
+    }
+  }
+
+  var recipients = getEmailsByRole(ss, "sub coordinator");
+  if (!recipients || recipients.length === 0) {
+    recipients = getEmailsByRole(ss, "admin");
+  }
+  // Deduplicate and clean recipient emails
+  var cleanRecipients = [];
+  if (recipients && recipients.length > 0) {
+    for (var rIdx = 0; rIdx < recipients.length; rIdx++) {
+      var em = String(recipients[rIdx] || "").trim();
+      if (em && cleanRecipients.indexOf(em) === -1) {
+        cleanRecipients.push(em);
+      }
+    }
+  }
+
+  if (cleanRecipients.length === 0) {
+    return { checked: true, duePeriods: duePeriods.length, emailsSent: 0, reason: "no_recipients" };
+  }
+
+  var appUrl = settings["App URL"] || (typeof DEFAULT_APP_URL !== "undefined" ? DEFAULT_APP_URL : "");
+  var emailsSent = 0;
+
+  for (var dIdx = 0; dIdx < duePeriods.length; dIdx++) {
+    var dueObj = duePeriods[dIdx];
+    var targetP = String(dueObj.period);
+    var pRangeObj = dueObj.periodRange;
+    var minsLeft = Math.max(1, Math.round(dueObj.diffMinutes));
+
+    var unfilledList = [];
+    var absentEmailsInPeriod = {};
+    var busySubNamesInPeriod = {};
+
+    for (var tIdx = 0; tIdx < todayActiveRows.length; tIdx++) {
+      var aRow = todayActiveRows[tIdx];
+      var tEmail = String(aRow[2] || "").toLowerCase().trim();
+      var reqPeriods = String(aRow[4] || "")
+        .split(",")
+        .map(function(tok) { return parsePeriod(tok); })
+        .filter(function(tok) { return Boolean(tok); });
+
+      if (reqPeriods.indexOf(targetP) === -1) continue;
+
+      if (tEmail) absentEmailsInPeriod[tEmail] = true;
+
+      var subColIdx = getSubColumnIndex(targetP) - 1;
+      var assignedSub = (subColIdx >= 0 && subColIdx < aRow.length)
+        ? String(aRow[subColIdx] || "").trim()
+        : "";
+
+      if (assignedSub !== "") {
+        if (assignedSub.toLowerCase() !== "no sub needed") {
+          busySubNamesInPeriod[assignedSub.toLowerCase()] = true;
+        }
+        continue; // Already covered or marked No Sub Needed
+      }
+
+      // Unfilled coverage in targetP!
+      var rawTeacherName = nameLookup[tEmail] || tEmail;
+      var displayTeacherName = formatTeacherDisplayName(rawTeacherName);
+
+      // Resolve Course & Room
+      var schedEntry = null;
+      if (snapshottedScheduleLookup && typeof lookupTeacherScheduleInfo === "function") {
+        schedEntry = lookupTeacherScheduleInfo(snapshottedScheduleLookup, tEmail, targetP, todayIso, settings);
+      }
+      if (!schedEntry || (!schedEntry.course && !schedEntry.room) ||
+          (schedEntry.course === "No Class Assigned" && schedEntry.room === "No Class Assigned")) {
+        var masterSched = getFallbackSchedule();
+        if (masterSched && typeof lookupTeacherScheduleInfo === "function") {
+          var fallbackEntry = lookupTeacherScheduleInfo(masterSched, tEmail, targetP, todayIso, settings);
+          if (fallbackEntry) schedEntry = fallbackEntry;
+        }
+      }
+
+      var courseStr = (schedEntry && schedEntry.course) ? String(schedEntry.course) : "Class Coverage Needed";
+      var roomStr = (schedEntry && schedEntry.room) ? String(schedEntry.room) : "TBD";
+
+      var rawInstructions = String(aRow[8] || "").trim();
+      var cleanInstructions = rawInstructions.replace(/^\[HR Docs Provided\]\s*/i, "").trim();
+      var subPlanUrl = (typeof extractSubPlanUrl === "function") ? extractSubPlanUrl(aRow) : String(aRow[20] || "").trim();
+
+      unfilledList.push({
+        absenceId: String(aRow[0] || ""),
+        teacherEmail: tEmail,
+        teacherName: displayTeacherName,
+        course: courseStr,
+        room: roomStr,
+        reason: String(aRow[5] || "").trim(),
+        instructions: cleanInstructions,
+        subPlanUrl: subPlanUrl
+      });
+    }
+
+    if (unfilledList.length === 0) {
+      continue;
+    }
+
+    // Find available staff who have Sub Duty in targetP today
+    var availableDutyTeachers = [];
+    for (var sIdx = 1; sIdx < rosterData.length; sIdx++) {
+      var sRow = rosterData[sIdx];
+      if (!sRow || sRow.length < 4) continue;
+      var sNameRaw = String(sRow[0] || "").trim();
+      var sEmail = String(sRow[1] || "").toLowerCase().trim();
+      var sDutyRaw = String(sRow[3] || "").trim();
+      if (!sNameRaw || !sDutyRaw) continue;
+
+      var resolvedDuty = (typeof resolveStaffDutyForDate === "function")
+        ? resolveStaffDutyForDate(sDutyRaw, todayIso, settings)
+        : sDutyRaw;
+      if (!resolvedDuty) continue;
+
+      var dutyPeriods = String(resolvedDuty)
+        .split(",")
+        .map(function(d) { return parsePeriod(d); })
+        .filter(function(d) { return Boolean(d); });
+
+      if (dutyPeriods.indexOf(targetP) === -1) continue;
+
+      // Exclude if absent during this period or already assigned to cover another class this period
+      if (sEmail && absentEmailsInPeriod[sEmail]) continue;
+      if (busySubNamesInPeriod[sNameRaw.toLowerCase()]) continue;
+      var formattedStaffName = formatTeacherDisplayName(sNameRaw);
+      if (busySubNamesInPeriod[formattedStaffName.toLowerCase()]) continue;
+
+      availableDutyTeachers.push(formattedStaffName);
+    }
+
+    var periodLabel = formatPeriodLabelDisplay(targetP);
+    var timeRangeDisplay = (pRangeObj && pRangeObj.displayRange) ? pRangeObj.displayRange : "";
+    var dayColorDisplay = (pRangeObj && pRangeObj.dayColor) ? (pRangeObj.dayColor + " Day") : "";
+    var subject = "⚠️ Unfilled Sub Coverage Starting in " + minsLeft + " Min: " + periodLabel +
+                  (timeRangeDisplay ? " (" + timeRangeDisplay + ")" : "");
+
+    var plainLines = [
+      "Unfilled Sub Coverage Alert — " + periodLabel + (timeRangeDisplay ? " (" + timeRangeDisplay + ")" : "") + (dayColorDisplay ? " [" + dayColorDisplay + "]" : ""),
+      "",
+      "The following " + (unfilledList.length === 1 ? "class is" : (unfilledList.length + " classes are")) + " scheduled to begin in approximately " + minsLeft + " minutes and still need a substitute:",
+      ""
+    ];
+
+    for (var uIdx = 0; uIdx < unfilledList.length; uIdx++) {
+      var item = unfilledList[uIdx];
+      plainLines.push(
+        (uIdx + 1) + ". " + item.teacherName + " — " + item.course + " (Room: " + item.room + ")" +
+        (item.instructions ? "\n   Instructions: " + item.instructions : "") +
+        (item.subPlanUrl ? "\n   Sub Plan: " + item.subPlanUrl : "")
+      );
+    }
+
+    plainLines.push("");
+    if (availableDutyTeachers.length > 0) {
+      plainLines.push("Available Teachers with " + periodLabel + " Sub Duty Today:");
+      plainLines.push("- " + availableDutyTeachers.join("\n- "));
+    } else {
+      plainLines.push("Available Teachers with " + periodLabel + " Sub Duty Today: None available (all duty teachers are already assigned or absent)");
+    }
+
+    if (appUrl) {
+      plainLines.push("");
+      plainLines.push("Assign a substitute in the Cathedral Sub App: " + appUrl);
+    }
+
+    var plainBody = plainLines.join("\n");
+
+    var htmlRows = "";
+    for (var hIdx = 0; hIdx < unfilledList.length; hIdx++) {
+      var u = unfilledList[hIdx];
+      var instrHtml = u.instructions ? escapeHtmlServer_(u.instructions) : "<span style='color:#9ca3af;font-style:italic;'>None</span>";
+      if (u.subPlanUrl) {
+        instrHtml += "<div style='margin-top:4px;'><a href='" + escapeHtmlServer_(u.subPlanUrl) + "' target='_blank' style='color:#00843D;font-weight:bold;text-decoration:underline;'>📄 View Sub Plan</a></div>";
+      }
+      htmlRows += "<tr>" +
+        "<td style='padding:10px 12px;border-bottom:1px solid #e5e7eb;font-weight:bold;color:#111827;'>" + escapeHtmlServer_(u.teacherName) + "</td>" +
+        "<td style='padding:10px 12px;border-bottom:1px solid #e5e7eb;color:#374151;'>" + escapeHtmlServer_(u.course) + "</td>" +
+        "<td style='padding:10px 12px;border-bottom:1px solid #e5e7eb;color:#374151;font-weight:600;'>" + escapeHtmlServer_(u.room) + "</td>" +
+        "<td style='padding:10px 12px;border-bottom:1px solid #e5e7eb;color:#4b5563;font-size:13px;'>" + instrHtml + "</td>" +
+      "</tr>";
+    }
+
+    var dutyBadgesHtml = "";
+    if (availableDutyTeachers.length > 0) {
+      for (var dtIdx = 0; dtIdx < availableDutyTeachers.length; dtIdx++) {
+        dutyBadgesHtml += "<span style='display:inline-block;background-color:#ecfdf5;color:#065f46;border:1px solid #a7f3d0;border-radius:9999px;padding:4px 12px;font-size:13px;font-weight:600;margin:3px 6px 3px 0;'>" +
+          escapeHtmlServer_(availableDutyTeachers[dtIdx]) + "</span>";
+      }
+    } else {
+      dutyBadgesHtml = "<p style='margin:0;color:#6b7280;font-style:italic;font-size:13px;'>None available — all teachers with " + escapeHtmlServer_(periodLabel) + " Sub Duty are already covering a class or absent.</p>";
+    }
+
+    var htmlBody =
+      "<div style='font-family:Arial,sans-serif;max-width:680px;color:#1f2937;'>" +
+        "<div style='background-color:#fef2f2;border-left:4px solid #dc2626;padding:14px 16px;border-radius:6px;margin-bottom:16px;'>" +
+          "<h2 style='margin:0 0 4px 0;font-size:18px;color:#991b1b;'>⚠️ Unfilled Sub Coverage Starting in " + minsLeft + " Minutes</h2>" +
+          "<p style='margin:0;font-size:14px;color:#7f1d1d;'>" +
+            "<strong>" + escapeHtmlServer_(periodLabel) + "</strong>" +
+            (timeRangeDisplay ? " (" + escapeHtmlServer_(timeRangeDisplay) + ")" : "") +
+            (dayColorDisplay ? " • " + escapeHtmlServer_(dayColorDisplay) : "") +
+          "</p>" +
+        "</div>" +
+        "<p style='font-size:14px;margin:0 0 12px 0;'>The following " +
+          (unfilledList.length === 1 ? "class still needs" : (unfilledList.length + " classes still need")) +
+          " a substitute:</p>" +
+        "<table style='width:100%;border-collapse:collapse;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;margin-bottom:18px;font-size:14px;'>" +
+          "<thead>" +
+            "<tr style='background-color:#002147;color:#ffffff;text-align:left;'>" +
+              "<th style='padding:10px 12px;'>Absent Teacher</th>" +
+              "<th style='padding:10px 12px;'>Course</th>" +
+              "<th style='padding:10px 12px;'>Room</th>" +
+              "<th style='padding:10px 12px;'>Instructions / Sub Plan</th>" +
+            "</tr>" +
+          "</thead>" +
+          "<tbody>" + htmlRows + "</tbody>" +
+        "</table>" +
+        "<div style='background-color:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:12px 16px;margin-bottom:18px;'>" +
+          "<h3 style='margin:0 0 8px 0;font-size:14px;color:#002147;'>Available Teachers with " + escapeHtmlServer_(periodLabel) + " Sub Duty Today:</h3>" +
+          "<div>" + dutyBadgesHtml + "</div>" +
+        "</div>" +
+        (appUrl
+          ? "<p style='margin:18px 0;'><a href='" + escapeHtmlServer_(appUrl) + "' target='_blank' style='display:inline-block;background-color:#002147;color:#ffffff;font-weight:bold;text-decoration:none;padding:10px 20px;border-radius:6px;font-size:14px;'>Open Cathedral Sub App to Assign Coverage</a></p>"
+          : "") +
+      "</div>";
+
+    var recipientCsv = cleanRecipients.join(",");
+    sendEmailHelper(recipientCsv, subject, plainBody, { htmlBody: htmlBody }, settings);
+    emailsSent++;
+
+    if (typeof logAuditAction === "function") {
+      try {
+        logAuditAction(
+          "UNFILLED_REMINDER_SENT",
+          todayIso + "_P" + targetP,
+          "Sent 15-min unfilled reminder for " + periodLabel + " (" + unfilledList.length + " unfilled) to " + recipientCsv,
+          "System"
+        );
+      } catch (audErr) {}
+    }
+  }
+
+  return {
+    checked: true,
+    duePeriods: duePeriods.length,
+    emailsSent: emailsSent
+  };
+}
+
+/**
+ * Escapes HTML special characters for server-side email templates.
+ */
+function escapeHtmlServer_(str) {
+  return String(str || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 /**

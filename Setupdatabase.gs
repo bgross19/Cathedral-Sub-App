@@ -37,6 +37,7 @@ function setupDatabase() {
       ["App URL", DEFAULT_APP_URL],
       ["Max Multi-Select Days", "5"],
       ["Urgency Cutoff Time", "15"],
+      ["Unfilled Coverage Reminder Lead Time (Minutes)", "15"],
       ["Term ID", "3601"],
       ["Green Day Pay Rate", "10"],
       ["Blue/Gold Day Pay Rate", "20"],

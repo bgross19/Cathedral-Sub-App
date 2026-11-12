@@ -69,6 +69,7 @@ function getSettings(ss) {
     "Max Multi-Select Days": "5",
     "Sub Availability Window (Days)": "5",
     "Urgency Cutoff Time": "15",
+    "Unfilled Coverage Reminder Lead Time (Minutes)": "15",
     "Term ID": "3601",
     "Auto Sync Google Calendar": "true",
     "Period Bell Times": JSON.stringify(typeof DEFAULT_PERIOD_BELL_TIMES !== "undefined" ? DEFAULT_PERIOD_BELL_TIMES : {}),

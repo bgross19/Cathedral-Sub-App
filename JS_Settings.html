@@ -947,6 +947,10 @@
                       <label class="block text-sm font-bold mb-1">Term ID</label>
                       <input type="number" id="settingsTermId" value="${escapeHtml(settings["Term ID"] || "3601")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none bg-white">
                     </div>
+                    <div>
+                      <label class="block text-sm font-bold mb-1">Unfilled Coverage Reminder Lead Time (Minutes)</label>
+                      <input type="number" id="settingsUnfilledReminderMinutes" min="0" max="60" value="${escapeHtml(settings["Unfilled Coverage Reminder Lead Time (Minutes)"] !== undefined ? settings["Unfilled Coverage Reminder Lead Time (Minutes)"] : "15")}" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#00843D] outline-none bg-white" title="Minutes before class start to email Sub Coordinators if coverage is still unfilled (set to 0 to disable).">
+                    </div>
                   </div>
               </div>
 
@@ -1117,6 +1121,7 @@
           "Urgency Cutoff Time": document.getElementById('settingsUrgencyCutoff').value,
           "Data Fetch Window (Days)": document.getElementById('settingsFetchWindow').value,
           "Term ID": document.getElementById('settingsTermId').value,
+          "Unfilled Coverage Reminder Lead Time (Minutes)": document.getElementById('settingsUnfilledReminderMinutes') ? document.getElementById('settingsUnfilledReminderMinutes').value : "15",
           "PS_URL": document.getElementById('settingsPsUrl').value,
           "PS_CLIENT_ID": document.getElementById('settingsPsClientId').value,
           "PS_CLIENT_SECRET": document.getElementById('settingsPsClientSecret').value,

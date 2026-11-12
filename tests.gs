@@ -1602,6 +1602,104 @@ function runTests() {
       var kqRosterItem = adminRosterList.find(function(s) { return s.email === "kquenichet@gocathedral.com"; });
       assert(kqRosterItem && kqRosterItem.duty === "S1:2 | S2:6", "Expected getStaffRosterForAdmin to return updated S1/S2 duty");
 
+      // Test 23: 15-Minute Unfilled Coverage Reminder Email to Sub Coordinators
+      if (typeof resetUnfilledCoverageReminderState_ === "function") {
+        resetUnfilledCoverageReminderState_();
+      }
+      var reminderSentEmails = [];
+      sendEmailHelper = function(to, subj, body, opts) {
+        reminderSentEmails.push({ to: to, subject: subj, body: body, options: opts });
+        return "SENT";
+      };
+
+      var reminderDateIso = "2026-11-12"; // Thursday (Semester 1, Term 3601)
+      var reminderDatesRows = [
+        ["Date", "Color"],
+        [reminderDateIso, "Green"]
+      ];
+      mockSheetsForPayroll["Dates"] = {
+        getDataRange: function() {
+          return { getValues: function() { return reminderDatesRows; } };
+        }
+      };
+      if (typeof clearDateColorsCache === "function") clearDateColorsCache();
+
+      var reminderRosterRows = [
+        ["Name", "Email", "Role", "Duty"],
+        ["Coordinator, Sub", "subcoord@gocathedral.com", "Sub Coordinator", ""],
+        ["Teacher, UnfilledOne", "unfilled1@gocathedral.com", "Teacher", ""],
+        ["Teacher, UnfilledTwo", "unfilled2@gocathedral.com", "Teacher", ""],
+        ["Teacher, CoveredThree", "covered3@gocathedral.com", "Teacher", ""],
+        ["Duty, AvailableS1", "availduty@gocathedral.com", "Teacher", "S1:2 | S2:5"],
+        ["Duty, BusyCovering", "busyduty@gocathedral.com", "Teacher", "2"],
+        ["Duty, AbsentToday", "absentduty@gocathedral.com", "Teacher", "2"],
+        ["Duty, S2OnlyTeacher", "s2only@gocathedral.com", "Teacher", "S1: | S2:2"]
+      ];
+      mockSheetsForPayroll["Staff Roster"] = {
+        getDataRange: function() {
+          return { getValues: function() { return reminderRosterRows; } };
+        }
+      };
+      if (typeof clearRosterCache === "function") clearRosterCache();
+
+      var reminderAbsenceRows = [
+        [
+          "ID", "Timestamp", "Email", "Date", "Periods", "Reason", "Duration",
+          "Urgency", "Instructions", "Period 1 Sub", "Period 2 Sub", "Period 3 Sub",
+          "Period 4 Sub", "Period 5 Sub", "Period 6 Sub", "Period 7 Sub", "Period 8 Sub",
+          "Period 0 Sub", "Advisory Sub", "Status", "Sub Plan URL", "Sub Feedback"
+        ],
+        [
+          "rem-abs-1", new Date(), "unfilled1@gocathedral.com", reminderDateIso, "1, 2",
+          "Personal", "Full Day", "Standard", "[HR Docs Provided] Students complete worksheet on Canvas",
+          "Duty, AvailableS1", "", "", "", "", "", "", "", "", "", "Active", "https://docs.google.com/document/d/subplan-1", ""
+        ],
+        [
+          "rem-abs-2", new Date(), "unfilled2@gocathedral.com", reminderDateIso, "2",
+          "Sick", "Partial Day", "Urgent", "Read chapter 4",
+          "", "", "", "", "", "", "", "", "", "", "Active", "", ""
+        ],
+        [
+          "rem-abs-3", new Date(), "covered3@gocathedral.com", reminderDateIso, "2",
+          "Personal", "Partial Day", "Standard", "Movie",
+          "", "Duty, BusyCovering", "", "", "", "", "", "", "", "", "Active", "", ""
+        ],
+        [
+          "rem-abs-4", new Date(), "absentduty@gocathedral.com", reminderDateIso, "2",
+          "Conference", "Partial Day", "Standard", "Independent study",
+          "", "No Sub Needed", "", "", "", "", "", "", "", "", "Active", "", ""
+        ]
+      ];
+      mockSheetsForPayroll["Absence Requests"] = {
+        getDataRange: function() {
+          return { getValues: function() { return reminderAbsenceRows; } };
+        }
+      };
+      delete mockSheetsForPayroll["Absences"];
+      delete mockSheetsForPayroll["Coverage_Assignments"];
+
+      // Green Day Period 2 starts at 09:10. Set mockNow to 08:58 (12 minutes before Period 2 start, after Advisory starts at 08:40).
+      var mockNow12MinBeforeP2 = new Date(2026, 10, 12, 8, 58, 0);
+      var remResult1 = checkAndSendUnfilledCoverageReminders(mockNow12MinBeforeP2, getSS());
+      assert(remResult1 && remResult1.checked === true && remResult1.duePeriods === 1 && remResult1.emailsSent === 1, "Expected 1 consolidated reminder email 12 minutes before Period 2, got: " + JSON.stringify(remResult1));
+      assert(reminderSentEmails.length === 1, "Expected exactly 1 reminder email to be sent");
+      assert(reminderSentEmails[0].to === "subcoord@gocathedral.com", "Expected reminder email to be sent to Sub Coordinator");
+      assert(reminderSentEmails[0].subject.indexOf("Period 2") !== -1 && reminderSentEmails[0].subject.indexOf("12 Min") !== -1, "Expected subject to mention Period 2 and 12 Min, got: " + reminderSentEmails[0].subject);
+      assert(reminderSentEmails[0].body.indexOf("UnfilledOne Teacher") !== -1 && reminderSentEmails[0].body.indexOf("UnfilledTwo Teacher") !== -1, "Expected both unfilled teachers inPeriod 2 to be listed in body");
+      assert(reminderSentEmails[0].body.indexOf("CoveredThree") === -1 && reminderSentEmails[0].body.indexOf("AbsentToday") === -1, "Expected already-covered and 'No Sub Needed' absences to be excluded from unfilled list");
+      assert(reminderSentEmails[0].body.indexOf("[HR Docs Provided]") === -1 && reminderSentEmails[0].body.indexOf("Students complete worksheet on Canvas") !== -1, "Expected clean instructions without [HR Docs Provided] prefix");
+      assert(reminderSentEmails[0].body.indexOf("https://docs.google.com/document/d/subplan-1") !== -1, "Expected Sub Plan URL to be included");
+      assert(reminderSentEmails[0].body.indexOf("AvailableS1 Duty") !== -1, "Expected available S1 Period 2 duty teacher to be listed");
+      assert(reminderSentEmails[0].body.indexOf("BusyCovering") === -1, "Expected Period 2 duty teacher already covering another Period 2 class to be excluded from available duty list");
+      assert(reminderSentEmails[0].body.indexOf("AbsentToday") === -1, "Expected Period 2 duty teacher who is absent during Period 2 to be excluded from available duty list");
+      assert(reminderSentEmails[0].body.indexOf("S2OnlyTeacher") === -1, "Expected S2-only Period 2 duty teacher to be excluded during Semester 1");
+
+      // Calling again 1 minute later (11 minutes before Period 2) should NOT send a duplicate email
+      var mockNow11MinBeforeP2 = new Date(2026, 10, 12, 8, 59, 0);
+      var remResult2 = checkAndSendUnfilledCoverageReminders(mockNow11MinBeforeP2, getSS());
+      assert(remResult2 && remResult2.duePeriods === 0 && remResult2.emailsSent === 0, "Expected duplicate check in same period window to send 0 emails");
+      assert(reminderSentEmails.length === 1, "Expected total reminder emails sent to remain 1");
+
       getSettings = origGetSettings;
       if (origUrlFetchApp !== undefined) global.UrlFetchApp = origUrlFetchApp;
 
