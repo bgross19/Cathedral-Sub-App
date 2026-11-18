@@ -1700,6 +1700,101 @@ function runTests() {
       assert(remResult2 && remResult2.duePeriods === 0 && remResult2.emailsSent === 0, "Expected duplicate check in same period window to send 0 emails");
       assert(reminderSentEmails.length === 1, "Expected total reminder emails sent to remain 1");
 
+      // Test 24: 48-hour absence cancellation CC to Sub Coordinator & Out-of-Building Substitute cancellation CC
+      var cancelTestRosterRows = [
+        ["Name", "Email", "Role", "Duty"],
+        ["Admin User", "admin@gocathedral.com", "Admin", ""],
+        ["Coordinator, Sub", "subcoord@gocathedral.com", "Sub Coordinator", ""],
+        ["Teacher, UnfilledOne", "unfilled1@gocathedral.com", "Teacher", ""],
+        ["Sub, ExternalGuest", "extsub@gocathedral.com", "Substitute", ""],
+        ["Teacher, InternalSub", "intsub@gocathedral.com", "Teacher", "2"]
+      ];
+      mockSheetsForPayroll["Staff Roster"] = {
+        getDataRange: function() {
+          return { getValues: function() { return cancelTestRosterRows; } };
+        }
+      };
+      if (typeof clearRosterCache === "function") clearRosterCache();
+
+      var cancelNowRef = new Date(2026, 10, 18, 8, 0, 0); // Nov 18, 2026 8:00 AM
+      assert(isAbsenceWithin48Hours_("2026-11-19", "1, 2", cancelNowRef, getSS()) === true, "Expected absence tomorrow (Nov 19) to be within 48 hours of Nov 18 8:00 AM");
+      assert(isAbsenceWithin48Hours_("2026-11-25", "1, 2", cancelNowRef, getSS()) === false, "Expected absence 7 days away (Nov 25) to NOT be within 48 hours");
+      assert(isAbsenceWithin48Hours_("2026-11-10", "1, 2", cancelNowRef, getSS()) === false, "Expected past absence (Nov 10) to NOT be treated as within 48 hours");
+      assert(isExternalSubstituteByEmailOrName_(getSS(), "extsub@gocathedral.com") === true, "Expected extsub@gocathedral.com to be recognized as external Substitute");
+      assert(isExternalSubstituteByEmailOrName_(getSS(), "intsub@gocathedral.com") === false, "Expected internal Teacher not to be recognized as external Substitute");
+
+      var enqueuedCancelEmails = [];
+      var origEnqueueEmail = enqueueEmail;
+      enqueueEmail = function(to, subj, body, opts) {
+        enqueuedCancelEmails.push({ to: to, subject: subj, body: body, options: opts || {} });
+      };
+
+      // Verify sendSubNotification('Canceled') CCs Sub Coordinator for external Substitute, but not for internal Teacher
+      sendSubNotification("extsub@gocathedral.com", "Canceled", {
+        id: "abs-ext-1",
+        teacherName: "UnfilledOne Teacher",
+        date: "Nov 25, 2026",
+        isoDate: "2026-11-25",
+        period: "1",
+        room: "2101",
+        course: "English 10",
+        instructions: "Read ch 1"
+      });
+      assert(enqueuedCancelEmails.length === 1, "Expected 1 enqueued email for external sub cancellation");
+      assert(enqueuedCancelEmails[0].to === "extsub@gocathedral.com" && enqueuedCancelEmails[0].options.cc === "subcoord@gocathedral.com", "Expected external Substitute cancellation email to CC subcoord@gocathedral.com, got cc: " + enqueuedCancelEmails[0].options.cc);
+
+      sendSubNotification("intsub@gocathedral.com", "Canceled", {
+        id: "abs-int-1",
+        teacherName: "UnfilledOne Teacher",
+        date: "Nov 25, 2026",
+        isoDate: "2026-11-25",
+        period: "2",
+        room: "2101",
+        course: "English 10",
+        instructions: "Read ch 1"
+      });
+      assert(enqueuedCancelEmails.length === 2, "Expected 2nd enqueued email for internal teacher sub cancellation");
+      assert(enqueuedCancelEmails[1].to === "intsub@gocathedral.com" && !enqueuedCancelEmails[1].options.cc, "Expected internal Teacher sub cancellation NOT to CC Sub Coordinator");
+
+      // Verify cancelAbsence CCs Sub Coordinator on teacher confirmation when absence is within 48 hours
+      enqueuedCancelEmails = [];
+      var todayIsoForCancel = Utilities.formatDate(new Date(), "America/Indiana/Indianapolis", "yyyy-MM-dd");
+      var cancelSheetRows = [
+        [
+          "ID", "Timestamp", "Email", "Date", "Periods", "Reason", "Duration",
+          "Urgency", "Instructions", "Period 1 Sub", "Period 2 Sub", "Period 3 Sub",
+          "Period 4 Sub", "Period 5 Sub", "Period 6 Sub", "Period 7 Sub", "Period 8 Sub",
+          "Period 0 Sub", "Advisory Sub", "Status", "Sub Plan URL", "Sub Feedback"
+        ],
+        [
+          "cancel-48h-id", new Date(), "unfilled1@gocathedral.com", todayIsoForCancel, "1, 2",
+          "Personal", "Partial Day", "Urgent", "Lesson on Canvas",
+          "Sub, ExternalGuest", "Teacher, InternalSub", "", "", "", "", "", "", "", "", "Active", "", ""
+        ]
+      ];
+      mockSheetsForPayroll["Absence Requests"] = {
+        getDataRange: function() {
+          return { getValues: function() { return cancelSheetRows; } };
+        },
+        getRange: function(r, c) {
+          return {
+            setValue: function(v) { cancelSheetRows[r - 1][c - 1] = v; }
+          };
+        }
+      };
+
+      var cancelRes48 = cancelAbsence("cancel-48h-id", "admin@gocathedral.com");
+      assert(cancelRes48 && cancelRes48.success === true, "Expected cancelAbsence to succeed, got: " + JSON.stringify(cancelRes48));
+      assert(enqueuedCancelEmails.length === 3, "Expected 3 emails on cancelAbsence (2 assigned subs + 1 teacher confirmation)");
+      var extSubCancelEmail = enqueuedCancelEmails.find(function(e) { return e.to === "extsub@gocathedral.com"; });
+      var intSubCancelEmail = enqueuedCancelEmails.find(function(e) { return e.to === "intsub@gocathedral.com"; });
+      var teacherCancelConfEmail = enqueuedCancelEmails.find(function(e) { return e.to === "unfilled1@gocathedral.com"; });
+      assert(extSubCancelEmail && extSubCancelEmail.options.cc === "subcoord@gocathedral.com", "Expected external sub cancellation during cancelAbsence to CC Sub Coordinator");
+      assert(intSubCancelEmail && !intSubCancelEmail.options.cc, "Expected internal sub cancellation during cancelAbsence not to CC Sub Coordinator");
+      assert(teacherCancelConfEmail && teacherCancelConfEmail.options.cc === "subcoord@gocathedral.com", "Expected teacher cancellation confirmation within 48h to CC Sub Coordinator");
+
+      enqueueEmail = origEnqueueEmail;
+
       getSettings = origGetSettings;
       if (origUrlFetchApp !== undefined) global.UrlFetchApp = origUrlFetchApp;
 

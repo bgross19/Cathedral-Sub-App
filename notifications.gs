@@ -575,9 +575,101 @@ function getCoordinatorEmail(ss) {
   for (var i = 1; i < data.length; i++) {
   if (!data[i]) continue;
     // Column 2 is Role, Column 1 is Email
-    if (data[i] && String(data[i][2]).toLowerCase().trim() === "sub coordinator") return String(data[i][1]).trim();
+    var roles = String(data[i][2] || "").toLowerCase().split(",").map(function(r) { return r.trim(); });
+    if (roles.indexOf("sub coordinator") !== -1) return String(data[i][1]).trim();
   }
   return null;
+}
+
+/**
+ * Helper to check if a substitute (identified by email or name) has the out-of-building
+ * "Substitute" role in the Staff Roster.
+ */
+function isExternalSubstituteByEmailOrName_(ss, emailOrName, optionalRosterData) {
+  if (!emailOrName) return false;
+  var target = String(emailOrName).trim().toLowerCase();
+  if (!target || target === "no sub needed") return false;
+  var cleanNameTarget = target.replace(/\s+-\s+.*$/, "").trim();
+
+  var rosterData = optionalRosterData || getRosterDataCached(ss || getSS());
+  if (!rosterData || rosterData.length === 0) return false;
+
+  for (var i = 1; i < rosterData.length; i++) {
+    if (!rosterData[i]) continue;
+    var rName = String(rosterData[i][0] || "").trim().toLowerCase();
+    var rEmail = String(rosterData[i][1] || "").trim().toLowerCase();
+    if ((rEmail && rEmail === target) || (rName && (rName === target || rName === cleanNameTarget))) {
+      var roles = String(rosterData[i][2] || "").toLowerCase().split(",").map(function(r) { return r.trim(); });
+      return roles.indexOf("substitute") !== -1;
+    }
+  }
+  return false;
+}
+
+/**
+ * Helper to check if an absence date is within 48 hours of the given timestamp (default: now).
+ * Uses the earliest requested period start time on the absence date when available (falling back
+ * to 07:50 AM on the absence date). Returns true if the absence is in the future (or earlier today)
+ * and starts within 48 hours.
+ */
+function isAbsenceWithin48Hours_(absenceDateVal, periodsRaw, nowOverride, optionalSS) {
+  try {
+    var now = (nowOverride instanceof Date && !isNaN(nowOverride.getTime())) ? nowOverride : new Date();
+    var ss = optionalSS || getSS();
+    var isoDate = typeof getStandardizedDateString === "function"
+      ? getStandardizedDateString(absenceDateVal)
+      : "";
+    if (!isoDate || !/^\d{4}-\d{2}-\d{2}$/.test(isoDate)) {
+      var parsed = typeof parseLocalDateSafe === "function" ? parseLocalDateSafe(absenceDateVal) : new Date(absenceDateVal);
+      if (!parsed || isNaN(parsed.getTime())) return false;
+      var tz = (typeof Session !== "undefined" && Session && typeof Session.getScriptTimeZone === "function")
+        ? Session.getScriptTimeZone()
+        : "America/Indiana/Indianapolis";
+      isoDate = Utilities.formatDate(parsed, tz, "yyyy-MM-dd");
+    }
+
+    var dParts = isoDate.split("-");
+    var yr = parseInt(dParts[0], 10);
+    var mo = parseInt(dParts[1], 10) - 1;
+    var dy = parseInt(dParts[2], 10);
+
+    // Default start of school day: 7:50 AM on the absence date
+    var targetStartObj = new Date(yr, mo, dy, 7, 50, 0);
+    var endOfAbsenceDay = new Date(yr, mo, dy, 23, 59, 59);
+
+    if (periodsRaw && typeof getPeriodTimeRangeForDate === "function") {
+      var settings = typeof getSettings === "function" ? getSettings(ss) : {};
+      var dateColors = typeof getDateColorsCached === "function" ? getDateColorsCached(ss) : null;
+      var normPeriods = (typeof normalizePeriodsListValue === "function" ? normalizePeriodsListValue(periodsRaw) : String(periodsRaw))
+        .split(",")
+        .map(function(p) { return parsePeriod(p); })
+        .filter(function(p) { return Boolean(p); });
+
+      var earliestStart = null;
+      for (var i = 0; i < normPeriods.length; i++) {
+        var pRange = getPeriodTimeRangeForDate(isoDate, normPeriods[i], dateColors, settings);
+        if (pRange && pRange.startDateObj instanceof Date && !isNaN(pRange.startDateObj.getTime())) {
+          if (!earliestStart || pRange.startDateObj.getTime() < earliestStart.getTime()) {
+            earliestStart = pRange.startDateObj;
+          }
+        }
+      }
+      if (earliestStart) {
+        targetStartObj = earliestStart;
+      }
+    }
+
+    // If the absence day has already completely passed before today, do not treat as an upcoming 48h cancellation
+    if (now.getTime() > endOfAbsenceDay.getTime()) {
+      return false;
+    }
+
+    var diffHours = (targetStartObj.getTime() - now.getTime()) / (1000 * 60 * 60);
+    return diffHours <= 48;
+  } catch (e) {
+    console.warn("Error in isAbsenceWithin48Hours_: " + e.message);
+    return false;
+  }
 }
 
 /**
@@ -1379,14 +1471,36 @@ function sendSubNotification(subEmail, type, details) {
   }
 
   try {
-    enqueueEmail(subEmail, subject, body, {
+    var emailOptions = {
       htmlBody: htmlBody,
       calendarSync: {
         subEmail: subEmail,
         type: type,
         details: details
       }
-    });
+    };
+
+    // Anytime an out-of-building substitute ("Substitute" role) has their coverage canceled,
+    // also notify the Sub Coordinator(s) on the cancellation email.
+    if (type === 'Canceled' && typeof isExternalSubstituteByEmailOrName_ === 'function') {
+      var ssForSub = getSS();
+      if (isExternalSubstituteByEmailOrName_(ssForSub, subEmail)) {
+        var coordEmails = getEmailsByRole(ssForSub, "sub coordinator");
+        var targetSubLower = String(subEmail).trim().toLowerCase();
+        var filteredCoords = [];
+        for (var cIdx = 0; cIdx < coordEmails.length; cIdx++) {
+          var ce = String(coordEmails[cIdx] || "").trim();
+          if (ce && ce.toLowerCase() !== targetSubLower && filteredCoords.indexOf(ce) === -1) {
+            filteredCoords.push(ce);
+          }
+        }
+        if (filteredCoords.length > 0) {
+          emailOptions.cc = filteredCoords.join(",");
+        }
+      }
+    }
+
+    enqueueEmail(subEmail, subject, body, emailOptions);
   } catch (e) {
     console.error("Failed to enqueue email to " + subEmail + ": " + e.message);
   }

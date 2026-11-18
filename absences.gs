@@ -730,18 +730,36 @@ function cancelAbsence(absenceId, clientEmail) {
       }
 
       var canceledPeriodsDisplay = formatPeriodsListDisplay(data[i][4]);
+      var teacherNameForEmail = nameLookup[teacherEmail] || teacherEmail;
       var teacherSubject = "Absence Request Canceled";
       var teacherBody = "Your absence request for " + formattedDateForEmail + " has been canceled.\n\n" +
+                        "Teacher: " + teacherNameForEmail + "\n" +
                         "Reason: " + data[i][5] + "\n" +
                         "Periods: " + canceledPeriodsDisplay + "\n\n" +
                         "If you have questions, please contact the sub coordinator.";
 
       var teacherHtml = "<p>Your absence request for <strong>" + formattedDateForEmail + "</strong> has been canceled.</p>" +
-                        "<ul><li><strong>Reason:</strong> " + data[i][5] + "</li>" +
+                        "<ul><li><strong>Teacher:</strong> " + teacherNameForEmail + "</li>" +
+                        "<li><strong>Reason:</strong> " + data[i][5] + "</li>" +
                         "<li><strong>Periods:</strong> " + canceledPeriodsDisplay + "</li></ul>" +
                         "<p>If you have questions, please contact the sub coordinator.</p>";
 
-      enqueueEmail(teacherEmail, teacherSubject, teacherBody, {htmlBody: teacherHtml});
+      var teacherEmailOpts = { htmlBody: teacherHtml };
+      if (typeof isAbsenceWithin48Hours_ === "function" && isAbsenceWithin48Hours_(rawDate, data[i][4], null, ss)) {
+        var coordinatorEmails = getEmailsByRole(ss, "sub coordinator");
+        var filteredCoords = [];
+        for (var cIdx = 0; cIdx < coordinatorEmails.length; cIdx++) {
+          var ce = String(coordinatorEmails[cIdx] || "").trim();
+          if (ce && ce.toLowerCase() !== teacherEmail && filteredCoords.indexOf(ce) === -1) {
+            filteredCoords.push(ce);
+          }
+        }
+        if (filteredCoords.length > 0) {
+          teacherEmailOpts.cc = filteredCoords.join(",");
+        }
+      }
+
+      enqueueEmail(teacherEmail, teacherSubject, teacherBody, teacherEmailOpts);
 
           return {
       success: true };
